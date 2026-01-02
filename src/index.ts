@@ -115,3 +115,8 @@ export {
   buildReviewInstructions,
   DEFAULT_REVIEW_CATEGORIES
 } from './review.js'
+
+// History utilities
+export {
+  cleanupInterruptedHistory
+} from './executor.js'

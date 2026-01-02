@@ -192,7 +192,7 @@ async function checkInterruption(
  * If the last assistant message has tool_use blocks without corresponding tool_results,
  * add cancelled tool_results to make the history valid for the next API call.
  */
-function cleanupInterruptedHistory(messages: Message[]): Message[] {
+export function cleanupInterruptedHistory(messages: Message[]): Message[] {
   if (messages.length === 0) return messages
 
   const lastMessage = messages[messages.length - 1]

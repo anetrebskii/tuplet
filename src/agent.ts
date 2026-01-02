@@ -253,28 +253,57 @@ export class Hive {
       history = await this.config.repository.getHistory(conversationId)
     }
 
-    // Check if last message was an __ask_user__ tool call (needs tool_result)
+    // Handle history with pending tool_use blocks (from interrupted executions)
     const messages: Message[] = [...history]
     const lastMessage = messages[messages.length - 1]
 
+    // Check if last message is assistant with tool_use blocks that need results
     if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.content)) {
-      const askUserToolUse = lastMessage.content.find(
-        (block): block is import('./types.js').ToolUseBlock =>
-          block.type === 'tool_use' && block.name === '__ask_user__'
+      const toolUseBlocks = lastMessage.content.filter(
+        (block): block is import('./types.js').ToolUseBlock => block.type === 'tool_use'
       )
 
-      if (askUserToolUse) {
-        // Add tool_result for the __ask_user__ call with user's response
-        messages.push({
-          role: 'user',
-          content: [{
-            type: 'tool_result',
-            tool_use_id: askUserToolUse.id,
-            content: JSON.stringify({ success: true, data: { answer: message } })
-          }]
+      if (toolUseBlocks.length > 0) {
+        // Find __ask_user__ tool if present
+        const askUserToolUse = toolUseBlocks.find(block => block.name === '__ask_user__')
+
+        // Build tool_results for all tool_use blocks
+        const toolResults: import('./types.js').ToolResultBlock[] = toolUseBlocks.map(toolUse => {
+          if (toolUse.name === '__ask_user__') {
+            // User's message is the answer to __ask_user__
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: toolUse.id,
+              content: JSON.stringify({ success: true, data: { answer: message } })
+            }
+          } else {
+            // Other tools were interrupted - mark as cancelled
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: toolUse.id,
+              content: JSON.stringify({ success: false, error: 'Operation cancelled - execution was interrupted' }),
+              is_error: true
+            }
+          }
         })
+
+        // If there was an __ask_user__, the user's message is already the answer
+        // Otherwise, we need to include both the tool_results and the user message
+        if (askUserToolUse) {
+          messages.push({ role: 'user', content: toolResults })
+        } else {
+          // Combine tool_results and user message in a single user message
+          // (API doesn't allow consecutive user messages)
+          messages.push({
+            role: 'user',
+            content: [
+              ...toolResults,
+              { type: 'text' as const, text: message }
+            ]
+          })
+        }
       } else {
-        // Normal user message
+        // No tool_use blocks, normal user message
         messages.push({ role: 'user', content: message })
       }
     } else {
