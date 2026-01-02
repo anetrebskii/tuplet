@@ -1,5 +1,5 @@
 {
-  "name": "hive-agent",
+  "name": "@alexnetrebskii/hive-agent",
   "version": "0.1.0",
   "description": "Minimal TypeScript agent framework inspired by Claude Code architecture",
   "type": "module",
