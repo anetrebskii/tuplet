@@ -12,20 +12,29 @@ import type {
   Message,
   ToolSchema,
   ContentBlock,
-  StopReason,
-  CacheConfig
+  StopReason
 } from '../../types.js'
+
+export interface CacheConfig {
+  enabled: boolean
+  cacheSystemPrompt?: boolean   // Cache the system prompt (default: true)
+  cacheTools?: boolean          // Cache tool definitions (default: true)
+  cacheHistory?: boolean        // Cache conversation history (default: true)
+}
 
 export interface ClaudeProviderConfig {
   apiKey?: string
   model?: string
   maxTokens?: number
+  /** Enable prompt caching to reduce costs */
+  cache?: CacheConfig
 }
 
 export class ClaudeProvider implements LLMProvider {
   private client: Anthropic
   private model: string
   private maxTokens: number
+  private cacheConfig?: CacheConfig
 
   constructor(config: ClaudeProviderConfig = {}) {
     this.client = new Anthropic({
@@ -33,6 +42,7 @@ export class ClaudeProvider implements LLMProvider {
     })
     this.model = config.model || 'claude-sonnet-4-20250514'
     this.maxTokens = config.maxTokens || 8192
+    this.cacheConfig = config.cache
   }
 
   async chat(
@@ -41,12 +51,12 @@ export class ClaudeProvider implements LLMProvider {
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const cacheConfig = options.cache
-    const cacheEnabled = cacheConfig?.enabled ?? false
+    // Use provider-level cache config
+    const cacheEnabled = this.cacheConfig?.enabled ?? false
 
-    const anthropicMessages = this.convertMessages(messages, cacheEnabled && (cacheConfig?.cacheHistory ?? true))
-    const anthropicTools = this.convertTools(tools, cacheEnabled && (cacheConfig?.cacheTools ?? true))
-    const systemContent = this.buildSystemContent(systemPrompt, cacheEnabled && (cacheConfig?.cacheSystemPrompt ?? true))
+    const anthropicMessages = this.convertMessages(messages, cacheEnabled && (this.cacheConfig?.cacheHistory ?? true))
+    const anthropicTools = this.convertTools(tools, cacheEnabled && (this.cacheConfig?.cacheTools ?? true))
+    const systemContent = this.buildSystemContent(systemPrompt, cacheEnabled && (this.cacheConfig?.cacheSystemPrompt ?? true))
 
     const requestParams: Anthropic.MessageCreateParams = {
       model: options.model || this.model,

@@ -49,7 +49,6 @@ export type {
   ProgressUpdate,
 
   // Cache types
-  CacheConfig,
   CacheUsage,
 
   // Review types
@@ -67,7 +66,8 @@ export type {
 // Providers
 export {
   ClaudeProvider,
-  type ClaudeProviderConfig
+  type ClaudeProviderConfig,
+  type CacheConfig
 } from './providers/llm/claude.js'
 
 export {

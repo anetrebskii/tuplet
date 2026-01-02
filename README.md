@@ -173,6 +173,58 @@ const agent = new Hive({
 })
 ```
 
+### Redis Repository Example
+
+```typescript
+import type { RepositoryProvider, Message } from '@alexnetrebskii/hive-agent'
+import { Redis } from 'ioredis'
+
+class RedisRepository implements RepositoryProvider {
+  constructor(private redis: Redis, private ttlSeconds = 86400) {}
+
+  async getHistory(conversationId: string): Promise<Message[]> {
+    const data = await this.redis.get(`chat:${conversationId}`)
+    return data ? JSON.parse(data) : []
+  }
+
+  async saveHistory(conversationId: string, messages: Message[]): Promise<void> {
+    await this.redis.setex(
+      `chat:${conversationId}`,
+      this.ttlSeconds,
+      JSON.stringify(messages)
+    )
+  }
+}
+```
+
+### PostgreSQL Repository Example
+
+```typescript
+import type { RepositoryProvider, Message } from '@alexnetrebskii/hive-agent'
+import { Pool } from 'pg'
+
+class PostgresRepository implements RepositoryProvider {
+  constructor(private pool: Pool) {}
+
+  async getHistory(conversationId: string): Promise<Message[]> {
+    const result = await this.pool.query(
+      'SELECT messages FROM conversations WHERE id = $1',
+      [conversationId]
+    )
+    return result.rows[0]?.messages || []
+  }
+
+  async saveHistory(conversationId: string, messages: Message[]): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO conversations (id, messages, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (id) DO UPDATE SET messages = $2, updated_at = NOW()`,
+      [conversationId, JSON.stringify(messages)]
+    )
+  }
+}
+```
+
 ### Manual History Management
 
 Alternatively, manage history yourself:
@@ -306,23 +358,52 @@ const agent = new Hive({
 
 ## Prompt Caching (Claude)
 
-Reduce costs with Claude's prompt caching:
+Reduce costs by up to 90% with Claude's prompt caching. Cached tokens are billed at 1/10th the price of regular input tokens.
+
+Configure caching at the provider level:
 
 ```typescript
-const result = await agent.run(message, {
-  history,
+import { ClaudeProvider, type CacheConfig } from '@alexnetrebskii/hive-agent'
+
+const provider = new ClaudeProvider({
+  apiKey: process.env.ANTHROPIC_API_KEY,
   cache: {
     enabled: true,
-    cacheSystemPrompt: true,  // Cache system prompt
-    cacheTools: true,         // Cache tool definitions
-    cacheHistory: true        // Cache conversation history
+    cacheSystemPrompt: true,  // Cache system prompt (default: true)
+    cacheTools: true,         // Cache tool definitions (default: true)
+    cacheHistory: true        // Cache conversation history (default: true)
   }
 })
 
+const agent = new Hive({
+  systemPrompt: '...',
+  tools: [...],
+  llm: provider
+})
+
+const result = await agent.run(message)
+
 // Check cache usage
-console.log(result.usage?.cacheReadInputTokens)
-console.log(result.usage?.cacheCreationInputTokens)
+if (result.usage) {
+  console.log(`Cache write: ${result.usage.cacheCreationInputTokens || 0} tokens`)
+  console.log(`Cache read: ${result.usage.cacheReadInputTokens || 0} tokens`)
+}
 ```
+
+### How It Works
+
+- **First request**: Tokens are written to cache (`cacheCreationInputTokens`)
+- **Subsequent requests**: Tokens are read from cache (`cacheReadInputTokens`) at 1/10th cost
+- **Cache TTL**: 5 minutes (automatically extended on each hit)
+
+### Cache Breakpoints
+
+The framework automatically places cache breakpoints at optimal positions:
+- End of system prompt
+- End of tool definitions
+- Last user message in conversation history
+
+This ensures maximum cache reuse across conversation turns.
 
 ## Configuration
 
@@ -357,7 +438,13 @@ import { ClaudeProvider } from '@alexnetrebskii/hive-agent'
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
   model: 'claude-sonnet-4-20250514',  // Default
-  maxTokens: 8192
+  maxTokens: 8192,
+  cache: {                            // Optional: enable prompt caching
+    enabled: true,
+    cacheSystemPrompt: true,
+    cacheTools: true,
+    cacheHistory: true
+  }
 })
 ```
 
@@ -386,7 +473,11 @@ interface AgentResult {
   thinking?: string[]           // Thinking blocks (if enabled)
   todos?: TodoItem[]            // Current todo list
   pendingQuestion?: PendingQuestion  // If status is 'needs_input'
-  status: 'complete' | 'needs_input'
+  status: 'complete' | 'needs_input' | 'interrupted'
+  interrupted?: {
+    reason: 'aborted' | 'stopped' | 'max_iterations'
+    iterationsCompleted: number
+  }
   usage?: {
     totalInputTokens: number
     totalOutputTokens: number
@@ -417,6 +508,26 @@ interface ToolContext {
   conversationId?: string
   userId?: string
   metadata?: Record<string, unknown>
+}
+```
+
+### RepositoryProvider
+
+```typescript
+interface RepositoryProvider {
+  // Required: Load conversation history
+  getHistory(conversationId: string): Promise<Message[]>
+
+  // Required: Save conversation history
+  saveHistory(conversationId: string, messages: Message[]): Promise<void>
+
+  // Optional: Custom state storage
+  getState?(conversationId: string): Promise<Record<string, unknown> | null>
+  saveState?(conversationId: string, state: Record<string, unknown>): Promise<void>
+
+  // Optional: Caching layer
+  getCached?(key: string): Promise<unknown | null>
+  setCached?(key: string, value: unknown, ttlMs?: number): Promise<void>
 }
 ```
 

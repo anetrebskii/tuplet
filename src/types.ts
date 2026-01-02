@@ -121,13 +121,6 @@ export interface LLMResponse {
   cacheUsage?: CacheUsage
 }
 
-export interface CacheConfig {
-  enabled: boolean
-  cacheSystemPrompt?: boolean   // Cache the system prompt (default: true)
-  cacheTools?: boolean          // Cache tool definitions (default: true)
-  cacheHistory?: boolean        // Cache conversation history (default: true)
-}
-
 export interface CacheUsage {
   cacheCreationInputTokens: number
   cacheReadInputTokens: number
@@ -137,7 +130,6 @@ export interface LLMOptions {
   thinkingMode?: 'none' | 'enabled'
   thinkingBudget?: number
   model?: string
-  cache?: CacheConfig
 }
 
 export interface LLMProvider {
