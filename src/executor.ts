@@ -76,6 +76,15 @@ function toolsToSchemas(tools: Tool[]): ToolSchema[] {
 }
 
 /**
+ * Truncate and stringify data for logging
+ */
+function truncateForLog(data: unknown, maxLength = 500): string {
+  const str = JSON.stringify(data)
+  if (str.length <= maxLength) return str
+  return str.slice(0, maxLength) + `... (${str.length} chars total)`
+}
+
+/**
  * Execute a single tool
  */
 async function executeTool(
@@ -109,11 +118,28 @@ async function executeTool(
     details: { toolName: tool.name }
   })
 
+  // Log tool execution details
+  logger?.debug(`[Tool: ${tool.name}] Executing with params: ${truncateForLog(params)}`)
+  logger?.debug(`[Tool: ${tool.name}] Context: conversationId=${context.conversationId}, userId=${context.userId}, remainingTokens=${context.remainingTokens}`)
+  if (context.metadata && Object.keys(context.metadata).length > 0) {
+    logger?.debug(`[Tool: ${tool.name}] Metadata: ${truncateForLog(context.metadata)}`)
+  }
+
   logger?.onToolCall?.(tool.name, params)
 
   try {
     const result = await tool.execute(params, context)
     const durationMs = Date.now() - startTime
+
+    // Log result details
+    logger?.debug(`[Tool: ${tool.name}] Completed in ${durationMs}ms, success=${result.success}`)
+    if (result.success) {
+      if (result.data !== undefined) {
+        logger?.debug(`[Tool: ${tool.name}] Result data: ${truncateForLog(result.data)}`)
+      }
+    } else {
+      logger?.debug(`[Tool: ${tool.name}] Error: ${result.error}`)
+    }
 
     // Progress: tool completed (with result context)
     let completionMessage = `${tool.name} completed`
@@ -135,9 +161,17 @@ async function executeTool(
     return { result, durationMs }
   } catch (error) {
     const durationMs = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+
+    logger?.error(`[Tool: ${tool.name}] Exception after ${durationMs}ms: ${errorMessage}`)
+    if (errorStack) {
+      logger?.debug(`[Tool: ${tool.name}] Stack trace: ${errorStack}`)
+    }
+
     const result: ToolResult = {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: errorMessage
     }
 
     // Progress: tool failed
