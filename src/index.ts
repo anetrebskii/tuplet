@@ -51,12 +51,6 @@ export type {
   // Cache types
   CacheUsage,
 
-  // Review types
-  ReviewResult,
-  ReviewIssue,
-  ReviewSeverity,
-  ReviewConfig,
-
   // Config types
   ContextStrategy,
   SystemPromptConfig,
@@ -106,14 +100,6 @@ export {
   TodoManager,
   formatTodoList
 } from './todo.js'
-
-// Review utilities
-export {
-  ReviewManager,
-  formatReviewResult,
-  buildReviewInstructions,
-  DEFAULT_REVIEW_CATEGORIES
-} from './review.js'
 
 // History utilities
 export {

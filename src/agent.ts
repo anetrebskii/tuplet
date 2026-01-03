@@ -17,7 +17,6 @@ import type {
 import { ContextManager } from './context.js'
 import { executeLoop, cleanupInterruptedHistory } from './executor.js'
 import { TodoManager, createTodoTool } from './todo.js'
-import { ReviewManager, createReviewTool } from './review.js'
 import { TraceBuilder } from './trace.js'
 
 /**
@@ -435,17 +434,11 @@ export class Hive {
   /**
    * Get tools including internal tools for a specific run
    */
-  private getRunTools(todoManager: TodoManager, reviewManager?: ReviewManager): Tool[] {
-    const tools = [
+  private getRunTools(todoManager: TodoManager): Tool[] {
+    return [
       ...this.tools,
       createTodoTool(todoManager)
     ]
-
-    if (reviewManager?.isEnabled()) {
-      tools.push(createReviewTool(reviewManager))
-    }
-
-    return tools
   }
 
   /**
@@ -528,11 +521,6 @@ export class Hive {
     // Create todo manager for this run
     const todoManager = new TodoManager()
 
-    // Create review manager if review is configured
-    const reviewManager = this.config.review
-      ? new ReviewManager(this.config.review)
-      : undefined
-
     // Create tool context
     const toolContext: ToolContext = {
       remainingTokens: this.contextManager.getRemainingTokens(),
@@ -561,13 +549,12 @@ export class Hive {
     const result = await executeLoop(
       {
         systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(todoManager, reviewManager),
+        tools: this.getRunTools(todoManager),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,
         contextManager: this.contextManager,
         todoManager,
-        reviewManager,
         llmOptions: {
           thinkingMode: this.config.thinkingMode,
           thinkingBudget: this.config.thinkingBudget

@@ -219,7 +219,6 @@ export interface HiveConfig {
   thinkingMode?: 'none' | 'enabled'
   thinkingBudget?: number
 
-  review?: ReviewConfig
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean
@@ -283,7 +282,6 @@ export interface AgentResult {
   thinking?: string[]
   pendingQuestion?: PendingQuestion
   todos?: TodoItem[]
-  review?: ReviewResult
   status: AgentStatus
 
   /**
@@ -343,33 +341,6 @@ export interface TodoItem {
 export interface TodoList {
   items: TodoItem[]
   currentTaskId?: string
-}
-
-// ============================================================================
-// Review Types
-// ============================================================================
-
-export type ReviewSeverity = 'info' | 'warning' | 'error' | 'critical'
-
-export interface ReviewIssue {
-  severity: ReviewSeverity
-  message: string
-  suggestion?: string
-  location?: string
-}
-
-export interface ReviewResult {
-  passed: boolean
-  issues: ReviewIssue[]
-  summary: string
-  reviewedAt: number
-}
-
-export interface ReviewConfig {
-  enabled: boolean
-  autoReview?: boolean           // Automatically review before completing
-  requireApproval?: boolean      // Require explicit approval after review
-  categories?: string[]          // What to review: 'code', 'security', 'completeness', etc.
 }
 
 // ============================================================================

@@ -22,7 +22,6 @@ import type {
 } from './types.js'
 import { ContextManager } from './context.js'
 import { TodoManager } from './todo.js'
-import { ReviewManager } from './review.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 
@@ -34,7 +33,6 @@ export interface ExecutorConfig {
   maxIterations: number
   contextManager: ContextManager
   todoManager: TodoManager
-  reviewManager?: ReviewManager
   llmOptions?: LLMOptions
 
   /** AbortSignal for cancellation */
@@ -103,12 +101,6 @@ async function executeTool(
   } else if (tool.name === '__task__') {
     const agent = (params as { agent?: string }).agent
     progressMessage = `Delegating to ${agent}...`
-  } else if (tool.name === 'search_food') {
-    const query = (params as { query?: string }).query
-    progressMessage = `Searching for "${query}"...`
-  } else if (tool.name === 'log_meal') {
-    const food = (params as { food?: string }).food
-    progressMessage = `Logging ${food}...`
   }
 
   logger?.onProgress?.({
@@ -130,12 +122,6 @@ async function executeTool(
       if (data.message) {
         completionMessage = data.message
       }
-    } else if (tool.name === 'search_food' && result.success && result.data) {
-      const data = result.data as { count?: number }
-      completionMessage = `Found ${data.count || 0} results`
-    } else if (tool.name === 'log_meal' && result.success && result.data) {
-      const data = result.data as { message?: string }
-      completionMessage = data.message || 'Meal logged'
     }
 
     logger?.onProgress?.({
@@ -374,7 +360,6 @@ export async function executeLoop(
     maxIterations,
     contextManager,
     todoManager,
-    reviewManager,
     llmOptions,
     signal,
     shouldContinue,
@@ -504,14 +489,12 @@ export async function executeLoop(
         continue
       }
 
-      const review = reviewManager?.getCurrentReview()
       const result: AgentResult = {
         response: extractText(response.content),
         history: messages,
         toolCalls: toolCallLogs,
         thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
         todos: todos.length > 0 ? todos : undefined,
-        review,
         status: 'complete',
         usage: {
           totalInputTokens,
