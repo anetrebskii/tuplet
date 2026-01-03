@@ -127,5 +127,11 @@ export {
   Context,
   createContextTools,
   type ContextEntry,
-  type ContextListItem
+  type ContextListItem,
+  type ContextSchema,
+  type ContextConfig,
+  type ValidatorFn,
+  type ZodLike,
+  type ValidationError,
+  type WriteResult
 } from './shared-context.js'
