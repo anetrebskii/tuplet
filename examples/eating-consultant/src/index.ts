@@ -33,8 +33,7 @@ function displayEnhancedQuestion(q: EnhancedQuestion, index: number): void {
       const descText = desc ? ` - ${desc}` : ''
       console.log(`  ${i + 1}. ${label}${descText}`)
     })
-    // Always show "Other" option
-    console.log(`  0. Other (type your own)`)
+    console.log(`  Or type your own answer`)
   }
 }
 
@@ -43,48 +42,27 @@ async function collectAnswer(
   rl: readline.Interface,
   q: EnhancedQuestion
 ): Promise<string | string[]> {
-  const promptText = q.multiSelect
-    ? 'Your choices (e.g., 1,3 or 0 for other): '
-    : 'Your choice (or 0 for other): '
+  const promptText = q.multiSelect ? 'Your choices: ' : 'Your choice: '
 
   return new Promise((resolve) => {
-    rl.question(promptText, async (input) => {
+    rl.question(promptText, (input) => {
       const trimmed = input.trim()
 
       // If options exist, try to parse as numbers
       if (q.options && q.options.length > 0) {
         const parts = trimmed.split(',').map(s => s.trim())
-
-        // Check if user selected "0" (Other)
-        if (parts.includes('0') || parts[0] === '0') {
-          // Prompt for custom input
-          rl.question('Type your answer: ', (customInput) => {
-            const custom = customInput.trim()
-            if (q.multiSelect) {
-              // For multiSelect, allow combining with other selections
-              const otherParts = parts.filter(p => p !== '0')
-              const indices = otherParts.map(s => parseInt(s) - 1)
-              const validIndices = indices.filter(i => i >= 0 && i < q.options!.length)
-              const selected = validIndices.map(i => getOptionLabel(q.options![i]))
-              resolve([...selected, custom])
-            } else {
-              resolve(custom)
-            }
-          })
-          return
-        }
-
         const indices = parts.map(s => parseInt(s) - 1)
-        const validIndices = indices.filter(i => i >= 0 && i < q.options!.length)
+        const validIndices = indices.filter(i => !isNaN(i) && i >= 0 && i < q.options!.length)
 
         if (validIndices.length > 0) {
+          // User entered valid option numbers
           const selected = validIndices.map(i => getOptionLabel(q.options![i]))
           resolve(q.multiSelect ? selected : selected[0])
           return
         }
       }
 
-      // No options or invalid input - treat as raw text
+      // Not a number or no options - use as custom text
       resolve(q.multiSelect ? trimmed.split(',').map(s => s.trim()) : trimmed)
     })
   })
@@ -132,7 +110,7 @@ function displayPendingQuestion(pq: PendingQuestion): 'legacy' | 'multi' {
       if (parsedOptions.length > 0) {
         console.log('\nOptions:')
         parsedOptions.forEach((opt, i) => console.log(`  ${i + 1}. ${opt}`))
-        console.log(`  0. Other (type your own)`)
+        console.log(`  Or type your own answer`)
       }
     }
     return 'legacy'
@@ -162,7 +140,7 @@ function showProgress(update: ProgressUpdate): void {
   }
 }
 
-// Create logger with progress support
+// Create logger with progress support and tool debugging
 function createProgressLogger() {
   const base = new ConsoleLogger({ level: 'warn', prefix: '[Eating]' })
   return {
@@ -170,7 +148,19 @@ function createProgressLogger() {
     info: base.info.bind(base),
     warn: base.warn.bind(base),
     error: base.error.bind(base),
-    onProgress: showProgress
+    onProgress: showProgress,
+    // Show tool inputs and outputs for debugging
+    onToolCall: (toolName: string, params: unknown) => {
+      if (toolName.startsWith('context_')) {
+        console.log(`\n📥 ${toolName} input:`, JSON.stringify(params, null, 2))
+      }
+    },
+    onToolResult: (toolName: string, result: { success: boolean; data?: unknown; error?: string }) => {
+      if (toolName.startsWith('context_')) {
+        const status = result.success ? '✓' : '✗'
+        console.log(`📤 ${toolName} ${status}:`, JSON.stringify(result, null, 2))
+      }
+    }
   }
 }
 
@@ -260,97 +250,53 @@ If food not found, return:
 
 const SYSTEM_PROMPT = `You are a friendly nutrition consultant powered by real food data from OpenFoodFacts.
 
-## Your Capabilities
+## Capabilities
 
-1. **Log Meals** - When users mention eating something, delegate to the nutrition_counter agent
-2. **View Progress** - Show daily nutrition totals and meal breakdown
-3. **Meal Planning** - Create weekly/daily meal plans using the todo list
-4. **Give Advice** - Provide nutrition guidance based on their intake
+1. **Log Meals** - Use nutrition_counter agent when users mention eating something
+2. **View Progress** - Show daily nutrition totals with get_daily_totals
+3. **Meal Planning** - Create meal plans, use todo list to track progress
+4. **Give Advice** - Provide nutrition guidance based on intake
 
-## How to Help Users
+## Context Storage
+
+Save important data to context:
+
+- plan/current.json - Meal plans { title, goal, dailyCalories, days[] }
+- meals/today.json - Today's nutrition { totalCalories, totalProtein, totalCarbs, totalFat, meals[] }
+- user/preferences.json - User preferences { goal, restrictions[] }
+- notes/advice.md - Nutritional recommendations (markdown)
+
+Always save meal plans and user preferences to context.
+
+## Workflow
 
 ### Logging meals
-When a user says they ate something like "I had a chicken sandwich for lunch":
+When user says "I had chicken for lunch":
+1. Ask for portion if unclear (150g small, 250g medium, 350g large)
+2. Call nutrition_counter with { food, portionGrams, meal }
+3. Summarize: "Recorded chicken - 350 kcal"
 
-1. Extract the information:
-   - food: "chicken sandwich"
-   - portionGrams: estimate ~300g (or ask if unclear)
-   - meal: "lunch"
+### Meal planning
+When user asks for a meal plan:
+1. Ask clarifying questions: goal, daily calories, restrictions
+2. Create todo list to track each day
+3. Write out the full plan with meals and calories
+4. Save plan to context
 
-2. Call nutrition_counter agent with structured parameters:
-   { "agent": "nutrition_counter", "food": "chicken sandwich", "portionGrams": 300, "meal": "lunch" }
+Example plan format:
+📅 **Понедельник** (~1800 ккал)
+🍳 Завтрак: Овсянка с ягодами (350 ккал)
+🍽️ Обед: Курица с рисом (500 ккал)
+🍲 Ужин: Рыба с овощами (400 ккал)
 
-3. You'll receive structured output:
-   { "summary": "Logged 300g chicken sandwich...", "data": { "logged": true, "calories": 450, ... } }
+## Rules
 
-4. Summarize to user: "Recorded your chicken sandwich - 450 kcal"
+- Ask clarifying questions before complex tasks
+- Use todo list for multi-step tasks
+- Be encouraging, never judgmental
+- Use Russian if user speaks Russian
 
-### When information is missing
-If the user says "I ate pasta" without portion/meal:
-- Use __ask_user__ to ask: "How much pasta? (150g small, 250g medium, 350g large)"
-- Then call nutrition_counter with complete parameters
-
-### Meal Planning (use __todo__ and __ask_user__)
-When a user asks for a meal plan like "Составь план питания на неделю":
-
-1. FIRST ask clarifying questions using __ask_user__ with options:
-   - "Какая у вас цель?" options: ["Похудение", "Набор массы", "Поддержание веса", "Здоровое питание"]
-   - "Сколько калорий в день?" options: ["1500 ккал", "1800 ккал", "2000 ккал", "2500 ккал"]
-   - "Есть ли ограничения?" options: ["Нет ограничений", "Без мяса", "Без молочных", "Без глютена"]
-
-2. Create a todo list to track days:
-   { "action": "set", "items": ["План на понедельник", "План на вторник", ...] }
-
-3. CREATE THE FULL PLAN IN YOUR RESPONSE. For each day:
-   - Think about balanced meals matching user's calorie goal
-   - Include breakfast, lunch, dinner, and snacks
-   - Calculate approximate calories for each meal
-   - Mark each day complete as you write it
-
-4. YOUR FINAL RESPONSE MUST CONTAIN THE ACTUAL MEAL PLAN:
-
-   📅 **Понедельник** (~1800 ккал)
-   🍳 Завтрак: Овсянка с ягодами и орехами (350 ккал)
-   🍽️ Обед: Куриная грудка с рисом и овощами (500 ккал)
-   🥗 Перекус: Яблоко и йогурт (150 ккал)
-   🍲 Ужин: Рыба на пару с брокколи (400 ккал)
-
-   📅 **Вторник** (~1800 ккал)
-   ... и так далее для каждого дня
-
-CRITICAL: You MUST write out the actual meals with calories. Do NOT just say "план готов" without the content!
-
-5. SAVE THE PLAN TO CONTEXT using context_write:
-   - Use path "plan/current.json" with the full plan data
-   - The path has validation - must include title and days array
-   - Example: context_write({ path: "plan/current.json", value: { title: "План питания на неделю", goal: "weight_loss", dailyCalories: 1800, days: [...] } })
-
-### Viewing progress
-When a user asks about their progress:
-1. Use get_daily_totals to show their intake
-2. Save summary to context: context_write({ path: "meals/today.json", value: { totalCalories, totalProtein, totalCarbs, totalFat, meals: [...] } })
-3. Provide helpful commentary on their nutrition
-
-### Saving user preferences
-When user mentions dietary goals or restrictions:
-- Save to context: context_write({ path: "user/preferences.json", value: { goal: "weight_loss", restrictions: ["vegetarian"] } })
-- Valid goals: weight_loss, muscle_gain, maintenance, healthy
-
-### Saving advice
-When giving nutritional advice:
-- Save important advice to: context_write({ path: "notes/advice.md", value: "## Recommendations\n- Eat more protein..." })
-
-## Important Rules
-- For complex tasks (meal planning, weekly plans), ALWAYS use __todo__ to track progress
-- Ask clarifying questions BEFORE starting complex tasks
-- Be encouraging and supportive
-
-## Personality
-- Warm and encouraging (use Russian if user speaks Russian)
-- Data-driven but approachable
-- Never judgmental about food choices
-
-Start by greeting the user and asking what they've eaten today!`
+Start by greeting the user!`
 
 async function main() {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -369,44 +315,52 @@ async function main() {
 
   // Create context for agent communication with validation
   const context = new Context({
-    validators: {
-      // Meal plan must be valid JSON with required structure
+    strict: false,  // Allow any path (set to true to restrict to defined paths only)
+    paths: {
+      // Meal plan with schema validation
       'plan/current.json': {
-        type: 'object',
-        properties: {
-          title: { type: 'string' },
-          goal: { type: 'string' },
-          dailyCalories: { type: 'number' },
-          days: { type: 'array' }
-        },
-        required: ['title', 'days']
+        validator: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            goal: { type: 'string' },
+            dailyCalories: { type: 'number' },
+            days: { type: 'array' }
+          },
+          required: ['title', 'days']
+        }
       },
 
-      // Daily totals as JSON
+      // Daily totals with initial value
       'meals/today.json': {
-        type: 'object',
-        properties: {
-          totalCalories: { type: 'number' },
-          totalProtein: { type: 'number' },
-          totalCarbs: { type: 'number' },
-          totalFat: { type: 'number' },
-          meals: { type: 'array' }
-        }
+        validator: {
+          type: 'object',
+          properties: {
+            totalCalories: { type: 'number' },
+            totalProtein: { type: 'number' },
+            totalCarbs: { type: 'number' },
+            totalFat: { type: 'number' },
+            meals: { type: 'array' }
+          }
+        },
+        value: { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, meals: [] }
       },
 
-      // User preferences as JSON
+      // User preferences with schema
       'user/preferences.json': {
-        type: 'object',
-        properties: {
-          goal: { type: 'string', enum: ['weight_loss', 'muscle_gain', 'maintenance', 'healthy'] },
-          restrictions: { type: 'array' }
+        validator: {
+          type: 'object',
+          properties: {
+            goal: { type: 'string', enum: ['weight_loss', 'muscle_gain', 'maintenance', 'healthy'] },
+            restrictions: { type: 'array' }
+          }
         }
       },
 
-      // Notes as markdown
-      'notes/advice.md': null,  // Just validates it's a string
+      // Notes as markdown (format validation from extension)
+      'notes/advice.md': null,
 
-      // Analysis result as text
+      // Analysis result as text (format validation from extension)
       'analysis/summary.txt': null
     }
   })

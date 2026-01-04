@@ -1,131 +1,149 @@
 # Context - Shared Data for Agents
 
-Context is a virtual filesystem that enables tools and sub-agents to share data without passing content through return values. Similar to how Claude Code uses the actual filesystem for agent coordination.
+Context is a virtual filesystem that enables tools and sub-agents to share data. Instead of relying on text responses (which can be lost or truncated), Context provides a structured way to store and retrieve data.
 
-## Why Context?
-
-Sub-agents often generate data that the parent agent or user needs to access:
-- Generated plans, reports, or analysis
-- User preferences collected during conversation
-- Intermediate results from multi-step workflows
-
-Instead of relying on text responses (which can be lost or truncated), Context provides a structured way to store and retrieve data.
-
-## Quick Start
+## Basic Setup
 
 ```typescript
 import { Hive, ClaudeProvider, Context } from '@alexnetrebskii/hive-agent'
 
-// Create context with optional validators
+// 1. Create context with paths
 const context = new Context({
-  validators: {
-    'plan/current.json': {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        days: { type: 'array' }
-      },
-      required: ['title', 'days']
+  paths: {
+    'user/preferences.json': null,        // format validation only
+    'meals/today.json': { value: [] },    // with initial value
+    'plan/current.json': {                // with schema validation
+      validator: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          days: { type: 'array' }
+        },
+        required: ['title', 'days']
+      }
     }
   }
 })
 
-// Pre-populate data before run
-context.write('user/name', 'Alex')
-
+// 2. Create agent
 const agent = new Hive({
-  systemPrompt: '...',
+  systemPrompt: SYSTEM_PROMPT,
   tools: [...],
   llm: new ClaudeProvider({ apiKey: '...' })
 })
 
-// Pass context to agent
+// 3. Pass context to run
 const result = await agent.run('Create a meal plan', { context })
 
-// Read data written by agent
+// 4. Read data written by agent
 const plan = context.read('plan/current.json')
-console.log(plan)
 ```
 
-## Context API
+## System Prompt Example
 
-### Writing Data
+The framework automatically provides `context_write`, `context_read`, `context_ls` tools. Your system prompt only needs to explain **what paths exist** and **when to save**:
 
 ```typescript
-const context = new Context()
+const SYSTEM_PROMPT = `You are a nutrition consultant.
 
-// Simple write
-context.write('user/preferences', { theme: 'dark', language: 'en' })
+## Context Storage
 
-// Write with author tracking
-context.write('meals/today', [...meals], 'nutrition_agent')
+Save important data to context so it persists:
 
-// Check write result (for validated paths)
-const result = context.write('plan/current.json', invalidData)
-if (!result.success) {
-  console.log('Validation errors:', result.errors)
-}
+- user/preferences.json - User dietary preferences { goal, restrictions }
+- meals/today.json - Today's meals { totalCalories, meals: [] }
+- plan/current.json - Meal plan (required: title, days array)
+- notes/advice.md - Nutritional advice (markdown)
+
+Always save meal plans and user preferences to context.`
 ```
 
-### Reading Data
+## Reading Data (Application Code)
 
 ```typescript
+// After agent.run() completes
+
 // Read with type hint
-const prefs = context.read<{ theme: string }>('user/preferences')
+const plan = context.read<{ title: string; days: string[] }>('plan/current.json')
 
 // Check if exists
 if (context.has('plan/current.json')) {
-  const plan = context.read('plan/current.json')
+  console.log('Plan created!')
 }
 
-// Get full entry with metadata
-const entry = context.getEntry('meals/today')
-console.log(entry?.writtenBy)  // 'nutrition_agent'
-console.log(entry?.updatedAt)  // timestamp
+// Get metadata
+const entry = context.getEntry('meals/today.json')
+console.log(entry?.writtenBy)   // 'nutrition_agent'
+console.log(entry?.updatedAt)   // timestamp
+
+// List all data
+const items = context.list()
+// [{ path: 'user/preferences.json', preview: '{goal, restrictions}', updatedAt: ... }]
+
+// List by prefix (matches paths starting with prefix)
+context.list('meals/')     // 'meals/today.json', 'meals/history.json'
+context.list('meals')      // same as above
+context.list('mea')        // also matches 'meals/*'
+context.list('user/pref')  // 'user/preferences.json'
 ```
 
-### Listing and Searching
+## Initialization Options
+
+### Strict Mode
+
+Only allow writes to defined paths:
 
 ```typescript
-// List all paths
-const all = context.list()
-// [{ path: 'user/preferences', preview: '{theme, language}', updatedAt: ... }]
+const context = new Context({
+  strict: true,  // Reject writes to undefined paths
+  paths: {
+    'user/data.json': null,
+    'output/result.json': null
+  }
+})
 
-// List with prefix filter
-const meals = context.list('meals/')
-// [{ path: 'meals/today', ... }, { path: 'meals/yesterday', ... }]
+// Works
+context.write('user/data.json', { name: 'Alex' })
 
-// Get just keys
-const keys = context.keys('user/')
-// ['user/name', 'user/preferences']
+// Fails in strict mode
+context.write('random/path.json', { foo: 'bar' })
+// Error: Path "random/path.json" is not defined
 ```
 
-### Other Operations
+### Initial Values
+
+Pre-populate paths with data:
 
 ```typescript
-// Delete
-context.delete('temp/scratch')
+const context = new Context({
+  paths: {
+    // With initial value (format validation from .json extension)
+    'config/settings.json': {
+      value: { theme: 'dark', language: 'en' }
+    },
 
-// Clear all
-context.clear()
+    // With initial value AND schema validator
+    'meals/today.json': {
+      validator: {
+        type: 'object',
+        properties: {
+          totalCalories: { type: 'number' },
+          meals: { type: 'array' }
+        }
+      },
+      value: { totalCalories: 0, meals: [] }
+    }
+  }
+})
 
-// Export to plain object
-const data = context.toObject()
-
-// Import from object
-context.fromObject({ 'user/name': 'Alex', 'user/age': 30 })
-
-// Get count
-console.log(context.size)
+// Data is available immediately
+const settings = context.read('config/settings.json')
+// { theme: 'dark', language: 'en' }
 ```
-
-## Validation
-
-Context supports validation to ensure agents write correctly structured data.
 
 ### Format Extensions
 
-Use file-like extensions for basic type validation:
+File-like extensions provide basic type validation:
 
 | Extension | Validates |
 |-----------|-----------|
@@ -137,58 +155,36 @@ Use file-like extensions for basic type validation:
 
 ```typescript
 const context = new Context({
-  validators: {
+  paths: {
     'data/config.json': null,    // Must be object/array
     'notes/summary.md': null,    // Must be string
     'stats/count.num': null,     // Must be number
-    'flags/active.bool': null    // Must be boolean
   }
 })
-
-// Valid
-context.write('data/config.json', { key: 'value' })
-context.write('notes/summary.md', 'This is markdown')
-
-// Invalid - will return { success: false, errors: [...] }
-context.write('data/config.json', 'not an object')
-context.write('stats/count.num', 'not a number')
 ```
 
 ### JSON Schema Validation
 
-Add JSON Schema for structured validation:
-
 ```typescript
 const context = new Context({
-  validators: {
+  paths: {
     'plan/current.json': {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        goal: { type: 'string', enum: ['weight_loss', 'muscle_gain', 'maintenance'] },
-        dailyCalories: { type: 'number' },
-        days: { type: 'array' }
+      validator: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          goal: { type: 'string', enum: ['weight_loss', 'muscle_gain'] },
+          days: { type: 'array' }
+        },
+        required: ['title', 'days']
       },
-      required: ['title', 'days']
+      description: 'Weekly meal plan'  // Shown to AI
     }
   }
 })
-
-// Valid
-context.write('plan/current.json', {
-  title: 'Weekly Plan',
-  goal: 'weight_loss',
-  days: ['Monday', 'Tuesday']
-})
-
-// Invalid - missing required 'days'
-const result = context.write('plan/current.json', { title: 'Plan' })
-// result.errors: [{ path: 'plan/current.json.days', message: 'Missing required property: days' }]
 ```
 
 ### Zod Validation
-
-Use Zod schemas for runtime validation:
 
 ```typescript
 import { z } from 'zod'
@@ -200,201 +196,118 @@ const UserSchema = z.object({
 })
 
 const context = new Context({
-  validators: {
-    'user/profile.json': UserSchema
+  paths: {
+    'user/profile.json': { validator: UserSchema }
   }
 })
-
-// Valid
-context.write('user/profile.json', {
-  name: 'Alex',
-  email: 'alex@example.com'
-})
-
-// Invalid
-const result = context.write('user/profile.json', {
-  name: '',
-  email: 'not-an-email'
-})
-// result.errors contain Zod validation messages
 ```
 
 ### Custom Validators
 
-Use custom functions for complex validation:
-
 ```typescript
 const context = new Context({
-  validators: {
-    'data/items.json': (value: unknown) => {
-      if (!Array.isArray(value)) {
-        return [{ path: 'data/items.json', message: 'Must be an array' }]
+  paths: {
+    'data/items.json': {
+      validator: (value: unknown) => {
+        if (!Array.isArray(value)) {
+          return [{ path: 'data/items.json', message: 'Must be array' }]
+        }
+        if (value.length > 100) {
+          return [{ path: 'data/items.json', message: 'Max 100 items' }]
+        }
+        return null  // Valid
       }
-      if (value.length > 100) {
-        return [{ path: 'data/items.json', message: 'Maximum 100 items allowed' }]
-      }
-      return null  // Valid
     }
   }
 })
 ```
 
-### Layered Validation
-
-Format validation happens first, then schema validation:
+## Writing Data (Application Code)
 
 ```typescript
-const context = new Context({
-  validators: {
-    // Step 1: .json extension validates it's an object/array
-    // Step 2: JSON Schema validates the structure
-    'plan/current.json': {
-      type: 'object',
-      properties: {
-        title: { type: 'string' }
-      },
-      required: ['title']
-    }
-  }
-})
+// Simple write
+context.write('user/preferences.json', { theme: 'dark' })
 
-// Fails format validation (not an object)
-context.write('plan/current.json', 'string')
-// Error: Expected JSON object or array
+// Write with author tracking
+context.write('meals/today.json', { meals: [...] }, 'nutrition_agent')
 
-// Passes format, fails schema (missing title)
-context.write('plan/current.json', { days: [] })
-// Error: Missing required property: title
-```
-
-## Context Tools
-
-When you pass context to `agent.run()`, three tools are automatically available to the agent:
-
-### context_ls
-
-List paths in the context:
-
-```
-Agent: I'll check what data is available.
-Tool: context_ls({ prefix: "user/" })
-Result: { items: [{ path: "user/preferences", preview: "{theme, language}" }] }
-```
-
-### context_read
-
-Read a value:
-
-```
-Agent: Let me read the user preferences.
-Tool: context_read({ path: "user/preferences" })
-Result: { found: true, value: { theme: "dark", language: "en" } }
-```
-
-### context_write
-
-Write a value:
-
-```
-Agent: I'll save the generated plan.
-Tool: context_write({ path: "plan/current.json", value: { title: "Weekly Plan", days: [...] } })
-Result: { success: true, path: "plan/current.json", written: true }
-```
-
-If validation fails:
-
-```
-Tool: context_write({ path: "plan/current.json", value: { days: [] } })
-Result: {
-  success: false,
-  error: "Validation failed",
-  errors: [{ path: "plan/current.json.title", message: "Missing required property: title" }]
+// Check result for validated paths
+const result = context.write('plan/current.json', { title: 'Plan' })
+if (!result.success) {
+  console.log('Errors:', result.errors)
+  // [{ path: 'plan/current.json.days', message: 'Missing required property: days' }]
 }
+```
+
+### Runtime Path Registration
+
+```typescript
+const context = new Context({ strict: true, paths: {} })
+
+// Add paths after construction
+context.registerPath('dynamic/data.json', {
+  validator: { type: 'object' },
+  value: {}
+})
+```
+
+### Other Operations
+
+```typescript
+// Delete
+context.delete('temp/scratch')
+
+// Clear all
+context.clear()
+
+// Export/Import
+const data = context.toObject()
+context.fromObject(savedData)
+
+// Count
+console.log(context.size)
 ```
 
 ## Sub-Agent Context
 
-Context is automatically passed to sub-agents, enabling data sharing:
-
-```typescript
-const context = new Context()
-
-// Main agent can pre-populate
-context.write('user/goals', ['lose weight', 'eat healthy'])
-
-const result = await agent.run('Analyze my eating habits', { context })
-
-// Sub-agent (nutrition_counter) can read parent's data
-// and write its own results
-const analysis = context.read('analysis/nutrition.json')
-```
-
-### Example: Multi-Agent Workflow
+Context is automatically passed to sub-agents:
 
 ```typescript
 const context = new Context({
-  validators: {
-    'research/findings.json': { type: 'object', required: ['topic', 'sources'] },
+  paths: {
+    'research/findings.json': null,
     'draft/article.md': null,
-    'review/feedback.json': { type: 'object', required: ['approved', 'comments'] }
+    'review/feedback.json': null
   }
 })
 
-// Agent orchestrates multiple sub-agents
-const result = await agent.run('Write an article about TypeScript', { context })
+// Parent agent orchestrates sub-agents
+const result = await agent.run('Write an article', { context })
 
 // Each sub-agent writes to context:
-// - researcher: context_write('research/findings.json', { topic: '...', sources: [...] })
-// - writer: context_write('draft/article.md', '# TypeScript Guide...')
-// - reviewer: context_write('review/feedback.json', { approved: true, comments: [...] })
+// - researcher → 'research/findings.json'
+// - writer → 'draft/article.md'
+// - reviewer → 'review/feedback.json'
 
-// Access all artifacts after run
+// Access all artifacts
 const research = context.read('research/findings.json')
 const draft = context.read('draft/article.md')
 const review = context.read('review/feedback.json')
 ```
 
-## System Prompt Integration
-
-Tell the agent about available context paths in your system prompt:
-
-```typescript
-const SYSTEM_PROMPT = `You are a nutrition consultant.
-
-## Context Storage
-
-Use context tools to save and retrieve data:
-
-- 'user/preferences.json' - User dietary preferences (goal, restrictions)
-- 'meals/today.json' - Today's logged meals with nutrition data
-- 'plan/current.json' - Generated meal plan (validated: must have title, days)
-- 'notes/advice.md' - Nutritional advice and recommendations
-
-Always save important data to context so it persists across conversations.`
-
-const context = new Context({
-  validators: {
-    'user/preferences.json': { /* schema */ },
-    'meals/today.json': { /* schema */ },
-    'plan/current.json': { /* schema */ },
-    'notes/advice.md': null
-  }
-})
-```
-
 ## Persisting Context
 
-Context is in-memory by default. To persist across sessions:
+Context is in-memory. To persist across sessions:
 
 ```typescript
-// Save to database after run
+// Save after run
 const result = await agent.run(message, { context })
-await db.collection('contexts').doc(userId).set(context.toObject())
+await db.save(userId, context.toObject())
 
 // Restore on next session
-const savedData = await db.collection('contexts').doc(userId).get()
-if (savedData.exists) {
-  context.fromObject(savedData.data())
+const saved = await db.load(userId)
+if (saved) {
+  context.fromObject(saved)
 }
 ```
 
@@ -402,21 +315,14 @@ if (savedData.exists) {
 
 ```typescript
 interface ContextConfig {
-  validators?: Record<string, JSONSchema | ValidatorFn | ZodLike | ContextSchema | null>
+  strict?: boolean  // Only allow defined paths (default: false)
+  paths?: Record<string, PathConfig | JSONSchema | ValidatorFn | ZodLike | null>
 }
 
-interface ContextEntry {
-  value: unknown
-  createdAt: number
-  updatedAt: number
-  writtenBy?: string
-}
-
-interface ContextListItem {
-  path: string
-  updatedAt: number
-  writtenBy?: string
-  preview: string
+interface PathConfig {
+  validator?: JSONSchema | ValidatorFn | ZodLike | null
+  value?: unknown           // Initial value
+  description?: string      // Shown to AI
 }
 
 interface WriteResult {
@@ -429,18 +335,5 @@ interface ValidationError {
   message: string
   expected?: string
   received?: string
-}
-
-type ValidatorFn = (value: unknown) => ValidationError[] | null
-
-interface ZodLike {
-  safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { errors: Array<{ path: (string | number)[]; message: string }> } }
-}
-
-interface ContextSchema {
-  schema?: JSONSchema
-  validate?: ValidatorFn
-  zod?: ZodLike
-  description?: string
 }
 ```

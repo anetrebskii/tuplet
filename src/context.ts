@@ -56,34 +56,65 @@ export interface ZodLike {
   safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { errors: Array<{ path: (string | number)[]; message: string }> } }
 }
 
-export interface ContextSchema {
-  /** JSON Schema for validation (use for .schema paths) */
-  schema?: JSONSchema
-  /** Custom validator function (use for .validate paths) */
-  validate?: ValidatorFn
-  /** Zod schema for validation (use for .zod paths) */
-  zod?: ZodLike
-  /** Description shown to AI about what this path expects */
+
+/**
+ * Path configuration with optional validator and initial value
+ */
+export interface PathConfig {
+  /** Validator for this path (null = format validation only from extension) */
+  validator?: JSONSchema | ValidatorFn | ZodLike | null
+  /** Initial value to populate */
+  value?: unknown
+  /** Description shown to AI */
   description?: string
 }
 
 export interface ContextConfig {
   /**
-   * Validators for context paths. Extension in path determines validation:
+   * Strict mode: only allow writing to defined paths.
+   * - true: writes to undefined paths will fail
+   * - false (default): any path can be written to
+   */
+  strict?: boolean
+
+  /**
+   * Path definitions with validators and optional initial values.
    *
-   * Format extensions (basic validation):
+   * Format extensions (basic validation from extension):
    * - 'path/name.json' → validates valid JSON object/array
    * - 'path/name.md' → validates string (markdown)
    * - 'path/name.txt' → validates string
    * - 'path/name.num' → validates number
    * - 'path/name.bool' → validates boolean
    *
-   * Schema extensions (with validator value):
-   * - 'path/name.schema' → JSON Schema validation
-   * - 'path/name.zod' → Zod schema validation
-   * - 'path/name.validate' → Custom validator function
+   * Values can be:
+   * - null → just format validation from extension
+   * - JSONSchema → schema validation
+   * - ValidatorFn → custom function
+   * - ZodLike → zod schema
+   * - PathConfig → { validator, value, description }
+   *
+   * @example
+   * ```typescript
+   * const context = new Context({
+   *   strict: true,
+   *   paths: {
+   *     // Format validation only
+   *     "notes.md": null,
+   *
+   *     // With initial value
+   *     "user.json": {
+   *       validator: { type: 'object', properties: { name: { type: 'string' } } },
+   *       value: { name: "Guest" }
+   *     },
+   *
+   *     // Just initial value, format validation from extension
+   *     "today/meals.json": { value: [] }
+   *   }
+   * })
+   * ```
    */
-  validators?: Record<string, JSONSchema | ValidatorFn | ZodLike | ContextSchema | null>
+  paths?: Record<string, JSONSchema | ValidatorFn | ZodLike | PathConfig | null>
 }
 
 export interface ValidationError {
@@ -117,6 +148,10 @@ interface ValidatorEntry {
 export class Context {
   private data: Map<string, ContextEntry> = new Map()
   private validators: Map<string, ValidatorEntry> = new Map()
+  /** Set of all defined paths (for strict mode) */
+  private definedPaths: Set<string> = new Set()
+  /** Strict mode: only allow writing to defined paths */
+  private strict: boolean = false
 
   /** Extension to type mapping */
   private static readonly EXT_MAP: Record<string, ValidatorType> = {
@@ -131,54 +166,92 @@ export class Context {
   }
 
   constructor(config?: ContextConfig) {
-    if (config?.validators) {
-      for (const [key, value] of Object.entries(config.validators)) {
-        this.registerValidator(key, value)
+    this.strict = config?.strict ?? false
+
+    if (config?.paths) {
+      for (const [key, value] of Object.entries(config.paths)) {
+        this.registerPath(key, value)
       }
     }
   }
 
   /**
-   * Register a validator for a path (can also be called after construction)
-   *
-   * For paths with format extensions (.json, .md, etc.), the validator adds
-   * additional validation on top of the basic format check.
+   * Check if strict mode is enabled
+   */
+  isStrict(): boolean {
+    return this.strict
+  }
+
+  /**
+   * Check if a path is defined (registered)
+   */
+  isDefined(path: string): boolean {
+    return this.definedPaths.has(path)
+  }
+
+  /**
+   * Get all defined paths
+   */
+  getDefinedPaths(): string[] {
+    return Array.from(this.definedPaths).sort()
+  }
+
+  /**
+   * Register a path with optional validator and initial value
    *
    * @example
-   * // Basic format validation only
-   * context.registerValidator('data/config.json', null)
+   * // Format validation only (from .json extension)
+   * context.registerPath('data/config.json', null)
    *
-   * // Format + JSON Schema validation
-   * context.registerValidator('data/config.json', { type: 'object', properties: {...} })
+   * // With JSON Schema
+   * context.registerPath('data/config.json', { type: 'object', properties: {...} })
    *
-   * // Format + Zod validation
-   * context.registerValidator('data/user.json', z.object({ name: z.string() }))
+   * // With initial value
+   * context.registerPath('data/user.json', { validator: schema, value: { name: "Guest" } })
    */
-  registerValidator(key: string, value: JSONSchema | ValidatorFn | ZodLike | ContextSchema | null): void {
-    // Keep the full path (with extension) as the key
-    const path = key
+  registerPath(
+    path: string,
+    config: JSONSchema | ValidatorFn | ZodLike | PathConfig | null
+  ): void {
+    // Always track this as a defined path
+    this.definedPaths.add(path)
 
-    if (!value) {
-      // Just register the path for format validation (no additional validator)
+    // Handle PathConfig (with value and/or validator)
+    if (config && typeof config === 'object' && ('value' in config || 'validator' in config || 'description' in config)) {
+      const pc = config as PathConfig
+      // Register validator if present
+      if (pc.validator !== undefined) {
+        this.setValidator(path, pc.validator, pc.description)
+      }
+      // Set initial value if present
+      if (pc.value !== undefined) {
+        this.write(path, pc.value, '_init')
+      }
       return
     }
 
-    // Determine validator type from value
-    if (typeof value === 'function') {
-      this.validators.set(path, { type: 'validate', validate: value })
-    } else if (this.isZodLike(value)) {
-      this.validators.set(path, { type: 'zod', zod: value })
-    } else if ('type' in value && value.type === 'object') {
-      this.validators.set(path, { type: 'schema', schema: value as JSONSchema })
-    } else if ('schema' in value || 'validate' in value || 'zod' in value) {
-      const cs = value as ContextSchema
-      if (cs.zod) {
-        this.validators.set(path, { type: 'zod', zod: cs.zod, description: cs.description })
-      } else if (cs.validate) {
-        this.validators.set(path, { type: 'validate', validate: cs.validate, description: cs.description })
-      } else if (cs.schema) {
-        this.validators.set(path, { type: 'schema', schema: cs.schema, description: cs.description })
-      }
+    // Handle direct validator (JSONSchema, ValidatorFn, ZodLike, null)
+    this.setValidator(path, config as JSONSchema | ValidatorFn | ZodLike | null)
+  }
+
+  /**
+   * Set validator for a path
+   */
+  private setValidator(
+    path: string,
+    validator: JSONSchema | ValidatorFn | ZodLike | null,
+    description?: string
+  ): void {
+    if (!validator) {
+      return
+    }
+
+    if (typeof validator === 'function') {
+      this.validators.set(path, { type: 'validate', validate: validator, description })
+    } else if (this.isZodLike(validator)) {
+      this.validators.set(path, { type: 'zod', zod: validator, description })
+    } else if ('type' in validator) {
+      this.validators.set(path, { type: 'schema', schema: validator as JSONSchema, description })
     }
   }
 
@@ -216,6 +289,17 @@ export class Context {
    * @returns WriteResult with success status and any validation errors
    */
   write(path: string, value: unknown, writtenBy?: string): WriteResult {
+    // Strict mode: only allow writing to defined paths
+    if (this.strict && !this.definedPaths.has(path)) {
+      return {
+        success: false,
+        errors: [{
+          path,
+          message: `Path "${path}" is not defined. Available paths: ${this.getDefinedPaths().join(', ') || 'none'}`
+        }]
+      }
+    }
+
     const { ext } = this.parsePathExt(path)
     const validator = this.validators.get(path)
     let errors: ValidationError[] = []
@@ -619,14 +703,20 @@ export class Context {
  * Create context tools for agents to interact with Context
  */
 export function createContextTools(context: Context, agentName?: string): import('./types.js').Tool[] {
-  // Build validator info for tool descriptions
-  const validatorPaths = context.getValidatorPaths()
-  const validatorInfo = validatorPaths.length > 0
-    ? `\n\nPaths with validation:\n${validatorPaths.map(p => {
+  // Build path info for tool descriptions
+  const definedPaths = context.getDefinedPaths()
+  const strictMode = context.isStrict()
+
+  const pathInfo = definedPaths.length > 0
+    ? `\n\n${strictMode ? 'Allowed' : 'Defined'} paths:\n${definedPaths.map(p => {
         const v = context.getValidator(p)
-        const desc = v?.description || (v?.type === 'schema' ? 'JSON Schema' : 'custom validator')
+        const desc = v?.description || (v?.type === 'schema' ? 'JSON Schema' : v?.type || 'format validation')
         return `- ${p}: ${desc}`
       }).join('\n')}`
+    : ''
+
+  const strictInfo = strictMode
+    ? '\n\nNOTE: Strict mode is enabled. Only defined paths can be written to.'
     : ''
 
   return [
@@ -635,7 +725,7 @@ export function createContextTools(context: Context, agentName?: string): import
       description: `List all paths in the context, optionally filtered by prefix.
 
 The context is a virtual filesystem where tools and agents can read/write data.
-Use this to discover what data is available.${validatorInfo}
+Use this to discover what data is available.${pathInfo}${strictInfo}
 
 Examples:
 - { } - list all paths
@@ -653,36 +743,27 @@ Examples:
         const prefix = params.prefix as string | undefined
         const items = context.list(prefix)
 
-        // Include validator info in response
-        const validators = context.getValidatorPaths()
+        // Include defined paths info in response
+        const paths = context.getDefinedPaths()
           .filter(p => !prefix || p.startsWith(prefix))
           .map(p => {
             const v = context.getValidator(p)
             return {
               path: p,
-              type: v?.type,
+              type: v?.type || 'format',
               description: v?.description,
-              schema: v?.schema
+              schema: v?.schema,
+              hasValue: context.has(p)
             }
           })
-
-        if (items.length === 0 && validators.length === 0) {
-          return {
-            success: true,
-            data: {
-              message: prefix ? `No entries found with prefix "${prefix}"` : 'Context is empty',
-              items: [],
-              validators: []
-            }
-          }
-        }
 
         return {
           success: true,
           data: {
+            strict: context.isStrict(),
             count: items.length,
             items,
-            validators: validators.length > 0 ? validators : undefined
+            definedPaths: paths.length > 0 ? paths : undefined
           }
         }
       }
@@ -738,11 +819,13 @@ Examples:
       description: `Write a value to the context.
 
 Use this to store data that should be available to other tools, agents, or after the run completes.
-Some paths have validators - if validation fails, you'll get an error with details.${validatorInfo}
+Some paths have validators - if validation fails, you'll get an error with details.${pathInfo}${strictInfo}
+
+IMPORTANT: For .json paths, pass the value as a JSON object, NOT as a string.
 
 Examples:
-- { "path": "meals.today", "value": { "breakfast": "eggs", "calories": 200 } }
-- { "path": "analysis.result", "value": "The data shows positive trends" }`,
+- { "path": "meals/today.json", "value": { "breakfast": "eggs", "calories": 200 } }
+- { "path": "notes/advice.md", "value": "Eat more vegetables" }`,
       parameters: {
         type: 'object',
         properties: {
@@ -751,15 +834,28 @@ Examples:
             description: 'The path to write to'
           },
           value: {
-            type: 'string',
-            description: 'The value to store (any JSON value)'
+            type: 'object',
+            description: 'The value to store. For .json paths use object/array, for .md/.txt use string.'
           }
         },
         required: ['path', 'value']
       },
       execute: async (params) => {
         const path = params.path as string
-        const value = params.value
+        let value = params.value
+
+        // If value is a string that looks like JSON, try to parse it
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+              (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+              value = JSON.parse(value)
+            } catch {
+              // Keep as string if parse fails
+            }
+          }
+        }
 
         const result = context.write(path, value, agentName)
 
