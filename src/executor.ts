@@ -446,9 +446,37 @@ export async function executeLoop(
 
       // Handle ask_user tool specially
       if (toolUse.name === ASK_USER_TOOL_NAME) {
-        const pendingQuestion: PendingQuestion = {
-          question: (toolUse.input as { question: string }).question,
-          options: (toolUse.input as { options?: string[] }).options
+        const input = toolUse.input as {
+          question?: string
+          options?: string[]
+          questions?: import('./types.js').EnhancedQuestion[]
+        }
+
+        // Build pendingQuestion supporting both legacy and new format
+        const pendingQuestion: PendingQuestion = {}
+
+        if (input.questions && Array.isArray(input.questions) && input.questions.length > 0) {
+          // New multi-question format
+          pendingQuestion.questions = input.questions
+        } else if (input.question) {
+          // Legacy single question format
+          pendingQuestion.question = input.question
+          // Handle options as string (JSON) or array
+          if (input.options) {
+            if (typeof input.options === 'string') {
+              try {
+                pendingQuestion.options = JSON.parse(input.options)
+              } catch {
+                pendingQuestion.options = [input.options]
+              }
+            } else if (Array.isArray(input.options)) {
+              pendingQuestion.options = input.options
+            }
+          }
+        } else {
+          // Fallback: agent called tool without proper parameters
+          // Create a generic question to avoid breaking the flow
+          pendingQuestion.question = 'The assistant needs more information. Please provide additional details.'
         }
 
         const todos = todoManager.getAll()

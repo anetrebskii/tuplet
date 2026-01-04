@@ -26,29 +26,59 @@ import { Context, createContextTools } from './context.js'
 function createAskUserTool(): Tool {
   return {
     name: '__ask_user__',
-    description: `Ask the user a clarifying question when you need more information.
+    description: `Ask the user clarifying question(s) when you need more information.
+
+Supports two formats:
+
+1. Single question (legacy):
+   { "question": "Which database?", "options": ["PostgreSQL", "MySQL"] }
+
+2. Multiple questions with rich options:
+   {
+     "questions": [
+       {
+         "question": "Which database should we use?",
+         "header": "Database",
+         "options": [
+           { "label": "PostgreSQL", "description": "Best for complex queries" },
+           { "label": "MongoDB", "description": "Best for flexible schemas" }
+         ],
+         "multiSelect": false
+       },
+       {
+         "question": "Which features do you need?",
+         "header": "Features",
+         "options": [
+           { "label": "Auth", "description": "User authentication" },
+           { "label": "Cache", "description": "Redis caching layer" }
+         ],
+         "multiSelect": true
+       }
+     ]
+   }
 
 Usage:
 - Use when requirements are ambiguous
 - Use when you need the user to make a decision
-- Use when you need specific information to proceed
-
-Examples:
-- { "question": "Which database should I use?", "options": ["PostgreSQL", "MySQL", "MongoDB"] }
-- { "question": "What is the target directory for the output files?" }`,
+- Use questions array for multiple related decisions
+- Use multiSelect: true when choices aren't mutually exclusive`,
     parameters: {
       type: 'object',
       properties: {
         question: {
           type: 'string',
-          description: 'The question to ask the user'
+          description: 'Single question to ask the user (legacy format). Use this OR questions, not both.'
         },
         options: {
-          type: 'string',
-          description: 'Optional array of choices for the user'
+          type: 'array',
+          description: 'Optional array of choices for single question (legacy format)'
+        },
+        questions: {
+          type: 'array',
+          description: 'Array of 1-4 questions for multi-question format. Each item has: question (string), header (short label), options (array of {label, description}), multiSelect (boolean). Use this OR question, not both.'
         }
       },
-      required: ['question']
+      required: []
     },
     execute: async () => {
       // This tool is handled specially in the executor

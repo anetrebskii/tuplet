@@ -33,6 +33,8 @@ export type {
   AgentResult,
   AgentStatus,
   PendingQuestion,
+  QuestionOption,
+  EnhancedQuestion,
 
   // Todo types
   TodoItem,

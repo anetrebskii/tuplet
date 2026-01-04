@@ -274,9 +274,39 @@ export interface RunOptions {
   _traceBuilder?: import('./trace.js').TraceBuilder
 }
 
-export interface PendingQuestion {
+/**
+ * Option for a question with label and optional description
+ */
+export interface QuestionOption {
+  label: string
+  description?: string
+}
+
+/**
+ * Enhanced question format for multi-question sequences
+ */
+export interface EnhancedQuestion {
+  /** The complete question to ask the user */
   question: string
+  /** Short label displayed as a chip/tag (max 12 chars), e.g., "Auth method", "Library" */
+  header?: string
+  /** Available choices - can be simple strings or objects with label/description */
+  options?: (string | QuestionOption)[]
+  /** Allow multiple options to be selected (default: false) */
+  multiSelect?: boolean
+}
+
+/**
+ * Pending question(s) awaiting user input
+ * Supports both legacy single-question format and new multi-question format
+ */
+export interface PendingQuestion {
+  /** Legacy: Single question text */
+  question?: string
+  /** Legacy: Simple string options for single question */
   options?: string[]
+  /** New: Array of questions for multi-question sequences (1-4 questions) */
+  questions?: EnhancedQuestion[]
 }
 
 export type AgentStatus = 'complete' | 'needs_input' | 'interrupted'

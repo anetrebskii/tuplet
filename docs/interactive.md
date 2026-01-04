@@ -36,12 +36,47 @@ if (result.status === 'needs_input') {
 
 ## PendingQuestion Structure
 
+The framework supports two formats: legacy single-question and multi-question sequences.
+
+### Legacy Single Question
+
 ```typescript
 interface PendingQuestion {
   question: string      // The question text
   options?: string[]    // Optional multiple choice options
 }
+```
 
+### Multi-Question Format
+
+For asking multiple related questions at once with rich options:
+
+```typescript
+interface QuestionOption {
+  label: string         // Display text (1-5 words)
+  description?: string  // Explanation of what this option means
+}
+
+interface EnhancedQuestion {
+  question: string      // Full question text
+  header?: string       // Short label for UI (max 12 chars), e.g., "Database"
+  options?: (string | QuestionOption)[]  // 2-4 choices
+  multiSelect?: boolean // Allow multiple selections (default: false)
+}
+
+interface PendingQuestion {
+  // Legacy format
+  question?: string
+  options?: string[]
+
+  // Multi-question format
+  questions?: EnhancedQuestion[]
+}
+```
+
+### AgentResult
+
+```typescript
 interface AgentResult {
   status: 'complete' | 'needs_input' | 'interrupted'
   pendingQuestion?: PendingQuestion  // Present when status is 'needs_input'
@@ -238,7 +273,102 @@ Always provide options when possible:
 `
 ```
 
-## Handling Multiple Questions
+## Multi-Question Example
+
+When the agent asks multiple questions at once:
+
+```typescript
+// Agent returns questions array
+if (result.pendingQuestion?.questions) {
+  const answers: Record<string, string | string[]> = {}
+
+  for (const q of result.pendingQuestion.questions) {
+    console.log(`\n${q.header || 'Question'}: ${q.question}`)
+
+    if (q.options) {
+      q.options.forEach((opt, i) => {
+        const label = typeof opt === 'string' ? opt : opt.label
+        const desc = typeof opt === 'object' ? opt.description : undefined
+        console.log(`  ${i + 1}. ${label}${desc ? ` - ${desc}` : ''}`)
+      })
+    }
+
+    const answer = await getUserInput(q.multiSelect ? '(comma-separated)' : '')
+    answers[q.header || q.question] = q.multiSelect
+      ? answer.split(',').map(s => s.trim())
+      : answer
+  }
+
+  // Continue with all answers as JSON
+  const continued = await agent.run(JSON.stringify(answers), {
+    history: result.history
+  })
+}
+```
+
+### React Multi-Question Component
+
+```tsx
+function MultiQuestionUI({ questions, onAnswer }) {
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
+
+  function handleOptionClick(questionIndex: number, option: string) {
+    const q = questions[questionIndex]
+    const key = q.header || `q${questionIndex}`
+
+    if (q.multiSelect) {
+      const current = (answers[key] as string[]) || []
+      const updated = current.includes(option)
+        ? current.filter(o => o !== option)
+        : [...current, option]
+      setAnswers({ ...answers, [key]: updated })
+    } else {
+      setAnswers({ ...answers, [key]: option })
+    }
+  }
+
+  function handleSubmit() {
+    onAnswer(JSON.stringify(answers))
+  }
+
+  return (
+    <div className="space-y-4">
+      {questions.map((q, qi) => (
+        <div key={qi} className="border p-4 rounded">
+          {q.header && <span className="chip">{q.header}</span>}
+          <p className="font-medium">{q.question}</p>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {q.options?.map((opt, oi) => {
+              const label = typeof opt === 'string' ? opt : opt.label
+              const desc = typeof opt === 'object' ? opt.description : undefined
+              const key = q.header || `q${qi}`
+              const selected = q.multiSelect
+                ? (answers[key] as string[])?.includes(label)
+                : answers[key] === label
+
+              return (
+                <button
+                  key={oi}
+                  onClick={() => handleOptionClick(qi, label)}
+                  className={selected ? 'selected' : ''}
+                  title={desc}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+
+      <button onClick={handleSubmit}>Submit Answers</button>
+    </div>
+  )
+}
+```
+
+## Handling Sequential Questions
 
 Sometimes agents need to ask several questions. Handle this with a loop:
 

@@ -7,8 +7,138 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, type Message, type SubAgentConfig, type ProgressUpdate } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools, mainAgentTools } from './tools.js'
+
+// Helper to get option label (works with both string and QuestionOption)
+function getOptionLabel(opt: string | QuestionOption): string {
+  return typeof opt === 'string' ? opt : opt.label
+}
+
+// Helper to get option description (only for QuestionOption)
+function getOptionDescription(opt: string | QuestionOption): string | undefined {
+  return typeof opt === 'object' ? opt.description : undefined
+}
+
+// Display a single enhanced question
+function displayEnhancedQuestion(q: EnhancedQuestion, index: number): void {
+  const header = q.header ? `[${q.header}] ` : ''
+  const multiNote = q.multiSelect ? ' (select multiple, comma-separated)' : ''
+  console.log(`\n${header}${q.question}${multiNote}`)
+
+  if (q.options && q.options.length > 0) {
+    q.options.forEach((opt, i) => {
+      const label = getOptionLabel(opt)
+      const desc = getOptionDescription(opt)
+      const descText = desc ? ` - ${desc}` : ''
+      console.log(`  ${i + 1}. ${label}${descText}`)
+    })
+    // Always show "Other" option
+    console.log(`  0. Other (type your own)`)
+  }
+}
+
+// Collect answer for a single question using readline
+async function collectAnswer(
+  rl: readline.Interface,
+  q: EnhancedQuestion
+): Promise<string | string[]> {
+  const promptText = q.multiSelect
+    ? 'Your choices (e.g., 1,3 or 0 for other): '
+    : 'Your choice (or 0 for other): '
+
+  return new Promise((resolve) => {
+    rl.question(promptText, async (input) => {
+      const trimmed = input.trim()
+
+      // If options exist, try to parse as numbers
+      if (q.options && q.options.length > 0) {
+        const parts = trimmed.split(',').map(s => s.trim())
+
+        // Check if user selected "0" (Other)
+        if (parts.includes('0') || parts[0] === '0') {
+          // Prompt for custom input
+          rl.question('Type your answer: ', (customInput) => {
+            const custom = customInput.trim()
+            if (q.multiSelect) {
+              // For multiSelect, allow combining with other selections
+              const otherParts = parts.filter(p => p !== '0')
+              const indices = otherParts.map(s => parseInt(s) - 1)
+              const validIndices = indices.filter(i => i >= 0 && i < q.options!.length)
+              const selected = validIndices.map(i => getOptionLabel(q.options![i]))
+              resolve([...selected, custom])
+            } else {
+              resolve(custom)
+            }
+          })
+          return
+        }
+
+        const indices = parts.map(s => parseInt(s) - 1)
+        const validIndices = indices.filter(i => i >= 0 && i < q.options!.length)
+
+        if (validIndices.length > 0) {
+          const selected = validIndices.map(i => getOptionLabel(q.options![i]))
+          resolve(q.multiSelect ? selected : selected[0])
+          return
+        }
+      }
+
+      // No options or invalid input - treat as raw text
+      resolve(q.multiSelect ? trimmed.split(',').map(s => s.trim()) : trimmed)
+    })
+  })
+}
+
+// Handle multi-question flow and return combined answer
+async function handleMultiQuestion(
+  rl: readline.Interface,
+  questions: EnhancedQuestion[]
+): Promise<string> {
+  const answers: Record<string, string | string[]> = {}
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i]
+    displayEnhancedQuestion(q, i)
+    const answer = await collectAnswer(rl, q)
+    const key = q.header || `q${i}`
+    answers[key] = answer
+  }
+
+  return JSON.stringify(answers)
+}
+
+// Display pending question (supports both legacy and multi-question format)
+function displayPendingQuestion(pq: PendingQuestion): 'legacy' | 'multi' {
+  if (pq.questions && pq.questions.length > 0) {
+    // Multi-question format - just show preview, actual collection happens separately
+    console.log('\nAssistant has some questions for you:')
+    return 'multi'
+  } else if (pq.question) {
+    // Legacy single question format
+    console.log('\nAssistant:', pq.question)
+    if (pq.options) {
+      const rawOptions = pq.options
+      let parsedOptions: string[] = []
+      if (typeof rawOptions === 'string') {
+        try {
+          parsedOptions = JSON.parse(rawOptions)
+        } catch {
+          parsedOptions = [rawOptions]
+        }
+      } else if (Array.isArray(rawOptions)) {
+        parsedOptions = rawOptions
+      }
+      if (parsedOptions.length > 0) {
+        console.log('\nOptions:')
+        parsedOptions.forEach((opt, i) => console.log(`  ${i + 1}. ${opt}`))
+        console.log(`  0. Other (type your own)`)
+      }
+    }
+    return 'legacy'
+  }
+  return 'legacy'
+}
 
 // Progress display helper
 function showProgress(update: ProgressUpdate): void {
@@ -417,44 +547,64 @@ async function main() {
 
         history = result.history
 
+        // Variable to track the final result to display
+        let finalResult = result
+
         if (result.status === 'needs_input' && result.pendingQuestion) {
-          console.log('\nAssistant:', result.pendingQuestion.question)
-          if (result.pendingQuestion.options) {
-            // Handle options as string or array
-            const rawOptions = result.pendingQuestion.options
-            let parsedOptions: string[] = []
-            if (typeof rawOptions === 'string') {
-              try {
-                parsedOptions = JSON.parse(rawOptions)
-              } catch {
-                parsedOptions = [rawOptions]
-              }
-            } else if (Array.isArray(rawOptions)) {
-              parsedOptions = rawOptions
-            }
-            if (parsedOptions.length > 0) {
-              console.log('\nOptions:')
-              parsedOptions.forEach((opt, i) => console.log(`  ${i + 1}. ${opt}`))
+          const questionType = displayPendingQuestion(result.pendingQuestion)
+
+          // For multi-question format, collect all answers and auto-continue
+          if (questionType === 'multi' && result.pendingQuestion.questions) {
+            const combinedAnswer = await handleMultiQuestion(rl, result.pendingQuestion.questions)
+            console.log('\n✅ Answers collected, continuing...\n')
+
+            // Auto-continue with the collected answers
+            isProcessing = true
+            currentController = new AbortController()
+            setupEscHandler()
+
+            const continuedResult = await agent.run(combinedAnswer, {
+              history: result.history,
+              signal: currentController.signal,
+              context
+            })
+
+            stopEscHandler()
+            isProcessing = false
+            currentController = null
+
+            // Use continued result for display
+            finalResult = continuedResult
+            history = continuedResult.history
+
+            if (continuedResult.status === 'complete') {
+              console.log('\nAssistant:', continuedResult.response)
+            } else if (continuedResult.status === 'needs_input' && continuedResult.pendingQuestion) {
+              // Show follow-up questions (legacy format will be handled by next prompt)
+              displayPendingQuestion(continuedResult.pendingQuestion)
+            } else if (continuedResult.status === 'interrupted') {
+              console.log(`\n⚠️  Task interrupted after ${continuedResult.interrupted?.iterationsCompleted} iterations`)
             }
           }
+          // Legacy format - user will answer via normal prompt (no response to show)
         } else {
           console.log('\nAssistant:', result.response)
         }
 
-        // Show todos if any
-        if (result.todos && result.todos.length > 0) {
+        // Show todos if any (from final result)
+        if (finalResult.todos && finalResult.todos.length > 0) {
           console.log('\n📋 Tasks:')
-          result.todos.forEach(todo => {
+          finalResult.todos.forEach(todo => {
             const icon = todo.status === 'completed' ? '✅' :
                          todo.status === 'in_progress' ? '🔄' : '⬜'
             console.log(`  ${icon} ${todo.content}`)
           })
         }
 
-        // Show usage by model
-        if (result.usageByModel && Object.keys(result.usageByModel).length > 0) {
+        // Show usage by model (from final result)
+        if (finalResult.usageByModel && Object.keys(finalResult.usageByModel).length > 0) {
           console.log('\n📊 Usage by model:')
-          for (const [modelId, modelUsage] of Object.entries(result.usageByModel)) {
+          for (const [modelId, modelUsage] of Object.entries(finalResult.usageByModel)) {
             let line = `  ${modelId}: ${modelUsage.inputTokens} in / ${modelUsage.outputTokens} out (${modelUsage.calls} calls)`
             if (modelUsage.cacheCreationInputTokens || modelUsage.cacheReadInputTokens) {
               const cacheWrite = modelUsage.cacheCreationInputTokens || 0
@@ -463,12 +613,12 @@ async function main() {
             }
             console.log(line)
           }
-        } else if (result.usage) {
+        } else if (finalResult.usage) {
           // Fallback to total usage if usageByModel not available
-          let usage = `[${result.usage.totalInputTokens} in / ${result.usage.totalOutputTokens} out`
-          if (result.usage.cacheCreationInputTokens || result.usage.cacheReadInputTokens) {
-            const cacheWrite = result.usage.cacheCreationInputTokens || 0
-            const cacheRead = result.usage.cacheReadInputTokens || 0
+          let usage = `[${finalResult.usage.totalInputTokens} in / ${finalResult.usage.totalOutputTokens} out`
+          if (finalResult.usage.cacheCreationInputTokens || finalResult.usage.cacheReadInputTokens) {
+            const cacheWrite = finalResult.usage.cacheCreationInputTokens || 0
+            const cacheRead = finalResult.usage.cacheReadInputTokens || 0
             usage += ` | cache: +${cacheWrite} write, ${cacheRead} read`
           }
           usage += ']'
