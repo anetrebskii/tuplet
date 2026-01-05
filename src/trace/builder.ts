@@ -96,6 +96,7 @@ export class TraceBuilder {
       type: 'agent',
       spanId: generateSpanId(),
       parentSpanId: parentSpan.spanId,
+      parent: parentSpan,
       agentName,
       depth: parentSpan.depth + 1,
       startTime: Date.now(),
@@ -152,15 +153,20 @@ export class TraceBuilder {
     inputTokens: number,
     outputTokens: number,
     durationMs: number,
-    cacheCreationTokens?: number,
-    cacheReadTokens?: number
+    options?: {
+      cacheCreationTokens?: number
+      cacheReadTokens?: number
+      systemPrompt?: string
+      messages?: import('../types.js').Message[]
+      response?: import('../types.js').ContentBlock[]
+    }
   ): void {
     const cost = calculateCost(
       modelId,
       inputTokens,
       outputTokens,
-      cacheCreationTokens,
-      cacheReadTokens,
+      options?.cacheCreationTokens,
+      options?.cacheReadTokens,
       this.pricing
     )
 
@@ -170,11 +176,14 @@ export class TraceBuilder {
       modelId,
       inputTokens,
       outputTokens,
-      cacheCreationTokens,
-      cacheReadTokens,
+      cacheCreationTokens: options?.cacheCreationTokens,
+      cacheReadTokens: options?.cacheReadTokens,
       cost,
       durationMs,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      systemPrompt: options?.systemPrompt,
+      messages: options?.messages,
+      response: options?.response
     }
 
     const span = this.getCurrentSpan()
@@ -182,16 +191,16 @@ export class TraceBuilder {
     span.totalCost += cost
     span.totalInputTokens += inputTokens
     span.totalOutputTokens += outputTokens
-    span.totalCacheCreationTokens += cacheCreationTokens || 0
-    span.totalCacheReadTokens += cacheReadTokens || 0
+    span.totalCacheCreationTokens += options?.cacheCreationTokens || 0
+    span.totalCacheReadTokens += options?.cacheReadTokens || 0
     span.totalLLMCalls += 1
 
     // Update trace-level metrics
     this.trace.totalCost += cost
     this.trace.totalInputTokens += inputTokens
     this.trace.totalOutputTokens += outputTokens
-    this.trace.totalCacheCreationTokens += cacheCreationTokens || 0
-    this.trace.totalCacheReadTokens += cacheReadTokens || 0
+    this.trace.totalCacheCreationTokens += options?.cacheCreationTokens || 0
+    this.trace.totalCacheReadTokens += options?.cacheReadTokens || 0
     this.trace.totalLLMCalls += 1
 
     // Update cost by model
@@ -207,8 +216,8 @@ export class TraceBuilder {
     }
     this.trace.costByModel[modelId].inputTokens += inputTokens
     this.trace.costByModel[modelId].outputTokens += outputTokens
-    this.trace.costByModel[modelId].cacheCreationTokens += cacheCreationTokens || 0
-    this.trace.costByModel[modelId].cacheReadTokens += cacheReadTokens || 0
+    this.trace.costByModel[modelId].cacheCreationTokens += options?.cacheCreationTokens || 0
+    this.trace.costByModel[modelId].cacheReadTokens += options?.cacheReadTokens || 0
     this.trace.costByModel[modelId].cost += cost
     this.trace.costByModel[modelId].calls += 1
 

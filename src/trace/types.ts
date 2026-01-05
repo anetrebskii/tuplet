@@ -52,6 +52,12 @@ export interface LLMCallEvent {
   cost: number
   durationMs: number
   timestamp: number
+  /** System prompt sent to LLM */
+  systemPrompt?: string
+  /** Messages sent to LLM */
+  messages?: import('../types.js').Message[]
+  /** Response content from LLM */
+  response?: import('../types.js').ContentBlock[]
 }
 
 /**
@@ -79,6 +85,8 @@ export interface AgentSpan {
   type: 'agent'
   spanId: SpanId
   parentSpanId?: SpanId
+  /** Reference to parent span for hierarchy traversal */
+  parent?: AgentSpan
   agentName: string
   depth: number
   startTime: number

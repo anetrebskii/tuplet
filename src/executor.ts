@@ -308,8 +308,13 @@ export async function executeLoop(
         response.usage.inputTokens,
         response.usage.outputTokens,
         llmDurationMs,
-        response.cacheUsage?.cacheCreationInputTokens,
-        response.cacheUsage?.cacheReadInputTokens
+        {
+          cacheCreationTokens: response.cacheUsage?.cacheCreationInputTokens,
+          cacheReadTokens: response.cacheUsage?.cacheReadInputTokens,
+          systemPrompt,
+          messages: managedMessages,
+          response: response.content
+        }
       )
     }
 

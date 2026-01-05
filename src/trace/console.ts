@@ -57,6 +57,19 @@ export class ConsoleTraceProvider implements TraceProvider {
     return `\x1b[${code}m${text}\x1b[0m`
   }
 
+  /**
+   * Get the path from root to span as "parent → child → current"
+   */
+  private getPath(span: AgentSpan): string {
+    const names: string[] = []
+    let current: AgentSpan | undefined = span
+    while (current) {
+      names.unshift(current.agentName)
+      current = current.parent
+    }
+    return names.join(' → ')
+  }
+
   onTraceStart(trace: Trace): void {
     console.log(this.color(`\n━━━ Trace: ${trace.traceId} ━━━`, '1;36'))
   }
@@ -95,7 +108,8 @@ export class ConsoleTraceProvider implements TraceProvider {
   onAgentStart(span: AgentSpan, _trace: Trace): void {
     const indent = this.getIndent(span.depth)
     const icon = span.depth === 0 ? '🤖' : '🔹'
-    console.log(`${indent}${icon} ${this.color(span.agentName, '1;32')} started`)
+    const path = span.depth > 0 ? this.color(this.getPath(span), '2') : this.color(span.agentName, '1;32')
+    console.log(`${indent}${icon} ${path} started`)
   }
 
   onAgentEnd(span: AgentSpan, _trace: Trace): void {
@@ -104,8 +118,9 @@ export class ConsoleTraceProvider implements TraceProvider {
                    span.status === 'error' ? '✗' : '⚠'
     const statusColor = span.status === 'complete' ? '32' :
                         span.status === 'error' ? '31' : '33'
+    const path = span.depth > 0 ? this.getPath(span) : span.agentName
 
-    let line = `${indent}${this.color(status, statusColor)} ${span.agentName} completed`
+    let line = `${indent}${this.color(status, statusColor)} ${path} completed`
     line += ` (${span.durationMs}ms`
 
     if (this.config.showCosts && span.totalCost > 0) {
@@ -120,7 +135,8 @@ export class ConsoleTraceProvider implements TraceProvider {
     if (!this.config.showLLMCalls) return
 
     const indent = this.getIndent(span.depth + 1)
-    let line = `${indent}${this.color('⚡', '33')} LLM: ${event.modelId}`
+    const path = this.color(this.getPath(span), '2')
+    let line = `${indent}${this.color('⚡', '33')} ${path} → LLM: ${event.modelId}`
     line += ` (${event.inputTokens}/${event.outputTokens} tokens`
     if (event.cacheReadTokens) {
       line += ` +${event.cacheReadTokens} cached`
@@ -139,7 +155,8 @@ export class ConsoleTraceProvider implements TraceProvider {
     if (!this.config.showToolCalls) return
 
     const indent = this.getIndent(span.depth + 1)
+    const path = this.color(this.getPath(span), '2')
     const status = event.output.success ? this.color('✓', '32') : this.color('✗', '31')
-    console.log(`${indent}${this.color('🔧', '35')} ${event.toolName} ${status} (${event.durationMs}ms)`)
+    console.log(`${indent}${this.color('🔧', '35')} ${path} → ${event.toolName} ${status} (${event.durationMs}ms)`)
   }
 }
