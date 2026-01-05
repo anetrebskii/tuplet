@@ -221,9 +221,6 @@ export interface HiveConfig {
   /** Trace provider for execution tracing and cost tracking */
   trace?: import('./trace.js').TraceProvider
 
-  /** Custom model pricing for cost calculation (overrides defaults) */
-  modelPricing?: Record<string, import('./trace.js').ModelPricing>
-
   /** Agent name for tracing (defaults to 'agent') */
   agentName?: string
 }

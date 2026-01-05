@@ -280,9 +280,8 @@ Usage:
           logger: subLogger,
           maxIterations: agentConfig.maxIterations || hive.config.maxIterations,
           disableAskUser: true,  // Sub-agents return questions as text, not via __ask_user__
-          // Pass parent's trace/pricing config for nested sub-agents
+          // Pass parent's trace config for nested sub-agents
           trace: hive.config.trace,
-          modelPricing: hive.config.modelPricing,
           agentName: agentName
         })
 
@@ -558,8 +557,7 @@ export class Hive {
       this.config.trace
         ? new TraceBuilder(
             this.config.agentName || 'agent',
-            this.config.trace,
-            this.config.modelPricing
+            this.config.trace
           )
         : undefined
     )

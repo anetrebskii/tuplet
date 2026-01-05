@@ -233,6 +233,11 @@ export interface TraceProvider {
    * Called for each tool call
    */
   onToolCall(event: ToolCallEvent, span: AgentSpan, trace: Trace): void
+
+  /**
+   * Custom model pricing for cost calculation (overrides defaults)
+   */
+  modelPricing?: Record<string, ModelPricing>
 }
 
 // ============================================================================
@@ -250,11 +255,11 @@ export class TraceBuilder {
 
   constructor(
     agentName: string,
-    provider?: TraceProvider,
-    pricing?: Record<string, ModelPricing>
+    provider?: TraceProvider
   ) {
     this.provider = provider
-    this.pricing = pricing
+    // Get pricing from provider if available
+    this.pricing = provider?.modelPricing
 
     const traceId = generateTraceId()
     const rootSpan: AgentSpan = {
@@ -508,13 +513,16 @@ export interface ConsoleTraceConfig {
   indent?: string
   /** Use colors (ANSI) */
   colors?: boolean
+  /** Custom model pricing for cost calculation (overrides defaults) */
+  modelPricing?: Record<string, ModelPricing>
 }
 
 /**
  * Console trace provider - logs trace events to console
  */
 export class ConsoleTraceProvider implements TraceProvider {
-  private config: Required<ConsoleTraceConfig>
+  private config: Omit<Required<ConsoleTraceConfig>, 'modelPricing'>
+  readonly modelPricing?: Record<string, ModelPricing>
 
   constructor(config: ConsoleTraceConfig = {}) {
     this.config = {
@@ -524,6 +532,7 @@ export class ConsoleTraceProvider implements TraceProvider {
       indent: config.indent ?? '  ',
       colors: config.colors ?? true
     }
+    this.modelPricing = config.modelPricing
   }
 
   private getIndent(depth: number): string {

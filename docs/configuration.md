@@ -29,7 +29,6 @@ interface HiveConfig {
   // Tracing
   trace?: TraceProvider         // Execution tracing
   agentName?: string            // Root agent name (default: 'agent')
-  modelPricing?: Record<string, ModelPricing>  // Custom pricing
 }
 ```
 
