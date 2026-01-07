@@ -286,16 +286,11 @@ export interface EnhancedQuestion {
 }
 
 /**
- * Pending question(s) awaiting user input
- * Supports both legacy single-question format and new multi-question format
+ * Pending questions awaiting user input
  */
 export interface PendingQuestion {
-  /** Legacy: Single question text */
-  question?: string
-  /** Legacy: Simple string options for single question */
-  options?: string[]
-  /** New: Array of questions for multi-question sequences (1-4 questions) */
-  questions?: EnhancedQuestion[]
+  /** Array of questions (1-4 questions) */
+  questions: EnhancedQuestion[]
 }
 
 export type AgentStatus = 'complete' | 'needs_input' | 'interrupted'

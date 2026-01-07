@@ -424,14 +424,16 @@ Agent can pause to ask clarifying questions:
 const result = await agent.run('Create a database schema')
 
 if (result.status === 'needs_input') {
-  // Show question to user
-  console.log(result.pendingQuestion?.question)
-  console.log(result.pendingQuestion?.options)
+  // Show questions to user
+  for (const q of result.pendingQuestion!.questions) {
+    console.log(q.question)
+    console.log(q.options)
+  }
 
   // Save state and wait for user response
   // When user responds, run again with the same history
-  const answer = await getUserInput()
-  const continued = await agent.run(answer, { history: result.history })
+  const answers = await getUserInput()
+  const continued = await agent.run(answers, { history: result.history })
 }
 ```
 

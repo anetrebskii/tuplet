@@ -28,54 +28,33 @@ function createAskUserTool(): Tool {
     name: '__ask_user__',
     description: `Ask the user clarifying question(s) when you need more information.
 
-Supports two formats:
-
-1. Single question (legacy):
-   { "question": "Which database?", "options": ["PostgreSQL", "MySQL"] }
-
-2. Multiple questions with rich options:
-   {
-     "questions": [
-       {
-         "question": "Which database should we use?",
-         "header": "Database",
-         "options": [
-           { "label": "PostgreSQL", "description": "Best for complex queries" },
-           { "label": "MongoDB", "description": "Best for flexible schemas" }
-         ]
-       },
-       {
-         "question": "Which caching strategy?",
-         "header": "Caching",
-         "options": [
-           { "label": "Redis", "description": "Distributed caching" },
-           { "label": "In-memory", "description": "Local caching only" }
-         ]
-       }
-     ]
-   }
+Format:
+{
+  "questions": [
+    {
+      "question": "Which database should we use?",
+      "header": "Database",
+      "options": [
+        { "label": "PostgreSQL", "description": "Best for complex queries" },
+        { "label": "MongoDB", "description": "Best for flexible schemas" }
+      ]
+    }
+  ]
+}
 
 Usage:
 - Use when requirements are ambiguous
 - Use when you need the user to make a decision
-- Use questions array for multiple related decisions`,
+- questions array can have 1-4 questions`,
     parameters: {
       type: 'object',
       properties: {
-        question: {
-          type: 'string',
-          description: 'Single question to ask the user (legacy format). Use this OR questions, not both.'
-        },
-        options: {
-          type: 'array',
-          description: 'Optional array of choices for single question (legacy format)'
-        },
         questions: {
           type: 'array',
-          description: 'Array of 1-4 questions for multi-question format. Each item has: question (string), header (short label), options (array of {label, description}). Use this OR question, not both.'
+          description: 'Array of 1-4 questions. Each item has: question (string, required), header (short label, optional), options (array of {label, description}, optional)'
         }
       },
-      required: []
+      required: ['questions']
     },
     execute: async () => {
       // This tool is handled specially in the executor

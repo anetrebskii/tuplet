@@ -79,36 +79,9 @@ async function handleMultiQuestion(
   return JSON.stringify(answers)
 }
 
-// Display pending question (supports both legacy and multi-question format)
-function displayPendingQuestion(pq: PendingQuestion): 'legacy' | 'multi' {
-  if (pq.questions && pq.questions.length > 0) {
-    // Multi-question format - just show preview, actual collection happens separately
-    console.log('\nAssistant has some questions for you:')
-    return 'multi'
-  } else if (pq.question) {
-    // Legacy single question format
-    console.log('\nAssistant:', pq.question)
-    if (pq.options) {
-      const rawOptions = pq.options
-      let parsedOptions: string[] = []
-      if (typeof rawOptions === 'string') {
-        try {
-          parsedOptions = JSON.parse(rawOptions)
-        } catch {
-          parsedOptions = [rawOptions]
-        }
-      } else if (Array.isArray(rawOptions)) {
-        parsedOptions = rawOptions
-      }
-      if (parsedOptions.length > 0) {
-        console.log('\nOptions:')
-        parsedOptions.forEach((opt, i) => console.log(`  ${i + 1}. ${opt}`))
-        console.log(`  Or type your own answer`)
-      }
-    }
-    return 'legacy'
-  }
-  return 'legacy'
+// Display pending question preview (actual collection happens in handleMultiQuestion)
+function displayPendingQuestion(pq: PendingQuestion): void {
+  console.log(`\nAssistant has ${pq.questions?.length || 1} question(s) for you:`)
 }
 
 // Progress display helper
@@ -497,42 +470,39 @@ async function main() {
         let finalResult = result
 
         if (result.status === 'needs_input' && result.pendingQuestion) {
-          const questionType = displayPendingQuestion(result.pendingQuestion)
+          displayPendingQuestion(result.pendingQuestion)
 
-          // For multi-question format, collect all answers and auto-continue
-          if (questionType === 'multi' && result.pendingQuestion.questions) {
-            const combinedAnswer = await handleMultiQuestion(rl, result.pendingQuestion.questions)
-            console.log('\n✅ Answers collected, continuing...\n')
+          // Collect all answers and auto-continue
+          const combinedAnswer = await handleMultiQuestion(rl, result.pendingQuestion!.questions)
+          console.log('\n✅ Answers collected, continuing...\n')
 
-            // Auto-continue with the collected answers
-            isProcessing = true
-            currentController = new AbortController()
-            setupEscHandler()
+          // Auto-continue with the collected answers
+          isProcessing = true
+          currentController = new AbortController()
+          setupEscHandler()
 
-            const continuedResult = await agent.run(combinedAnswer, {
-              history: result.history,
-              signal: currentController.signal,
-              context
-            })
+          const continuedResult = await agent.run(combinedAnswer, {
+            history: result.history,
+            signal: currentController.signal,
+            context
+          })
 
-            stopEscHandler()
-            isProcessing = false
-            currentController = null
+          stopEscHandler()
+          isProcessing = false
+          currentController = null
 
-            // Use continued result for display
-            finalResult = continuedResult
-            history = continuedResult.history
+          // Use continued result for display
+          finalResult = continuedResult
+          history = continuedResult.history
 
-            if (continuedResult.status === 'complete') {
-              console.log('\nAssistant:', continuedResult.response)
-            } else if (continuedResult.status === 'needs_input' && continuedResult.pendingQuestion) {
-              // Show follow-up questions (legacy format will be handled by next prompt)
-              displayPendingQuestion(continuedResult.pendingQuestion)
-            } else if (continuedResult.status === 'interrupted') {
-              console.log(`\n⚠️  Task interrupted after ${continuedResult.interrupted?.iterationsCompleted} iterations`)
-            }
+          if (continuedResult.status === 'complete') {
+            console.log('\nAssistant:', continuedResult.response)
+          } else if (continuedResult.status === 'needs_input' && continuedResult.pendingQuestion) {
+            // Show follow-up questions
+            displayPendingQuestion(continuedResult.pendingQuestion)
+          } else if (continuedResult.status === 'interrupted') {
+            console.log(`\n⚠️  Task interrupted after ${continuedResult.interrupted?.iterationsCompleted} iterations`)
           }
-          // Legacy format - user will answer via normal prompt (no response to show)
         } else {
           console.log('\nAssistant:', result.response)
         }

@@ -17,39 +17,28 @@ Agents can pause to ask clarifying questions using the built-in `__ask_user__` t
 const result = await agent.run('Create a database schema')
 
 if (result.status === 'needs_input') {
-  // Show question to user
-  console.log(result.pendingQuestion?.question)
-  // "What type of database? (PostgreSQL, MySQL, SQLite)"
+  // Show questions to user
+  for (const q of result.pendingQuestion!.questions) {
+    console.log(q.question)
+    // "What type of database?"
 
-  console.log(result.pendingQuestion?.options)
-  // ["PostgreSQL", "MySQL", "SQLite"]
+    if (q.options) {
+      console.log(q.options.map(o => typeof o === 'string' ? o : o.label))
+      // ["PostgreSQL", "MySQL", "SQLite"]
+    }
+  }
 
-  // Get user's answer
-  const answer = await getUserInput()
+  // Get user's answers
+  const answers = await getUserInput()
 
-  // Continue with the answer
-  const continued = await agent.run(answer, {
+  // Continue with the answers
+  const continued = await agent.run(answers, {
     history: result.history
   })
 }
 ```
 
 ## PendingQuestion Structure
-
-The framework supports two formats: legacy single-question and multi-question sequences.
-
-### Legacy Single Question
-
-```typescript
-interface PendingQuestion {
-  question: string      // The question text
-  options?: string[]    // Optional multiple choice options
-}
-```
-
-### Multi-Question Format
-
-For asking multiple related questions at once with rich options:
 
 ```typescript
 interface QuestionOption {
@@ -64,12 +53,7 @@ interface EnhancedQuestion {
 }
 
 interface PendingQuestion {
-  // Legacy format
-  question?: string
-  options?: string[]
-
-  // Multi-question format
-  questions?: EnhancedQuestion[]
+  questions: EnhancedQuestion[]  // Array of 1-4 questions
 }
 ```
 
@@ -98,24 +82,29 @@ async function chat(message: string, history: Message[] = []) {
   const result = await agent.run(message, { history })
 
   if (result.status === 'needs_input' && result.pendingQuestion) {
-    // Show question
-    console.log('\nAgent:', result.pendingQuestion.question)
+    const answers: Record<string, string> = {}
 
-    // Show options if available
-    if (result.pendingQuestion.options) {
-      console.log('\nOptions:')
-      result.pendingQuestion.options.forEach((opt, i) => {
-        console.log(`  ${i + 1}. ${opt}`)
+    // Collect answers for all questions
+    for (const q of result.pendingQuestion.questions) {
+      console.log(`\n${q.header || 'Question'}: ${q.question}`)
+
+      if (q.options) {
+        console.log('\nOptions:')
+        q.options.forEach((opt, i) => {
+          const label = typeof opt === 'string' ? opt : opt.label
+          console.log(`  ${i + 1}. ${label}`)
+        })
+      }
+
+      const answer = await new Promise<string>(resolve => {
+        rl.question('\nYour answer: ', resolve)
       })
+
+      answers[q.header || q.question] = answer
     }
 
-    // Get answer
-    const answer = await new Promise<string>(resolve => {
-      rl.question('\nYour answer: ', resolve)
-    })
-
-    // Continue conversation
-    return chat(answer, result.history)
+    // Continue conversation with all answers
+    return chat(JSON.stringify(answers), result.history)
   }
 
   return result
@@ -138,7 +127,7 @@ export async function POST(req: Request) {
   return Response.json({
     response: result.response,
     status: result.status,
-    pendingQuestion: result.pendingQuestion
+    questions: result.pendingQuestion?.questions
   })
 }
 
@@ -152,8 +141,8 @@ async function sendMessage(message: string) {
   const data = await response.json()
 
   if (data.status === 'needs_input') {
-    // Show question UI
-    showQuestionDialog(data.pendingQuestion)
+    // Show questions UI
+    showQuestionsDialog(data.questions)
   } else {
     // Show response
     showMessage(data.response)
@@ -166,16 +155,16 @@ async function sendMessage(message: string) {
 ```tsx
 function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
-  const [pending, setPending] = useState<PendingQuestion | null>(null)
+  const [questions, setQuestions] = useState<EnhancedQuestion[] | null>(null)
 
   async function send(text: string) {
     const result = await agent.run(text, { history: messages })
 
     if (result.status === 'needs_input') {
-      setPending(result.pendingQuestion!)
+      setQuestions(result.pendingQuestion!.questions)
       setMessages(result.history)
     } else {
-      setPending(null)
+      setQuestions(null)
       setMessages(result.history)
     }
   }
@@ -184,12 +173,8 @@ function Chat() {
     <div>
       <MessageList messages={messages} />
 
-      {pending ? (
-        <QuestionUI
-          question={pending.question}
-          options={pending.options}
-          onAnswer={send}
-        />
+      {questions ? (
+        <QuestionsUI questions={questions} onAnswer={send} />
       ) : (
         <Input onSend={send} />
       )}
@@ -197,24 +182,47 @@ function Chat() {
   )
 }
 
-function QuestionUI({ question, options, onAnswer }) {
-  if (options) {
-    return (
-      <div>
-        <p>{question}</p>
-        {options.map(opt => (
-          <button key={opt} onClick={() => onAnswer(opt)}>
-            {opt}
-          </button>
-        ))}
-      </div>
-    )
+function QuestionsUI({ questions, onAnswer }) {
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+
+  function handleOptionClick(questionIndex: number, option: string) {
+    const q = questions[questionIndex]
+    const key = q.header || `q${questionIndex}`
+    setAnswers({ ...answers, [key]: option })
+  }
+
+  function handleSubmit() {
+    onAnswer(JSON.stringify(answers))
   }
 
   return (
-    <div>
-      <p>{question}</p>
-      <Input onSend={onAnswer} />
+    <div className="space-y-4">
+      {questions.map((q, qi) => (
+        <div key={qi} className="border p-4 rounded">
+          {q.header && <span className="chip">{q.header}</span>}
+          <p className="font-medium">{q.question}</p>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {q.options?.map((opt, oi) => {
+              const label = typeof opt === 'string' ? opt : opt.label
+              const key = q.header || `q${qi}`
+              const selected = answers[key] === label
+
+              return (
+                <button
+                  key={oi}
+                  onClick={() => handleOptionClick(qi, label)}
+                  className={selected ? 'selected' : ''}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+
+      <button onClick={handleSubmit}>Submit Answers</button>
     </div>
   )
 }
@@ -270,88 +278,6 @@ Always provide options when possible:
 - Good: "Which database? Options: PostgreSQL, MySQL, SQLite"
 - Bad: "What database do you want?"
 `
-```
-
-## Multi-Question Example
-
-When the agent asks multiple questions at once:
-
-```typescript
-// Agent returns questions array
-if (result.pendingQuestion?.questions) {
-  const answers: Record<string, string> = {}
-
-  for (const q of result.pendingQuestion.questions) {
-    console.log(`\n${q.header || 'Question'}: ${q.question}`)
-
-    if (q.options) {
-      q.options.forEach((opt, i) => {
-        const label = typeof opt === 'string' ? opt : opt.label
-        const desc = typeof opt === 'object' ? opt.description : undefined
-        console.log(`  ${i + 1}. ${label}${desc ? ` - ${desc}` : ''}`)
-      })
-    }
-
-    const answer = await getUserInput()
-    answers[q.header || q.question] = answer
-  }
-
-  // Continue with all answers as JSON
-  const continued = await agent.run(JSON.stringify(answers), {
-    history: result.history
-  })
-}
-```
-
-### React Multi-Question Component
-
-```tsx
-function MultiQuestionUI({ questions, onAnswer }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-
-  function handleOptionClick(questionIndex: number, option: string) {
-    const q = questions[questionIndex]
-    const key = q.header || `q${questionIndex}`
-    setAnswers({ ...answers, [key]: option })
-  }
-
-  function handleSubmit() {
-    onAnswer(JSON.stringify(answers))
-  }
-
-  return (
-    <div className="space-y-4">
-      {questions.map((q, qi) => (
-        <div key={qi} className="border p-4 rounded">
-          {q.header && <span className="chip">{q.header}</span>}
-          <p className="font-medium">{q.question}</p>
-
-          <div className="flex flex-wrap gap-2 mt-2">
-            {q.options?.map((opt, oi) => {
-              const label = typeof opt === 'string' ? opt : opt.label
-              const desc = typeof opt === 'object' ? opt.description : undefined
-              const key = q.header || `q${qi}`
-              const selected = answers[key] === label
-
-              return (
-                <button
-                  key={oi}
-                  onClick={() => handleOptionClick(qi, label)}
-                  className={selected ? 'selected' : ''}
-                  title={desc}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-
-      <button onClick={handleSubmit}>Submit Answers</button>
-    </div>
-  )
-}
 ```
 
 ## Handling Sequential Questions

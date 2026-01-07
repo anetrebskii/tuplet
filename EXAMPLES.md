@@ -150,8 +150,7 @@ export const chat = functions.https.onRequest(async (req, res) => {
   if (result.status === 'needs_input') {
     res.json({
       type: 'question',
-      question: result.pendingQuestion?.question,
-      options: result.pendingQuestion?.options
+      questions: result.pendingQuestion?.questions
     })
     return
   }
@@ -199,18 +198,20 @@ bot.on('message', async (msg) => {
     conversations.set(chatId, result.history)
 
     if (result.status === 'needs_input' && result.pendingQuestion) {
-      // Send question with options as keyboard
-      const options = result.pendingQuestion.options
-      if (options && options.length > 0) {
-        await bot.sendMessage(chatId, result.pendingQuestion.question, {
-          reply_markup: {
-            keyboard: options.map(opt => [{ text: opt }]),
-            one_time_keyboard: true,
-            resize_keyboard: true
-          }
-        })
-      } else {
-        await bot.sendMessage(chatId, result.pendingQuestion.question)
+      // Send each question
+      for (const q of result.pendingQuestion.questions) {
+        const options = q.options?.map(o => typeof o === 'string' ? o : o.label)
+        if (options && options.length > 0) {
+          await bot.sendMessage(chatId, q.question, {
+            reply_markup: {
+              keyboard: options.map(opt => [{ text: opt }]),
+              one_time_keyboard: true,
+              resize_keyboard: true
+            }
+          })
+        } else {
+          await bot.sendMessage(chatId, q.question)
+        }
       }
     } else {
       await bot.sendMessage(chatId, result.response)
@@ -449,16 +450,21 @@ async function main() {
 
   while (true) {
     if (result.status === 'needs_input') {
-      console.log('\n' + result.pendingQuestion?.question)
-      if (result.pendingQuestion?.options) {
-        result.pendingQuestion.options.forEach((opt, i) =>
-          console.log(`  ${i + 1}. ${opt}`)
-        )
+      const answers: Record<string, string> = {}
+      for (const q of result.pendingQuestion!.questions) {
+        console.log('\n' + q.question)
+        if (q.options) {
+          q.options.forEach((opt, i) => {
+            const label = typeof opt === 'string' ? opt : opt.label
+            console.log(`  ${i + 1}. ${label}`)
+          })
+        }
+        const answer = await question('\nYour answer: ')
+        answers[q.header || q.question] = answer
       }
 
-      const answer = await question('\nYour answer: ')
       history = result.history
-      result = await agent.run(answer, { history })
+      result = await agent.run(JSON.stringify(answers), { history })
     } else {
       console.log('\n' + result.response)
       break
