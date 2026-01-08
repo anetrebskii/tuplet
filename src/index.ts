@@ -137,3 +137,19 @@ export {
   type ValidationError,
   type WriteResult
 } from './context.js'
+
+// Dataset (Run Recording, Replay & Testing)
+export {
+  RunRecorder,
+  RunReplayer,
+  RunTester,
+  type RunRecorderConfig,
+  type RunRecord,
+  type RunRecordConfig,
+  type RunRecordResult,
+  type SerializedTool,
+  type SerializedSubAgentConfig,
+  type RunTesterConfig,
+  type TestResult,
+  type TestSummary
+} from './providers/dataset/index.js'

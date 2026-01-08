@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools, mainAgentTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -330,7 +330,7 @@ async function main() {
     }
   })
 
-  // Create the main agent with sub-agent
+  // Create the main agent with sub-agent and run recorder
   const agent = new Hive({
     systemPrompt: SYSTEM_PROMPT,
     tools: mainAgentTools,
@@ -339,7 +339,8 @@ async function main() {
     logger: createProgressLogger(),
     maxIterations: 15,
     trace: new ConsoleTraceProvider({ showCosts: true }),
-    agentName: 'eating_consultant'
+    agentName: 'eating_consultant',
+    recorder: new RunRecorder({ outputDir: './runs' })
   })
 
   let history: Message[] = []

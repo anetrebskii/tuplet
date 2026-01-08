@@ -14,3 +14,6 @@ export { ConsoleLogger, ConsoleLoggerConfig, LogLevel } from './logger/console.j
 // Repository Providers
 export { RepositoryProvider } from './repository/base.js'
 export { MemoryRepository } from './repository/memory.js'
+
+// Dataset Providers
+export * from './dataset/index.js'

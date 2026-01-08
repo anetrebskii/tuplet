@@ -573,6 +573,15 @@ export class Hive {
       result.trace = traceBuilder.endTrace(status, result.response)
     }
 
+    // Record the run (only for root agent, not sub-agents)
+    if (this.config.recorder && !options._traceBuilder) {
+      try {
+        await this.config.recorder.record(message, history, this.config, result)
+      } catch (error) {
+        this.config.logger?.warn('Failed to record run', error)
+      }
+    }
+
     return result
   }
 }

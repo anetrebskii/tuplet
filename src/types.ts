@@ -223,6 +223,9 @@ export interface HiveConfig {
 
   /** Agent name for tracing (defaults to 'agent') */
   agentName?: string
+
+  /** Run recorder for saving run data to JSON files */
+  recorder?: import('./providers/dataset/recorder.js').RunRecorder
 }
 
 // ============================================================================
