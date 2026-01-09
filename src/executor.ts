@@ -21,7 +21,7 @@ import type {
   PendingQuestion
 } from './types.js'
 import { ContextManager } from './context-manager.js'
-import { TodoManager } from './todo.js'
+import { TodoManager } from './tools/todo.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 

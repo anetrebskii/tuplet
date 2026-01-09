@@ -4,7 +4,7 @@
  * Provides todo list functionality for agents to track and execute tasks.
  */
 
-import type { Tool, TodoItem, TodoStatus, TodoList } from "./types.js";
+import type { Tool, TodoItem, TodoStatus } from "../types.js";
 
 /**
  * Generate unique ID for todo items

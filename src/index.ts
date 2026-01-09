@@ -101,7 +101,7 @@ export {
 export {
   TodoManager,
   formatTodoList
-} from './todo.js'
+} from './tools/todo.js'
 
 // Tracing
 export {
