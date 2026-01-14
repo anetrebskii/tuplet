@@ -338,7 +338,7 @@ Add a single constraint.
 
 #### `.useTodoTracking(options?)`
 
-Enable the `__todo__` tool for the agent to track its own work.
+Enable the `__todo__` tool for the agent to plan and track its own work.
 
 ```typescript
 .useTodoTracking({
@@ -351,7 +351,31 @@ Enable the `__todo__` tool for the agent to track its own work.
 })
 ```
 
-The agent will create its own todos based on the task, using these as examples.
+Options:
+
+- `exampleSteps` - Example todos to guide the AI (optional)
+
+The agent will create its own todos based on the task, using these as examples. This generates a "Task Tracking" section in the prompt:
+
+```
+## Task Tracking
+
+Use the __todo__ tool to plan and track your work.
+Create your own todos based on the task. Example items you might track:
+
+- Reading user preferences from context
+- Asking about calorie target
+- Creating meal plan
+- Saving plan to context
+
+Mark each todo as in_progress when starting, then completed when done.
+```
+
+You can also call without options to just enable tracking:
+
+```typescript
+.useTodoTracking()
+```
 
 ### Instructions
 
