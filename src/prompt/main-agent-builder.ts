@@ -5,8 +5,6 @@
  */
 
 import type {
-  SubAgentDef,
-  ToolDef,
   ContextPathDef,
   TaskExample,
   MainAgentPromptConfig
@@ -50,22 +48,6 @@ export class MainAgentBuilder {
   }
 
   /**
-   * Add a sub-agent definition manually
-   */
-  addSubAgent(name: string, purpose: string, whenToUse: string): this {
-    this.config.subAgents!.push({ name, purpose, whenToUse })
-    return this
-  }
-
-  /**
-   * Add multiple sub-agents at once (manual definitions)
-   */
-  addSubAgents(agents: SubAgentDef[]): this {
-    this.config.subAgents!.push(...agents)
-    return this
-  }
-
-  /**
    * Set sub-agents from actual SubAgentConfig objects
    * Extracts name, description, and input parameters automatically
    */
@@ -102,22 +84,6 @@ export class MainAgentBuilder {
     exampleFlow?: string[]
   }): this {
     this.config.questionHandling = options
-    return this
-  }
-
-  /**
-   * Add a direct tool manually
-   */
-  addTool(name: string, description: string): this {
-    this.config.directTools!.push({ name, description })
-    return this
-  }
-
-  /**
-   * Add multiple tools at once (manual definitions)
-   */
-  addTools(tools: ToolDef[]): this {
-    this.config.directTools!.push(...tools)
     return this
   }
 

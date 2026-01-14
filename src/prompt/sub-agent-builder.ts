@@ -166,17 +166,6 @@ export class SubAgentBuilder {
   }
 
   /**
-   * Add a step with tool calls
-   */
-  addToolStep(description: string, toolCalls: string[]): this {
-    this.config.workflow!.push({
-      description,
-      toolCalls
-    })
-    return this
-  }
-
-  /**
    * Add a guideline
    */
   addGuideline(guideline: string): this {

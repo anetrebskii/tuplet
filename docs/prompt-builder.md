@@ -62,7 +62,7 @@ Add additional context about the role.
 
 #### `.agents(configs: SubAgentConfig[])`
 
-**Recommended.** Pass your SubAgentConfig array - automatically extracts names, descriptions, and input parameters.
+Pass your SubAgentConfig array - automatically extracts names, descriptions, and input parameters.
 
 ```typescript
 const subAgents: SubAgentConfig[] = [
@@ -74,55 +74,18 @@ builder.agents(subAgents)
 ```
 
 This generates:
+
 - Sub-agent table with name, purpose, when to use
 - Parameter documentation for each sub-agent
-
-#### `.addSubAgent(name, purpose, whenToUse)`
-
-Manually add a sub-agent definition.
-
-```typescript
-.addSubAgent('researcher', 'Search for information', 'User asks a question')
-```
-
-#### `.addSubAgents(agents: SubAgentDef[])`
-
-Add multiple sub-agents at once.
-
-```typescript
-.addSubAgents([
-  { name: 'writer', purpose: 'Write content', whenToUse: 'User needs text' },
-  { name: 'editor', purpose: 'Review content', whenToUse: 'Content needs review' }
-])
-```
 
 ### Tools
 
 #### `.tools(toolObjects: Tool[])`
 
-**Recommended.** Pass your Tool array - automatically extracts names and descriptions.
+Pass your Tool array - automatically extracts names and descriptions.
 
 ```typescript
 builder.tools([getDailyTotals, clearMealLog])
-```
-
-#### `.addTool(name, description)`
-
-Manually add a tool.
-
-```typescript
-.addTool('get_weather', 'Get current weather for a location')
-```
-
-#### `.addTools(tools: ToolDef[])`
-
-Add multiple tools at once.
-
-```typescript
-.addTools([
-  { name: 'search', description: 'Search the database' },
-  { name: 'save', description: 'Save to database' }
-])
 ```
 
 ### Context Paths
@@ -310,20 +273,9 @@ Add a step that conditionally asks the user a question.
 
 **Important:** When you add question steps with conditions, the builder automatically adds instructions to check input parameters and context first.
 
-#### `.addToolStep(description, toolCalls)`
-
-Add a step that uses tools (string-based).
-
-```typescript
-.addToolStep('Search and Log', [
-  'search_food - find nutrition data',
-  'log_meal - log with scaled nutrition'
-])
-```
-
 #### `.addToolsStep(description, toolRefs)`
 
-**Type-safe alternative.** Add a step using actual Tool objects.
+Add a workflow step using actual Tool objects.
 
 ```typescript
 .addToolsStep('Search and Log', [
@@ -643,7 +595,7 @@ When done, call __output__ with:
 
 ## Best Practices
 
-1. **Use type-safe methods** - `.agents()`, `.tools()`, `.outputSchema()` instead of manual definitions
+1. **Pass actual objects** - `.agents()`, `.tools()`, `.outputSchema()` extract info automatically
 2. **Define context paths** - Helps agents discover and use shared data
 3. **Add question conditions** - Prevents redundant questions
 4. **Use constraints** - Clearly state what to avoid
@@ -653,18 +605,6 @@ When done, call __output__ with:
 ## Type Definitions
 
 ```typescript
-interface SubAgentDef {
-  name: string
-  purpose: string
-  whenToUse: string
-  inputParams?: Array<{ name: string; description: string; required: boolean }>
-}
-
-interface ToolDef {
-  name: string
-  description: string
-}
-
 interface ContextPathDef {
   path: string
   description: string
@@ -690,5 +630,10 @@ interface SubAgentExample {
   input: string
   output: string
   explanation?: string
+}
+
+interface ToolStepRef {
+  tool: Tool
+  purpose?: string
 }
 ```
