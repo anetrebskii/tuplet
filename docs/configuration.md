@@ -192,7 +192,7 @@ const customLogger = {
   onIteration: (iteration, messageCount) => { /* ... */ },
   onComplete: (result) => { /* ... */ },
   onProgress: (update) => { /* ... */ },
-  onTodoUpdate: (update) => { /* ... */ }  // Todo list changes
+  onTaskUpdate: (update) => { /* ... */ }  // Task list changes
 }
 ```
 
@@ -228,60 +228,76 @@ const logger = {
 }
 ```
 
-## Todo Updates
+## Task Updates
 
-Real-time notifications when agents create or update their todo lists.
+Real-time notifications when agents create or update their task lists. Hive uses a 4-tool task management system (TaskCreate, TaskUpdate, TaskGet, TaskList) inspired by Claude Code.
+
+See the [Task Management Guide](./task-management.md) for full documentation.
 
 ```typescript
-interface TodoUpdate {
-  agentName?: string    // undefined for main agent, set for sub-agents
-  action: 'set' | 'complete' | 'update'
-  todos: TodoItem[]     // Full list of todos
-  current?: TodoItem    // Currently active task
-  progress: TodoProgress
+interface TaskUpdateNotification {
+  agentName?: string       // undefined for main agent, set for sub-agents
+  action: 'create' | 'update' | 'delete' | 'list'
+  tasks: TaskItem[]        // Full list of tasks
+  current?: TaskItem       // Currently active task
+  progress: TaskProgress
 }
 
-interface TodoProgress {
+interface TaskProgress {
   total: number
   completed: number
   pending: number
   inProgress: number
 }
 
-interface TodoItem {
+interface TaskItem {
   id: string
-  content: string       // Task description (imperative form)
-  activeForm?: string   // Present continuous form for display
+  subject: string          // Task title (imperative form, e.g., "Fix bug")
+  description?: string     // Detailed requirements
+  activeForm?: string      // Present continuous form for display
   status: 'pending' | 'in_progress' | 'completed'
+  owner?: string           // Agent ID that owns this task
+  blocks?: string[]        // Task IDs blocked by this task
+  blockedBy?: string[]     // Task IDs that block this task
+  comments?: TaskComment[] // Progress notes
+  metadata?: Record<string, unknown>
   createdAt: number
   completedAt?: number
 }
+
+interface TaskComment {
+  author: string           // Agent ID
+  content: string
+  createdAt: number
+}
 ```
 
-### Example: Display Todo Updates
+### Example: Display Task Updates
 
 ```typescript
-import type { TodoUpdate } from '@alexnetrebskii/hive-agent'
+import type { TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 
 const logger = {
   ...new ConsoleLogger({ level: 'warn' }),
 
-  onTodoUpdate: (update: TodoUpdate) => {
+  onTaskUpdate: (update: TaskUpdateNotification) => {
     // Identify which agent (main or sub-agent)
     const agent = update.agentName || 'Main'
 
-    console.log(`\n[${agent}] Todo ${update.action}:`)
+    console.log(`\n[${agent}] Task ${update.action}:`)
     console.log(`  Progress: ${update.progress.completed}/${update.progress.total}`)
 
     if (update.current) {
-      console.log(`  Current: ${update.current.activeForm || update.current.content}`)
+      console.log(`  Current: ${update.current.activeForm || update.current.subject}`)
     }
 
     // Display all tasks
-    update.todos.forEach(todo => {
-      const icon = todo.status === 'completed' ? '✅' :
-                   todo.status === 'in_progress' ? '🔄' : '⬜'
-      console.log(`  ${icon} ${todo.content}`)
+    update.tasks.forEach(task => {
+      const icon = task.status === 'completed' ? '✅' :
+                   task.status === 'in_progress' ? '🔄' : '⬜'
+      const owner = task.owner ? ` [@${task.owner}]` : ''
+      const blocked = task.blockedBy?.length ? ` (blocked by: ${task.blockedBy.join(', ')})` : ''
+      console.log(`  ${task.id}. ${icon} ${task.subject}${owner}${blocked}`)
     })
   }
 }
@@ -289,33 +305,33 @@ const logger = {
 
 ### Example Output
 
-When a sub-agent creates a todo list:
+When a sub-agent creates tasks:
 
 ```
-[meal_planner] Todo set:
+[meal_planner] Task create:
   Progress: 0/4
   Current: Reading user preferences
-  🔄 Reading user preferences
-  ⬜ Asking about calorie target
-  ⬜ Creating meal plan
-  ⬜ Saving plan to context
+  1. 🔄 Read user preferences
+  2. ⬜ Ask about calorie target
+  3. ⬜ Create meal plan (blocked by: 1, 2)
+  4. ⬜ Save plan to context (blocked by: 3)
 
-[meal_planner] Todo complete:
+[meal_planner] Task update:
   Progress: 1/4
   Current: Asking about calorie target
-  ✅ Reading user preferences
-  🔄 Asking about calorie target
-  ⬜ Creating meal plan
-  ⬜ Saving plan to context
+  1. ✅ Read user preferences
+  2. 🔄 Ask about calorie target
+  3. ⬜ Create meal plan (blocked by: 2)
+  4. ⬜ Save plan to context (blocked by: 3)
 ```
 
 Main agent updates show `agentName: undefined`:
 
 ```
-[Main] Todo set:
+[Main] Task create:
   Progress: 0/2
-  🔄 Processing user request
-  ⬜ Presenting results
+  1. 🔄 Process user request
+  2. ⬜ Present results
 ```
 
 ## Environment Variables

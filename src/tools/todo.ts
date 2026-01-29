@@ -1,420 +1,1071 @@
 /**
- * Todo List Management
+ * Task Management System (Claude Code 4-Tool Approach)
  *
- * Provides todo list functionality for agents to track and execute tasks.
+ * Provides task management functionality for agents to track and execute tasks.
+ * Uses 4 separate tools: TaskCreate, TaskUpdate, TaskGet, TaskList
  */
 
-import type { Tool, TodoItem, TodoStatus, LogProvider, TodoProgress } from "../types.js";
+import type { Tool, TaskItem, TaskStatus, TaskComment, LogProvider, TaskProgress, TaskUpdateNotification, TodoItem, TodoUpdate, TodoProgress } from "../types.js";
+import type { Context } from "../context.js";
 
-/**
- * Generate unique ID for todo items
- */
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 9);
+/** Path where tasks are persisted in Context */
+const TASKS_CONTEXT_PATH = '.hive/tasks.json';
+
+/** Serialized task state for persistence */
+interface TaskManagerState {
+  items: TaskItem[];
+  currentTaskId?: string;
+  nextId: number;
 }
 
 /**
- * Format todo list for display
+ * Format task list for display
+ * @param tasks - Array of tasks to format
+ * @param allTasks - Optional full task list (for checking blocker status). If not provided, blockedBy status won't be resolved.
  */
-export function formatTodoList(todos: TodoItem[]): string {
-  if (todos.length === 0) {
-    return "No tasks in the todo list.";
+export function formatTaskList(tasks: TaskItem[], allTasks?: TaskItem[]): string {
+  if (tasks.length === 0) {
+    return "No tasks in the task list.";
   }
 
-  const statusEmoji: Record<TodoStatus, string> = {
+  const statusEmoji: Record<TaskStatus, string> = {
     pending: "⬜",
     in_progress: "🔄",
     completed: "✅",
   };
 
-  return todos
-    .map((todo, index) => {
-      const emoji = statusEmoji[todo.status];
-      // Show activeForm when in_progress, otherwise show content
+  // Create a map for quick task lookup
+  const taskMap = new Map<string, TaskItem>();
+  for (const t of (allTasks || tasks)) {
+    taskMap.set(t.id, t);
+  }
+
+  // Helper to check if a task has open blockers
+  const hasOpenBlockers = (task: TaskItem): boolean => {
+    if (!task.blockedBy || task.blockedBy.length === 0) return false;
+    return task.blockedBy.some(blockerId => {
+      const blocker = taskMap.get(blockerId);
+      return blocker && blocker.status !== 'completed';
+    });
+  };
+
+  // Helper to get open blocker IDs
+  const getOpenBlockerIds = (task: TaskItem): string[] => {
+    if (!task.blockedBy) return [];
+    return task.blockedBy.filter(blockerId => {
+      const blocker = taskMap.get(blockerId);
+      return blocker && blocker.status !== 'completed';
+    });
+  };
+
+  return tasks
+    .map((task) => {
+      const emoji = statusEmoji[task.status];
+      const ownerTag = task.owner ? ` [@${task.owner}]` : '';
+
+      // Show blocked indicator if task has open blockers
+      let blockedTag = '';
+      if (task.status !== 'completed' && hasOpenBlockers(task)) {
+        const openBlockers = getOpenBlockerIds(task);
+        blockedTag = ` (blocked by: ${openBlockers.join(', ')})`;
+      }
+
+      // Show activeForm when in_progress, otherwise show subject
       const label =
-        todo.status === "in_progress" && todo.activeForm
-          ? todo.activeForm
-          : todo.content;
-      return `${index + 1}. ${emoji} ${label}`;
+        task.status === "in_progress" && task.activeForm
+          ? task.activeForm
+          : task.subject;
+      return `${task.id}. ${emoji} ${label}${ownerTag}${blockedTag}`;
     })
     .join("\n");
 }
 
+/** @deprecated Use formatTaskList instead */
+export function formatTodoList(todos: TodoItem[]): string {
+  // Convert TodoItem to TaskItem format for display
+  const tasks: TaskItem[] = todos.map(todo => ({
+    id: todo.id,
+    subject: todo.content,
+    activeForm: todo.activeForm,
+    status: todo.status,
+    createdAt: todo.createdAt,
+    completedAt: todo.completedAt,
+  }));
+  return formatTaskList(tasks);
+}
+
 /**
- * Create the TodoManager class for tracking todos during execution
+ * TaskManager class for tracking tasks during execution
  */
-export class TodoManager {
-  private items: Map<string, TodoItem> = new Map();
+export class TaskManager {
+  private items: Map<string, TaskItem> = new Map();
   private currentTaskId?: string;
+  private nextId: number = 1;
 
   /**
-   * Get all todo items
+   * Get all task items
    */
-  getAll(): TodoItem[] {
-    return Array.from(this.items.values());
+  getAll(): TaskItem[] {
+    // Return in ID order (sequential)
+    return Array.from(this.items.values()).sort((a, b) =>
+      parseInt(a.id) - parseInt(b.id)
+    );
+  }
+
+  /**
+   * Get a task by ID
+   */
+  get(id: string): TaskItem | undefined {
+    return this.items.get(id);
   }
 
   /**
    * Get current task being worked on
    */
-  getCurrentTask(): TodoItem | undefined {
+  getCurrentTask(): TaskItem | undefined {
     if (!this.currentTaskId) return undefined;
     return this.items.get(this.currentTaskId);
   }
 
   /**
-   * Add a new todo item
+   * Check if a task is blocked (has unresolved blockers)
    */
-  add(content: string, activeForm?: string): TodoItem {
-    const item: TodoItem = {
-      id: generateId(),
-      content,
+  isBlocked(task: TaskItem): boolean {
+    if (!task.blockedBy || task.blockedBy.length === 0) return false;
+    // Check if any blocker is not completed
+    return task.blockedBy.some(blockerId => {
+      const blocker = this.items.get(blockerId);
+      return blocker && blocker.status !== 'completed';
+    });
+  }
+
+  /**
+   * Get open (unresolved) blockers for a task
+   */
+  getOpenBlockers(task: TaskItem): string[] {
+    if (!task.blockedBy) return [];
+    return task.blockedBy.filter(blockerId => {
+      const blocker = this.items.get(blockerId);
+      return blocker && blocker.status !== 'completed';
+    });
+  }
+
+  /**
+   * Create a new task
+   * If this is the first task and no tasks are in_progress, auto-starts it (if not blocked)
+   */
+  create(
+    subject: string,
+    description?: string,
+    activeForm?: string,
+    metadata?: Record<string, unknown>
+  ): TaskItem {
+    const id = String(this.nextId++);
+    const item: TaskItem = {
+      id,
+      subject,
+      description,
       activeForm,
       status: "pending",
+      metadata,
       createdAt: Date.now(),
     };
-    this.items.set(item.id, item);
+    this.items.set(id, item);
+
+    // Auto-start if no task is currently in progress and task is not blocked
+    const hasInProgress = Array.from(this.items.values()).some(
+      t => t.status === "in_progress"
+    );
+    if (!hasInProgress && !this.isBlocked(item)) {
+      item.status = "in_progress";
+      this.currentTaskId = id;
+    }
+
     return item;
   }
 
   /**
-   * Set multiple todos at once (replaces existing)
+   * Update a task
+   * Returns the updated task or undefined if not found
    */
-  setAll(
-    todos: Array<{ content: string; activeForm?: string; status?: TodoStatus }>
-  ): TodoItem[] {
-    this.items.clear();
-    this.currentTaskId = undefined;
+  update(
+    id: string,
+    updates: {
+      subject?: string;
+      description?: string;
+      activeForm?: string;
+      status?: TaskStatus | 'deleted';
+      owner?: string;
+      metadata?: Record<string, unknown>;
+      addBlocks?: string[];
+      addBlockedBy?: string[];
+      comment?: { author: string; content: string };
+    }
+  ): { task?: TaskItem; deleted?: boolean; next?: TaskItem } {
+    const item = this.items.get(id);
+    if (!item) return {};
 
-    const items = todos.map((todo) => {
-      const item: TodoItem = {
-        id: generateId(),
-        content: todo.content,
-        activeForm: todo.activeForm,
-        status: todo.status || "pending",
+    // Handle deletion
+    if (updates.status === 'deleted') {
+      // Remove this task from other tasks' blockedBy lists
+      this.removeFromBlockedBy(id);
+      // Remove this task from other tasks' blocks lists
+      this.removeFromBlocks(id);
+
+      this.items.delete(id);
+      if (this.currentTaskId === id) {
+        this.currentTaskId = undefined;
+      }
+      // Auto-start next pending task
+      const next = this.startNextPending();
+      return { deleted: true, next };
+    }
+
+    // Apply updates
+    if (updates.subject !== undefined) item.subject = updates.subject;
+    if (updates.description !== undefined) item.description = updates.description;
+    if (updates.activeForm !== undefined) item.activeForm = updates.activeForm;
+    if (updates.owner !== undefined) item.owner = updates.owner;
+    if (updates.metadata !== undefined) {
+      // Merge metadata, allowing null values to delete keys
+      item.metadata = item.metadata || {};
+      for (const [key, value] of Object.entries(updates.metadata)) {
+        if (value === null) {
+          delete item.metadata[key];
+        } else {
+          item.metadata[key] = value;
+        }
+      }
+    }
+
+    // Handle dependency updates
+    if (updates.addBlocks) {
+      item.blocks = item.blocks || [];
+      for (const blockedId of updates.addBlocks) {
+        if (!item.blocks.includes(blockedId)) {
+          item.blocks.push(blockedId);
+        }
+        // Also update the blocked task's blockedBy (bidirectional)
+        const blockedTask = this.items.get(blockedId);
+        if (blockedTask) {
+          blockedTask.blockedBy = blockedTask.blockedBy || [];
+          if (!blockedTask.blockedBy.includes(id)) {
+            blockedTask.blockedBy.push(id);
+          }
+        }
+      }
+    }
+
+    if (updates.addBlockedBy) {
+      item.blockedBy = item.blockedBy || [];
+      for (const blockerId of updates.addBlockedBy) {
+        if (!item.blockedBy.includes(blockerId)) {
+          item.blockedBy.push(blockerId);
+        }
+        // Also update the blocker task's blocks (bidirectional)
+        const blockerTask = this.items.get(blockerId);
+        if (blockerTask) {
+          blockerTask.blocks = blockerTask.blocks || [];
+          if (!blockerTask.blocks.includes(id)) {
+            blockerTask.blocks.push(id);
+          }
+        }
+      }
+    }
+
+    // Handle comment
+    if (updates.comment) {
+      item.comments = item.comments || [];
+      const comment: TaskComment = {
+        author: updates.comment.author,
+        content: updates.comment.content,
         createdAt: Date.now(),
       };
-      this.items.set(item.id, item);
-      return item;
-    });
-
-    // Set first pending as in_progress
-    const firstPending = items.find((i) => i.status === "pending");
-    if (firstPending) {
-      firstPending.status = "in_progress";
-      this.currentTaskId = firstPending.id;
+      item.comments.push(comment);
     }
 
-    return items;
-  }
+    // Handle status changes
+    if (updates.status) {
+      const newStatus = updates.status as TaskStatus;
+      const oldStatus = item.status;
+      item.status = newStatus;
 
-  /**
-   * Mark a todo as in progress
-   */
-  startTask(id: string): TodoItem | undefined {
-    const item = this.items.get(id);
-    if (!item) return undefined;
-
-    // Mark previous current as pending if not completed
-    if (this.currentTaskId && this.currentTaskId !== id) {
-      const current = this.items.get(this.currentTaskId);
-      if (current && current.status === "in_progress") {
-        current.status = "pending";
+      if (updates.status === 'in_progress') {
+        // Pause any other in_progress task
+        if (this.currentTaskId && this.currentTaskId !== id) {
+          const current = this.items.get(this.currentTaskId);
+          if (current && current.status === 'in_progress') {
+            current.status = 'pending';
+          }
+        }
+        this.currentTaskId = id;
+      } else if (updates.status === 'completed') {
+        item.completedAt = Date.now();
+        if (this.currentTaskId === id) {
+          this.currentTaskId = undefined;
+        }
+        // Auto-start next pending task (checking for unblocked)
+        const next = this.startNextPending();
+        return { task: item, next };
+      } else if (oldStatus === 'in_progress' && updates.status === 'pending') {
+        if (this.currentTaskId === id) {
+          this.currentTaskId = undefined;
+        }
       }
     }
 
-    item.status = "in_progress";
-    this.currentTaskId = id;
-    return item;
+    return { task: item };
   }
 
   /**
-   * Mark a todo as completed and start next
+   * Remove a task ID from all other tasks' blockedBy lists
    */
-  completeTask(
-    id: string
-  ): { completed: TodoItem; next?: TodoItem } | undefined {
-    const item = this.items.get(id);
-    if (!item) return undefined;
-
-    item.status = "completed";
-    item.completedAt = Date.now();
-
-    if (this.currentTaskId === id) {
-      this.currentTaskId = undefined;
+  private removeFromBlockedBy(taskId: string): void {
+    for (const task of this.items.values()) {
+      if (task.blockedBy) {
+        task.blockedBy = task.blockedBy.filter(id => id !== taskId);
+        if (task.blockedBy.length === 0) {
+          delete task.blockedBy;
+        }
+      }
     }
+  }
 
-    // Find and start next pending task
-    const nextPending = Array.from(this.items.values()).find(
-      (i) => i.status === "pending"
+  /**
+   * Remove a task ID from all other tasks' blocks lists
+   */
+  private removeFromBlocks(taskId: string): void {
+    for (const task of this.items.values()) {
+      if (task.blocks) {
+        task.blocks = task.blocks.filter(id => id !== taskId);
+        if (task.blocks.length === 0) {
+          delete task.blocks;
+        }
+      }
+    }
+  }
+
+  /**
+   * Find and start the next pending task that is not blocked
+   */
+  private startNextPending(): TaskItem | undefined {
+    const pending = this.getAll().find(
+      t => t.status === 'pending' && !this.isBlocked(t)
     );
-    if (nextPending) {
-      nextPending.status = "in_progress";
-      this.currentTaskId = nextPending.id;
-      return { completed: item, next: nextPending };
+    if (pending) {
+      pending.status = 'in_progress';
+      this.currentTaskId = pending.id;
+      return pending;
     }
-
-    return { completed: item };
-  }
-
-  /**
-   * Complete current task and move to next
-   */
-  completeCurrentAndNext(): { completed?: TodoItem; next?: TodoItem } {
-    if (!this.currentTaskId) {
-      // No current task, find first pending
-      const pending = Array.from(this.items.values()).find(
-        (i) => i.status === "pending"
-      );
-      if (pending) {
-        pending.status = "in_progress";
-        this.currentTaskId = pending.id;
-        return { next: pending };
-      }
-      return {};
-    }
-
-    return this.completeTask(this.currentTaskId) || {};
+    return undefined;
   }
 
   /**
    * Check if all tasks are completed
    */
   isAllCompleted(): boolean {
-    return Array.from(this.items.values()).every(
-      (i) => i.status === "completed"
-    );
+    const items = Array.from(this.items.values());
+    return items.length > 0 && items.every(i => i.status === "completed");
   }
 
   /**
    * Get progress stats
    */
-  getProgress(): {
-    total: number;
-    completed: number;
-    pending: number;
-    inProgress: number;
-  } {
+  getProgress(): TaskProgress {
     const items = Array.from(this.items.values());
     return {
       total: items.length,
-      completed: items.filter((i) => i.status === "completed").length,
-      pending: items.filter((i) => i.status === "pending").length,
-      inProgress: items.filter((i) => i.status === "in_progress").length,
+      completed: items.filter(i => i.status === "completed").length,
+      pending: items.filter(i => i.status === "pending").length,
+      inProgress: items.filter(i => i.status === "in_progress").length,
     };
+  }
+
+  /**
+   * Clear all tasks (used internally)
+   */
+  clear(): void {
+    this.items.clear();
+    this.currentTaskId = undefined;
+    this.nextId = 1;
+  }
+
+  /**
+   * Serialize the TaskManager state for persistence
+   */
+  serialize(): TaskManagerState {
+    return {
+      items: this.getAll(),
+      currentTaskId: this.currentTaskId,
+      nextId: this.nextId,
+    };
+  }
+
+  /**
+   * Restore TaskManager state from serialized data
+   */
+  restore(state: TaskManagerState): void {
+    this.items.clear();
+    for (const item of state.items) {
+      this.items.set(item.id, item);
+    }
+    this.currentTaskId = state.currentTaskId;
+    this.nextId = state.nextId;
+  }
+
+  /**
+   * Save tasks to Context (if provided)
+   */
+  saveToContext(context: Context | undefined, agentName?: string): void {
+    if (!context) return;
+    try {
+      const state = this.serialize();
+      context.write(TASKS_CONTEXT_PATH, state, agentName || 'task-manager');
+    } catch {
+      // Silently ignore write errors (context may not support this path)
+    }
+  }
+
+  /**
+   * Restore tasks from Context (if available)
+   * Returns true if tasks were restored
+   */
+  restoreFromContext(context: Context | undefined): boolean {
+    if (!context) return false;
+    try {
+      const state = context.read<TaskManagerState>(TASKS_CONTEXT_PATH);
+      if (state && state.items && Array.isArray(state.items)) {
+        this.restore(state);
+        return true;
+      }
+    } catch {
+      // Silently ignore read errors
+    }
+    return false;
   }
 }
 
-export interface TodoToolOptions {
-  /** Logger for notifying UI about todo updates */
-  logger?: LogProvider
+/** @deprecated Use TaskManager instead */
+export const TodoManager = TaskManager;
+
+export interface TaskToolOptions {
+  /** Logger for notifying UI about task updates */
+  logger?: LogProvider;
   /** Agent name (for sub-agents) */
-  agentName?: string
+  agentName?: string;
+  /** Agent ID for ownership checks (defaults to CLAUDE_CODE_AGENT_ID env var) */
+  agentId?: string;
+  /** Agent type for permission checks (defaults to CLAUDE_CODE_AGENT_TYPE env var) */
+  agentType?: 'team-lead' | string;
+  /** Context for task persistence across __ask_user__ pauses */
+  context?: Context;
 }
 
 /**
- * Create the __todo__ tool
+ * Check if the current agent can update a task
+ * Returns true if:
+ * - Task has no owner
+ * - Current agent is the owner
+ * - Current agent is a team-lead
  */
-export function createTodoTool(manager: TodoManager, options: TodoToolOptions = {}): Tool {
-  const { logger, agentName } = options;
+function canUpdateTask(task: TaskItem, options: TaskToolOptions): boolean {
+  // No owner - anyone can update
+  if (!task.owner) return true;
 
-  /**
-   * Notify logger about todo list changes
-   */
-  function notifyTodoUpdate(action: 'set' | 'complete' | 'update'): void {
-    if (!logger?.onTodoUpdate) return;
+  const agentId = options.agentId || process.env.CLAUDE_CODE_AGENT_ID;
+  const agentType = options.agentType || process.env.CLAUDE_CODE_AGENT_TYPE;
 
-    const todos = manager.getAll();
+  // Team leads can update any task
+  if (agentType === 'team-lead') return true;
+
+  // Owner can update their own tasks
+  if (agentId && task.owner === agentId) return true;
+
+  return false;
+}
+
+/** @deprecated Use TaskToolOptions instead */
+export type TodoToolOptions = TaskToolOptions;
+
+/**
+ * Notify logger about task list changes and persist to context
+ */
+function notifyTaskUpdate(
+  manager: TaskManager,
+  action: 'create' | 'update' | 'delete' | 'list',
+  options: TaskToolOptions
+): void {
+  const { logger, agentName, context } = options;
+
+  // Persist to context on mutations (not on list)
+  if (action !== 'list' && context) {
+    manager.saveToContext(context, agentName);
+  }
+
+  if (logger?.onTaskUpdate) {
+    const tasks = manager.getAll();
     const current = manager.getCurrentTask();
     const progress = manager.getProgress();
 
-    logger.onTodoUpdate({
+    logger.onTaskUpdate({
       agentName,
       action,
-      todos,
+      tasks,
       current: current || undefined,
       progress,
     });
   }
+
+  // Also call deprecated onTodoUpdate for backward compatibility
+  if (logger?.onTodoUpdate) {
+    const tasks = manager.getAll();
+    const current = manager.getCurrentTask();
+    const progress = manager.getProgress();
+
+    // Convert to old format
+    const todos: TodoItem[] = tasks.map(t => ({
+      id: t.id,
+      content: t.subject,
+      activeForm: t.activeForm,
+      status: t.status,
+      createdAt: t.createdAt,
+      completedAt: t.completedAt,
+    }));
+
+    const todoUpdate: TodoUpdate = {
+      agentName,
+      action: action === 'create' ? 'set' : action === 'delete' ? 'update' : action === 'list' ? 'update' : 'update',
+      todos,
+      current: current ? {
+        id: current.id,
+        content: current.subject,
+        activeForm: current.activeForm,
+        status: current.status,
+        createdAt: current.createdAt,
+        completedAt: current.completedAt,
+      } : undefined,
+      progress,
+    };
+
+    logger.onTodoUpdate(todoUpdate);
+  }
+}
+
+// Tool descriptions - shared content
+const TASK_TOOL_USAGE_NOTES = `
+## When to Use Task Management
+
+Use task management tools proactively in these scenarios:
+
+- Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
+- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
+- Plan mode - When using plan mode, create a task list to track the work
+- User explicitly requests todo list - When the user directly asks you to use the todo list
+- User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
+- After receiving new instructions - Immediately capture user requirements as tasks
+- When you start working on a task - Mark it as in_progress BEFORE beginning work
+- After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
+
+## When NOT to Use Task Management
+
+Skip using task management when:
+- There is only a single, straightforward task
+- The task is trivial and tracking it provides no organizational benefit
+- The task can be completed in less than 3 trivial steps
+- The task is purely conversational or informational
+`;
+
+/**
+ * Create the TaskCreate tool
+ */
+export function createTaskCreateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
-    name: "__todo__",
-    description: `Use this tool to create and manage a structured task list for your current work session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
+    name: "TaskCreate",
+    description: `Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
+${TASK_TOOL_USAGE_NOTES}
+
+## Task Fields
+
+- **subject**: A brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
+- **description**: Detailed description of what needs to be done, including context and acceptance criteria
+- **activeForm**: Present continuous form shown in spinner when task is in_progress (e.g., "Fixing authentication bug"). This is displayed to the user while you work on the task.
+
+**IMPORTANT**: Always provide activeForm when creating tasks. The subject should be imperative ("Run tests") while activeForm should be present continuous ("Running tests"). All tasks are created with status \`pending\`.
+
+## Tips
+
+- Create tasks with clear, specific subjects that describe the outcome
+- Include enough detail in the description for another agent to understand and complete the task
+- After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
+- Check TaskList first to avoid creating duplicate tasks
+`,
+    parameters: {
+      type: "object",
+      properties: {
+        subject: {
+          type: "string",
+          description: "A brief title for the task",
+        },
+        description: {
+          type: "string",
+          description: "A detailed description of what needs to be done",
+        },
+        activeForm: {
+          type: "string",
+          description: 'Present continuous form shown in spinner when in_progress (e.g., "Running tests")',
+        },
+        metadata: {
+          type: "string",
+          description: "JSON string of arbitrary metadata to attach to the task",
+        },
+      },
+      required: ["subject", "description"],
+    },
+
+    execute: async (params) => {
+      const { subject, description, activeForm, metadata: rawMetadata } = params as {
+        subject: string;
+        description: string;
+        activeForm?: string;
+        metadata?: string;
+      };
+
+      // Parse metadata if provided
+      let metadata: Record<string, unknown> | undefined;
+      if (rawMetadata) {
+        try {
+          metadata = JSON.parse(rawMetadata);
+        } catch {
+          return { success: false, error: "Invalid metadata JSON" };
+        }
+      }
+
+      const task = manager.create(subject, description, activeForm, metadata);
+      const progress = manager.getProgress();
+
+      notifyTaskUpdate(manager, 'create', options);
+
+      return {
+        success: true,
+        data: {
+          message: `Created task #${task.id}: "${task.subject}"${task.status === 'in_progress' ? ' (auto-started)' : ''}`,
+          task,
+          progress,
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Create the TaskUpdate tool
+ */
+export function createTaskUpdateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
+  return {
+    name: "TaskUpdate",
+    description: `Use this tool to update a task in the task list.
 
 ## When to Use This Tool
-Use this tool proactively in these scenarios:
 
-1. Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-2. Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
-3. User explicitly requests todo list - When the user directly asks you to use the todo list
-4. User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-5. After receiving new instructions - Immediately capture user requirements as todos
-6. When you start working on a task - Mark it as in_progress BEFORE beginning work. Ideally you should only have one todo as in_progress at a time
-7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during execution
-8. NEVER add tasks about calling agent tools.
+**Mark tasks as resolved:**
+- When you have completed the work described in a task
+- When a task is no longer needed or has been superseded
+- IMPORTANT: Always mark your assigned tasks as resolved when you finish them
+- After resolving, call TaskList to find your next task
 
-## When NOT to Use This Tool
+- ONLY mark a task as completed when you have FULLY accomplished it
+- If you encounter errors, blockers, or cannot finish, keep the task as in_progress
+- When blocked, create a new task describing what needs to be resolved
+- Never mark a task as completed if:
+  - Tests are failing
+  - Implementation is partial
+  - You encountered unresolved errors
+  - You couldn't find necessary files or dependencies
 
-Skip using this tool when:
-1. There is only a single, straightforward task
-2. The task is trivial and tracking it provides no organizational benefit
-3. The task can be completed in less than 3 trivial steps
-4. The task is purely conversational or informational
+**Delete tasks:**
+- When a task is no longer relevant or was created in error
+- Setting status to \`deleted\` permanently removes the task
 
-NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
+**Update task details:**
+- When requirements change or become clearer
+- When establishing dependencies between tasks
 
-## Examples of When to Use the Todo List
+## Fields You Can Update
 
-<example>
-User: I need to plan a three-day trip to Paris. Include hotel bookings, restaurant reservations, and museum visits.
-Assistant: I'll help you plan your Paris trip. Let me create a todo list to organize all the components.
-*Creates todo list with the following items:*
-1. Researching and recommending hotels in central Paris
-2. Creating day-by-day itinerary with museum visits
-3. Suggesting restaurants for each meal with reservation details
-4. Adding transportation options between locations
-5. Compiling final trip document with all bookings and confirmations
-*Begins working on the first task*
+- **status**: The task status (see Status Workflow below)
+- **subject**: Change the task title (imperative form, e.g., "Run tests")
+- **description**: Change the task description
+- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., "Running tests")
+- **owner**: Change the task owner (agent name)
+- **metadata**: Merge metadata keys into the task (set a key to null to delete it)
+- **addBlocks**: Mark tasks that cannot start until this one completes
+- **addBlockedBy**: Mark tasks that must complete before this one can start
+- **comment**: Add a progress note or comment to the task
 
-<reasoning>
-The assistant used the todo list because:
-1. Trip planning is a multi-step process requiring research across multiple categories
-2. The user specified several distinct components (hotels, restaurants, museums)
-3. This is a complex task that benefits from systematic tracking
-4. The checklist ensures nothing is overlooked in the planning process
-</reasoning>
-</example>
+## Status Workflow
 
-<example>
-User: Help me organize my research paper on climate change. I need to restructure the sections, add citations, and create a bibliography.
-Assistant: Let me first review your current paper structure to understand what needs to be reorganized.
-*Reviews the document and identifies organizational issues*
-Assistant: I've reviewed your paper and identified several areas that need attention. Let me create a todo list to track these improvements.
-*Creates todo list with specific items for each section that needs restructuring, citation additions, and bibliography formatting*
+Status progresses: \`pending\` → \`in_progress\` → \`completed\`
 
-<reasoning>
-The assistant used the todo list because:
-1. First, the assistant reviewed the document to understand its scope
-2. Upon analysis, it identified this requires multiple distinct operations
-3. The todo list helps ensure each section is properly addressed
-4. This systematic approach maintains consistency throughout the document
-</reasoning>
-</example>
+Use \`deleted\` to permanently remove a task.
 
-<example>
-User: I want to redecorate my living room: new paint color, furniture arrangement, lighting fixtures, and window treatments.
-Assistant: I'll help you redecorate your living room. Let's organize these elements into a structured plan.
-*Creates a todo list breaking down each aspect into specific tasks with design considerations*
-Assistant: Let's start with selecting a paint color scheme. I'll need to consider your existing furniture, natural lighting, and the mood you want to create.
+## Staleness
 
-<reasoning>
-The assistant used the todo list because:
-1. The user provided multiple distinct elements in a comma-separated list
-2. Interior design involves multiple coordinated decisions
-3. The todo list helps organize these interconnected design choices
-4. This approach ensures all elements work together cohesively
-</reasoning>
-</example>
+Make sure to read a task's latest state using \`TaskGet\` before updating it.
 
-<example>
-User: My garden needs work. It looks messy and the plants aren't thriving.
-Assistant: I'll help improve your garden. First, let me understand the current state and identify the main issues.
-*Asks questions about garden size, current plants, sunlight, and soil conditions*
-Assistant: Based on your description, I've identified several improvements needed. Let me create a todo list to systematically address each issue.
-*Creates todo list with items like: 1) Removing overgrown weeds and dead plants, 2) Testing and amending soil pH and nutrients, 3) Reorganizing plant layout for better sunlight exposure, 4) Adding mulch for moisture retention, 5) Creating a watering schedule*
-Let's begin by clearing out the overgrown areas and removing plants that aren't thriving.
+## Examples
 
-<reasoning>
-The assistant used the todo list because:
-1. First, the assistant gathered information about the garden's condition
-2. Based on this assessment, it identified multiple improvement areas
-3. Garden renovation is a non-trivial task requiring sequential steps
-4. The todo list ensures each aspect is methodically addressed
-5. This organized approach leads to better overall results
-</reasoning>
-</example>
+Mark task as in progress when starting work:
+\`\`\`json
+{"taskId": "1", "status": "in_progress"}
+\`\`\`
 
-## Examples of When NOT to Use the Todo List
+Mark task as completed after finishing work:
+\`\`\`json
+{"taskId": "1", "status": "completed"}
+\`\`\`
 
-<example>
-User: What's a good recipe for chocolate chip cookies?
-Assistant: Here's a classic chocolate chip cookie recipe:
+Delete a task:
+\`\`\`json
+{"taskId": "1", "status": "deleted"}
+\`\`\`
 
-**Ingredients:**
-- 2¼ cups all-purpose flour
-- 1 tsp baking soda
-- 1 cup butter, softened
-- ¾ cup sugar
-- ¾ cup brown sugar
-- 2 eggs
-- 2 tsp vanilla extract
-- 2 cups chocolate chips
+Claim a task by setting owner:
+\`\`\`json
+{"taskId": "1", "owner": "my-name"}
+\`\`\`
 
-**Instructions:**
-Mix dry ingredients, cream butter and sugars, add eggs and vanilla, combine with dry mixture, fold in chocolate chips. Bake at 375°F for 9-11 minutes.
+Set up task dependencies:
+\`\`\`json
+{"taskId": "2", "addBlockedBy": ["1"]}
+\`\`\`
 
-<reasoning>
-The assistant did not use the todo list because this is a straightforward informational request. The user is asking for a recipe, not requesting help to actually bake cookies through multiple steps. There's no task execution required.
-</reasoning>
-</example>
+Add a comment:
+\`\`\`json
+{"taskId": "1", "comment": "Started implementing the API endpoint"}
+\`\`\`
+`,
+    parameters: {
+      type: "object",
+      properties: {
+        taskId: {
+          type: "string",
+          description: "The ID of the task to update",
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed", "deleted"],
+          description: "New status for the task",
+        },
+        subject: {
+          type: "string",
+          description: "New subject for the task",
+        },
+        description: {
+          type: "string",
+          description: "New description for the task",
+        },
+        activeForm: {
+          type: "string",
+          description: 'Present continuous form shown in spinner when in_progress (e.g., "Running tests")',
+        },
+        owner: {
+          type: "string",
+          description: "New owner for the task",
+        },
+        metadata: {
+          type: "string",
+          description: "JSON string of metadata keys to merge into the task. Set a key to null to delete it.",
+        },
+        addBlocks: {
+          type: "string",
+          description: "JSON array of task IDs that this task blocks (cannot start until this completes)",
+        },
+        addBlockedBy: {
+          type: "string",
+          description: "JSON array of task IDs that block this task (must complete before this can start)",
+        },
+        comment: {
+          type: "string",
+          description: "Add a progress note or comment to the task",
+        },
+      },
+      required: ["taskId"],
+    },
 
-<example>
-User: How long does it take to fly from New York to London?
-Assistant: A direct flight from New York to London typically takes about 7-8 hours. The exact duration depends on factors like wind patterns, the specific departure and arrival airports, and the flight path taken. Flights going eastbound are usually slightly shorter due to prevailing jet stream winds.
+    execute: async (params) => {
+      const {
+        taskId,
+        status,
+        subject,
+        description,
+        activeForm,
+        owner,
+        metadata: rawMetadata,
+        addBlocks: rawAddBlocks,
+        addBlockedBy: rawAddBlockedBy,
+        comment,
+      } = params as {
+        taskId: string;
+        status?: 'pending' | 'in_progress' | 'completed' | 'deleted';
+        subject?: string;
+        description?: string;
+        activeForm?: string;
+        owner?: string;
+        metadata?: string;
+        addBlocks?: string;
+        addBlockedBy?: string;
+        comment?: string;
+      };
 
-<reasoning>
-The assistant did not use the todo list because this is a simple informational query with no actionable tasks. The user wants information, not assistance with booking or planning that would require multiple steps.
-</reasoning>
-</example>
+      // Check if task exists first
+      const existingTask = manager.get(taskId);
+      if (!existingTask) {
+        return { success: false, error: `Task #${taskId} not found` };
+      }
 
-<example>
-User: Translate "Good morning" to Spanish for me.
-Assistant: "Good morning" in Spanish is "Buenos días."
+      // Check ownership permissions
+      if (!canUpdateTask(existingTask, options)) {
+        const agentId = options.agentId || process.env.CLAUDE_CODE_AGENT_ID || 'unknown';
+        return {
+          success: false,
+          error: `Task #${taskId} is owned by "${existingTask.owner}" and cannot be updated by agent "${agentId}"`,
+        };
+      }
 
-<reasoning>
-The assistant did not use the todo list because this is a single, trivial task with an immediate answer. There are no multiple steps to organize or track, making the todo list unnecessary.
-</reasoning>
-</example>
+      // Parse metadata if provided
+      let metadata: Record<string, unknown> | undefined;
+      if (rawMetadata) {
+        try {
+          metadata = JSON.parse(rawMetadata);
+        } catch {
+          return { success: false, error: "Invalid metadata JSON" };
+        }
+      }
 
-## Task States and Management
+      // Parse addBlocks if provided
+      let addBlocks: string[] | undefined;
+      if (rawAddBlocks) {
+        try {
+          addBlocks = JSON.parse(rawAddBlocks);
+          if (!Array.isArray(addBlocks)) {
+            return { success: false, error: "addBlocks must be a JSON array of task IDs" };
+          }
+        } catch {
+          return { success: false, error: "Invalid addBlocks JSON" };
+        }
+      }
 
-1. **Task States**: Use these states to track progress:
-   - pending: Task not yet started
-   - in_progress: Currently working on (limit to ONE task at a time)
-   - completed: Task finished successfully
+      // Parse addBlockedBy if provided
+      let addBlockedBy: string[] | undefined;
+      if (rawAddBlockedBy) {
+        try {
+          addBlockedBy = JSON.parse(rawAddBlockedBy);
+          if (!Array.isArray(addBlockedBy)) {
+            return { success: false, error: "addBlockedBy must be a JSON array of task IDs" };
+          }
+        } catch {
+          return { success: false, error: "Invalid addBlockedBy JSON" };
+        }
+      }
 
-   **IMPORTANT**: Task descriptions must have two forms:
-   - content: The imperative form describing what needs to be done (e.g., "Research hotels", "Create itinerary")
-   - activeForm: The present continuous form shown during execution (e.g., "Researching hotels", "Creating itinerary")
+      // Build comment object if provided
+      const commentObj = comment ? {
+        author: options.agentId || process.env.CLAUDE_CODE_AGENT_ID || options.agentName || 'agent',
+        content: comment,
+      } : undefined;
 
-2. **Task Management**:
-   - Update task status in real-time as you work
-   - Mark tasks complete IMMEDIATELY after finishing (don't batch completions)
-   - Exactly ONE task must be in_progress at any time (not less, not more)
-   - Complete current tasks before starting new ones
-   - Remove tasks that are no longer relevant from the list entirely
+      const result = manager.update(taskId, {
+        status,
+        subject,
+        description,
+        activeForm,
+        owner,
+        metadata,
+        addBlocks,
+        addBlockedBy,
+        comment: commentObj,
+      });
 
-3. **Task Completion Requirements**:
-   - ONLY mark a task as completed when you have FULLY accomplished it
-   - If you encounter obstacles, limitations, or cannot finish, keep the task as in_progress
-   - When blocked, create a new task describing what needs to be resolved
-   - Never mark a task as completed if:
-     - Requirements are not fully met
-     - Implementation is partial
-     - You encountered unresolved issues
-     - You couldn't obtain necessary information or resources
+      if (result.deleted) {
+        notifyTaskUpdate(manager, 'delete', options);
+        const progress = manager.getProgress();
+        let message = `Deleted task #${taskId}`;
+        if (result.next) {
+          message += `. Next task: #${result.next.id} "${result.next.subject}"`;
+        }
+        return {
+          success: true,
+          data: {
+            message,
+            deleted: true,
+            next: result.next,
+            progress,
+          },
+        };
+      }
 
-4. **Task Breakdown**:
-   - Create specific, actionable items
-   - Break complex tasks into smaller, manageable steps
-   - Use clear, descriptive task names
-   - Always provide both forms:
-     - content: "Research restaurant options"
-     - activeForm: "Researching restaurant options"
+      if (!result.task) {
+        return { success: false, error: `Task #${taskId} not found` };
+      }
 
-When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
-    `,
+      notifyTaskUpdate(manager, 'update', options);
+      const progress = manager.getProgress();
 
+      let message = `Updated task #${taskId}`;
+      if (status === 'completed') {
+        message = `Completed task #${taskId}: "${result.task.subject}"`;
+        if (result.next) {
+          message += `. Next: #${result.next.id} "${result.next.subject}"`;
+        } else if (manager.isAllCompleted()) {
+          message += `. All tasks completed!`;
+        }
+      } else if (status === 'in_progress') {
+        message = `Started task #${taskId}: "${result.task.subject}"`;
+      }
+
+      return {
+        success: true,
+        data: {
+          message,
+          task: result.task,
+          next: result.next,
+          progress,
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Create the TaskGet tool
+ */
+export function createTaskGetTool(manager: TaskManager, _options: TaskToolOptions = {}): Tool {
+  return {
+    name: "TaskGet",
+    description: `Use this tool to retrieve a task by its ID from the task list.
+
+## When to Use This Tool
+
+- When you need the full description and context before starting work on a task
+- To understand task dependencies (what it blocks, what blocks it)
+- After being assigned a task, to get complete requirements
+
+## Output
+
+Returns full task details:
+- **subject**: Task title
+- **description**: Detailed requirements and context
+- **status**: 'pending', 'in_progress', or 'completed'
+- **owner**: Agent that owns the task (if assigned)
+- **metadata**: Any additional metadata attached to the task
+
+## Tips
+
+- After fetching a task, verify its status before beginning work.
+- Use TaskList to see all tasks in summary form.
+`,
+    parameters: {
+      type: "object",
+      properties: {
+        taskId: {
+          type: "string",
+          description: "The ID of the task to retrieve",
+        },
+      },
+      required: ["taskId"],
+    },
+
+    execute: async (params) => {
+      const { taskId } = params as { taskId: string };
+
+      const task = manager.get(taskId);
+      if (!task) {
+        return { success: false, error: `Task #${taskId} not found` };
+      }
+
+      return {
+        success: true,
+        data: {
+          task,
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Create the TaskList tool
+ */
+export function createTaskListTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
+  return {
+    name: "TaskList",
+    description: `Use this tool to list all tasks in the task list.
+
+## When to Use This Tool
+
+- To see what tasks are available to work on (status: 'pending', no owner, not blocked)
+- To check overall progress on the project
+- To find tasks that are blocked and need dependencies resolved
+- After completing a task, to check for newly unblocked work or claim the next available task
+- **Prefer working on tasks in ID order** (lowest ID first) when multiple tasks are available, as earlier tasks often set up context for later ones
+
+## Output
+
+Returns a summary of each task:
+- **id**: Task identifier (use with TaskGet, TaskUpdate)
+- **subject**: Brief description of the task
+- **status**: 'pending', 'in_progress', or 'completed'
+- **owner**: Agent ID if assigned, empty if available
+
+Use TaskGet with a specific task ID to view full details including description.
+`,
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+
+    execute: async () => {
+      const tasks = manager.getAll();
+      const current = manager.getCurrentTask();
+      const progress = manager.getProgress();
+
+      notifyTaskUpdate(manager, 'list', options);
+
+      return {
+        success: true,
+        data: {
+          message: formatTaskList(tasks, tasks),
+          tasks,
+          current: current?.id,
+          progress,
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Create all 4 task management tools
+ */
+export function createTaskTools(manager: TaskManager, options: TaskToolOptions = {}): Tool[] {
+  return [
+    createTaskCreateTool(manager, options),
+    createTaskUpdateTool(manager, options),
+    createTaskGetTool(manager, options),
+    createTaskListTool(manager, options),
+  ];
+}
+
+/**
+ * @deprecated Use createTaskTools instead
+ */
+export function createTodoTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
+  // Return a legacy-compatible single tool that wraps the new system
+  return {
+    name: "__todo__",
+    description: "Deprecated: Use TaskCreate, TaskUpdate, TaskGet, TaskList tools instead.",
     parameters: {
       type: "object",
       properties: {
@@ -430,41 +1081,31 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
       },
       required: ["action"],
     },
-
     execute: async (params) => {
       const { action, items: rawItems } = params as {
         action: string;
         items?: unknown;
       };
 
-      // Parse items - could be JSON string, array of strings, or array of objects
+      // Parse items for set action
       type TodoInput = { content: string; activeForm?: string };
       let items: TodoInput[] | undefined;
 
       if (rawItems) {
         let parsed: unknown = rawItems;
-
-        // Parse JSON string if needed
         if (typeof rawItems === "string") {
           try {
             parsed = JSON.parse(rawItems);
           } catch {
-            // Single string item
             parsed = [rawItems];
           }
         }
-
-        // Convert to TodoInput array
         if (Array.isArray(parsed)) {
           items = parsed.map((item) => {
             if (typeof item === "string") {
               return { content: item };
             }
-            if (
-              typeof item === "object" &&
-              item !== null &&
-              "content" in item
-            ) {
+            if (typeof item === "object" && item !== null && "content" in item) {
               return {
                 content: (item as { content: string }).content,
                 activeForm: (item as { activeForm?: string }).activeForm,
@@ -478,86 +1119,61 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
       switch (action) {
         case "set": {
           if (!items || items.length === 0) {
-            return {
-              success: false,
-              error: 'Items array is required for "set" action',
-            };
+            return { success: false, error: 'Items array is required for "set" action' };
           }
-
-          const todos = manager.setAll(items);
+          manager.clear();
+          for (const item of items) {
+            manager.create(item.content, undefined, item.activeForm);
+          }
+          const todos = manager.getAll();
           const current = manager.getCurrentTask();
-          const currentLabel = current?.activeForm || current?.content;
-
-          // Notify UI about new todo list
-          notifyTodoUpdate('set');
-
+          notifyTaskUpdate(manager, 'create', options);
           return {
             success: true,
             data: {
-              message: `Created ${todos.length} tasks. Starting: "${currentLabel}"`,
-              todos: manager.getAll(),
-              current: currentLabel,
+              message: `Created ${todos.length} tasks. Starting: "${current?.activeForm || current?.subject}"`,
+              todos: todos.map(t => ({ ...t, content: t.subject })),
+              current: current?.activeForm || current?.subject,
             },
           };
         }
 
         case "complete": {
-          const { completed, next } = manager.completeCurrentAndNext();
-
-          if (!completed && !next) {
-            return {
-              success: true,
-              data: {
-                message: "No tasks to complete.",
-                todos: manager.getAll(),
-              },
-            };
+          const current = manager.getCurrentTask();
+          if (!current) {
+            return { success: true, data: { message: "No tasks to complete.", todos: manager.getAll() } };
           }
-
+          const result = manager.update(current.id, { status: 'completed' });
           const progress = manager.getProgress();
-          let message = "";
-
-          if (completed) {
-            message = `Completed: "${completed.content}". `;
-          }
-          if (next) {
-            const nextLabel = next.activeForm || next.content;
-            message += `Next: "${nextLabel}". `;
+          let message = `Completed: "${current.subject}". `;
+          if (result.next) {
+            message += `Next: "${result.next.activeForm || result.next.subject}". `;
           } else if (manager.isAllCompleted()) {
             message += "All tasks completed!";
           }
           message += `Progress: ${progress.completed}/${progress.total}`;
-
-          const nextLabel = next ? next.activeForm || next.content : undefined;
-
-          // Notify UI about task completion
-          notifyTodoUpdate('complete');
-
+          notifyTaskUpdate(manager, 'update', options);
           return {
             success: true,
             data: {
               message,
-              todos: manager.getAll(),
-              current: nextLabel,
+              todos: manager.getAll().map(t => ({ ...t, content: t.subject })),
+              current: result.next?.activeForm || result.next?.subject,
               progress,
             },
           };
         }
 
         case "list": {
-          const todos = manager.getAll();
+          const tasks = manager.getAll();
           const current = manager.getCurrentTask();
           const progress = manager.getProgress();
-          const currentLabel = current
-            ? current.activeForm || current.content
-            : undefined;
-
           return {
             success: true,
             data: {
-              message: formatTodoList(todos),
-              todos,
-              current: currentLabel,
+              message: formatTaskList(tasks, tasks),
+              todos: tasks.map(t => ({ ...t, content: t.subject })),
+              current: current?.activeForm || current?.subject,
               progress,
             },
           };

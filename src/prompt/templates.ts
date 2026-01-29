@@ -350,10 +350,10 @@ export function instructionsSection(instructions: string[]): string {
 export function checklistSection(config: ChecklistConfig): string {
   const lines = ['## Task Tracking', '']
 
-  // When trackProgress is enabled, instruct to use the __todo__ tool
+  // When trackProgress is enabled, instruct to use the __tasks__ tool
   if (config.trackProgress) {
-    lines.push('Use the __todo__ tool to plan and track your work.')
-    lines.push('Create your own todos based on the task. Example items you might track:')
+    lines.push('Use the __tasks__ tool to plan and track your work.')
+    lines.push('Create your own tasks based on the task. Example items you might track:')
     lines.push('')
 
     for (const item of config.items) {
@@ -362,7 +362,7 @@ export function checklistSection(config: ChecklistConfig): string {
     }
 
     lines.push('')
-    lines.push('Mark each todo as in_progress when starting, then completed when done.')
+    lines.push('Mark each task as in_progress when starting, then completed when done.')
   } else {
     // Static checklist without todo tracking - just guidance
     lines.push('Consider these aspects:')

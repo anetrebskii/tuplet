@@ -19,8 +19,8 @@ import { Context, createContextTools } from "./context.js";
 import {
   createAskUserTool,
   createTaskTool,
-  TodoManager,
-  createTodoTool,
+  TaskManager,
+  createTaskTools,
 } from "./tools/index.js";
 
 /**
@@ -87,15 +87,16 @@ export class Hive {
    * Get tools including internal tools for a specific run
    */
   private getRunTools(
-    todoManager: TodoManager,
+    taskManager: TaskManager,
     context?: Context,
     agentName?: string
   ): Tool[] {
     const tools = [
       ...this.tools,
-      createTodoTool(todoManager, {
+      ...createTaskTools(taskManager, {
         logger: this.config.logger,
         agentName,
+        context, // Enable task persistence across __ask_user__ pauses
       }),
     ];
 
@@ -197,8 +198,12 @@ export class Hive {
       messages.push({ role: "user", content: message });
     }
 
-    // Create todo manager for this run
-    const todoManager = new TodoManager();
+    // Create task manager for this run and restore from context if available
+    // This preserves task state across __ask_user__ pauses
+    const taskManager = new TaskManager();
+    if (context) {
+      taskManager.restoreFromContext(context);
+    }
 
     // Create tool context
     const toolContext: ToolContext = {
@@ -228,12 +233,12 @@ export class Hive {
     const result = await executeLoop(
       {
         systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(todoManager, context, this.config.agentName),
+        tools: this.getRunTools(taskManager, context, this.config.agentName),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,
         contextManager: this.contextManager,
-        todoManager,
+        taskManager,
         llmOptions: {},
         signal,
         shouldContinue,

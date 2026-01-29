@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TodoUpdate } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools, mainAgentTools, searchFoodTool, logMealTool } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -106,12 +106,12 @@ function showProgress(update: ProgressUpdate): void {
   }
 }
 
-// Todo update display helper
-function showTodoUpdate(update: TodoUpdate): void {
+// Task update display helper
+function showTaskUpdate(update: TaskUpdateNotification): void {
   const agentLabel = update.agentName ? `[${update.agentName}]` : '[Main]'
-  const actionEmoji = update.action === 'set' ? '📋' : update.action === 'complete' ? '✅' : '🔄'
+  const actionEmoji = update.action === 'create' ? '📋' : update.action === 'delete' ? '🗑️' : '🔄'
 
-  console.log(`\n${actionEmoji} ${agentLabel} Todo ${update.action}:`)
+  console.log(`\n${actionEmoji} ${agentLabel} Task ${update.action}:`)
 
   // Show progress
   const { completed, total, inProgress } = update.progress
@@ -119,16 +119,18 @@ function showTodoUpdate(update: TodoUpdate): void {
 
   // Show current task if any
   if (update.current) {
-    const label = update.current.activeForm || update.current.content
+    const label = update.current.activeForm || update.current.subject
     console.log(`   Current: ${label}`)
   }
 
   // Show task list
-  if (update.todos.length > 0) {
-    update.todos.forEach(todo => {
-      const icon = todo.status === 'completed' ? '✅' :
-                   todo.status === 'in_progress' ? '🔄' : '⬜'
-      console.log(`   ${icon} ${todo.content}`)
+  if (update.tasks.length > 0) {
+    update.tasks.forEach(task => {
+      const icon = task.status === 'completed' ? '✅' :
+                   task.status === 'in_progress' ? '🔄' : '⬜'
+      const owner = task.owner ? ` [@${task.owner}]` : ''
+      const blocked = task.blockedBy?.length ? ` (blocked by: ${task.blockedBy.join(', ')})` : ''
+      console.log(`   ${task.id}. ${icon} ${task.subject}${owner}${blocked}`)
     })
   }
   console.log('')
@@ -143,8 +145,8 @@ function createProgressLogger() {
     warn: base.warn.bind(base),
     error: base.error.bind(base),
     onProgress: showProgress,
-    // Show todo list updates in real-time
-    onTodoUpdate: showTodoUpdate,
+    // Show task list updates in real-time
+    onTaskUpdate: showTaskUpdate,
     // Show tool inputs and outputs for debugging
     onToolCall: (toolName: string, params: unknown) => {
       if (toolName.startsWith('context_')) {
@@ -631,13 +633,14 @@ async function main() {
           console.log(`\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`)
         }
 
-        // Show todos if any (from final result)
-        if (finalResult.todos && finalResult.todos.length > 0) {
+        // Show tasks if any (from final result)
+        if (finalResult.tasks && finalResult.tasks.length > 0) {
           console.log('\n📋 Tasks:')
-          finalResult.todos.forEach(todo => {
-            const icon = todo.status === 'completed' ? '✅' :
-                         todo.status === 'in_progress' ? '🔄' : '⬜'
-            console.log(`  ${icon} ${todo.content}`)
+          finalResult.tasks.forEach(task => {
+            const icon = task.status === 'completed' ? '✅' :
+                         task.status === 'in_progress' ? '🔄' : '⬜'
+            const blocked = task.blockedBy?.length ? ` (blocked by: ${task.blockedBy.join(', ')})` : ''
+            console.log(`  ${task.id}. ${icon} ${task.subject}${blocked}`)
           })
         }
 

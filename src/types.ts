@@ -183,7 +183,10 @@ export interface LogProvider {
   /** Called with progress updates for real-time UI feedback */
   onProgress?(update: ProgressUpdate): void
 
-  /** Called when todo list is created or updated */
+  /** Called when task list is created or updated */
+  onTaskUpdate?(update: TaskUpdateNotification): void
+
+  /** @deprecated Use onTaskUpdate instead */
   onTodoUpdate?(update: TodoUpdate): void
 }
 
@@ -307,6 +310,8 @@ export interface AgentResult {
   toolCalls: ToolCallLog[]
   thinking?: string[]
   pendingQuestion?: PendingQuestion
+  tasks?: TaskItem[]
+  /** @deprecated Use tasks instead */
   todos?: TodoItem[]
   status: AgentStatus
 
@@ -326,43 +331,89 @@ export interface AgentResult {
 }
 
 // ============================================================================
-// Todo List Types
+// Task Management Types (Claude Code 4-Tool Approach)
 // ============================================================================
 
-export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
 
-export interface TodoItem {
-  id: string
+export interface TaskComment {
+  /** Agent ID that authored the comment */
+  author: string
+  /** Comment content */
   content: string
+  /** Timestamp when comment was added */
+  createdAt: number
+}
+
+export interface TaskItem {
+  id: string
+  /** Brief, actionable title in imperative form (e.g., "Fix authentication bug") */
+  subject: string
+  /** Detailed description of what needs to be done */
+  description?: string
   /** Present continuous form shown when task is in_progress (e.g., "Running tests") */
   activeForm?: string
-  status: TodoStatus
+  status: TaskStatus
+  /** Agent ID that owns this task */
+  owner?: string
+  /** Task IDs that cannot start until this task completes */
+  blocks?: string[]
+  /** Task IDs that must complete before this task can start */
+  blockedBy?: string[]
+  /** Progress notes and discussions */
+  comments?: TaskComment[]
+  /** Arbitrary metadata attached to the task */
+  metadata?: Record<string, unknown>
   createdAt: number
   completedAt?: number
 }
 
-export interface TodoList {
-  items: TodoItem[]
-  currentTaskId?: string
-}
-
-export interface TodoProgress {
+export interface TaskProgress {
   total: number
   completed: number
   pending: number
   inProgress: number
 }
 
-export interface TodoUpdate {
+export interface TaskUpdateNotification {
   /** Agent name (undefined for main agent, set for sub-agents) */
   agentName?: string
   /** Action that triggered the update */
-  action: 'set' | 'complete' | 'update'
-  /** Full list of todos */
-  todos: TodoItem[]
+  action: 'create' | 'update' | 'delete' | 'list'
+  /** Full list of tasks */
+  tasks: TaskItem[]
   /** Currently active task (if any) */
-  current?: TodoItem
+  current?: TaskItem
   /** Progress statistics */
+  progress: TaskProgress
+}
+
+// ============================================================================
+// Backward Compatibility Aliases (Deprecated)
+// ============================================================================
+
+/** @deprecated Use TaskStatus instead */
+export type TodoStatus = TaskStatus
+
+/** @deprecated Use TaskItem instead */
+export interface TodoItem {
+  id: string
+  content: string
+  activeForm?: string
+  status: TodoStatus
+  createdAt: number
+  completedAt?: number
+}
+
+/** @deprecated Use TaskProgress instead */
+export type TodoProgress = TaskProgress
+
+/** @deprecated Use TaskUpdateNotification instead */
+export interface TodoUpdate {
+  agentName?: string
+  action: 'set' | 'complete' | 'update'
+  todos: TodoItem[]
+  current?: TodoItem
   progress: TodoProgress
 }
 

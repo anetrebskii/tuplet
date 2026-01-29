@@ -36,10 +36,16 @@ export type {
   QuestionOption,
   EnhancedQuestion,
 
-  // Todo types
+  // Task types (new)
+  TaskItem,
+  TaskStatus,
+  TaskComment,
+  TaskProgress,
+  TaskUpdateNotification,
+
+  // Todo types (deprecated - use Task types instead)
   TodoItem,
   TodoStatus,
-  TodoList,
   TodoProgress,
   TodoUpdate,
 
@@ -124,10 +130,20 @@ export {
   type SubAgentPromptConfig
 } from './prompt.js'
 
-// Todo utilities
+// Task Management utilities (new 4-tool approach)
 export {
+  TaskManager,
+  formatTaskList,
+  createTaskTools,
+  createTaskCreateTool,
+  createTaskUpdateTool,
+  createTaskGetTool,
+  createTaskListTool,
+  type TaskToolOptions,
+  // Backward compatibility (deprecated)
   TodoManager,
   formatTodoList,
+  createTodoTool,
   type TodoToolOptions
 } from './tools/todo.js'
 

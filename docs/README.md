@@ -46,6 +46,7 @@ See [Quick Start Guide](./quickstart.md) for more examples.
 
 | Guide | Description |
 |-------|-------------|
+| [Task Management](./task-management.md) | 4-tool system for tracking tasks with dependencies |
 | [Prompt Builder](./prompt-builder.md) | Battle-tested templates for multi-agent prompts |
 | [Interactive](./interactive.md) | Agent asking clarifying questions |
 | [Interruption](./interruption.md) | Stopping and continuing agent execution |
