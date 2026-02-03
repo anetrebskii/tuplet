@@ -116,6 +116,10 @@ export interface SubAgentConfig {
    * Parent receives: { summary: string, data: <outputSchema> }
    */
   outputSchema?: JSONSchema
+  /** Disable __ask_user__ tool for this sub-agent */
+  disableAskUser?: boolean
+  /** Runtime-injected tool names for display (e.g., ['shell (read-only)']) */
+  builtInToolNames?: string[]
 }
 
 // ============================================================================

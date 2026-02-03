@@ -58,7 +58,11 @@ function buildAgentDescription(agent: SubAgentConfig): string {
     desc += `\n  Returns: structured data (summary + data object)`;
   }
 
-  desc += `\n  Tools: ${agent.tools.map((t) => t.name).join(", ")}`;
+  const toolNames = [
+    ...agent.tools.map((t) => t.name),
+    ...(agent.builtInToolNames || []),
+  ];
+  desc += `\n  Tools: ${toolNames.length > 0 ? toolNames.join(", ") : "none"}`;
 
   return desc;
 }
@@ -271,7 +275,7 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           llm: subLlm,
           logger: subLogger,
           maxIterations: agentConfig.maxIterations || context.config.maxIterations,
-          disableAskUser: false, // Sub-agents can ask questions via __ask_user__
+          disableAskUser: agentConfig.disableAskUser ?? false,
           // Pass parent's trace config for nested sub-agents
           trace: context.config.trace,
           agentName: agentName,

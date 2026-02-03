@@ -105,7 +105,7 @@ export class Shell {
     this.handlers.set(handler.name, handler)
   }
 
-  /** Execute a command string */
+  /** Execute a command string (supports sequential commands, pipes, heredocs, comments) */
   async execute(input: string): Promise<ShellResult> {
     try {
       const parsed = parseCommand(input)
@@ -114,8 +114,19 @@ export class Shell {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
 
-      // Execute first command (which may have pipes)
-      return await this.executeCommand(parsed[0])
+      // Execute commands sequentially, stop on first error
+      let combinedStdout = ''
+      let lastResult: ShellResult = { exitCode: 0, stdout: '', stderr: '' }
+
+      for (const cmd of parsed) {
+        lastResult = await this.executeCommand(cmd)
+        combinedStdout += lastResult.stdout
+        if (lastResult.exitCode !== 0) {
+          return { ...lastResult, stdout: combinedStdout }
+        }
+      }
+
+      return { ...lastResult, stdout: combinedStdout }
     } catch (error) {
       return {
         exitCode: 1,
@@ -141,7 +152,7 @@ export class Shell {
       fs: this.fs,
       env: this.env,
       config: this.config,
-      stdin
+      stdin: stdin || cmd.stdinContent
     }
 
     // Handle input redirection

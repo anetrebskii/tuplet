@@ -191,6 +191,136 @@ describe('Shell', () => {
     })
   })
 
+  describe('comments and multiline', () => {
+    it('ignores # comment lines', async () => {
+      const result = await shell.execute('# this is a comment\necho hello')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('hello\n')
+    })
+
+    it('ignores multiple comment lines', async () => {
+      const result = await shell.execute('# comment 1\n# comment 2\necho ok')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('ok\n')
+    })
+
+    it('ignores inline blank lines', async () => {
+      const result = await shell.execute('\n\necho hi\n\n')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('hi\n')
+    })
+
+    it('handles comment-only input as empty', async () => {
+      const result = await shell.execute('# just a comment')
+      expect(result).toEqual({ exitCode: 0, stdout: '', stderr: '' })
+    })
+
+    it('does not strip # inside quoted strings', async () => {
+      const result = await shell.execute("echo '# not a comment'")
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('# not a comment\n')
+    })
+  })
+
+  describe('sequential commands', () => {
+    it('executes multiple lines sequentially', async () => {
+      const result = await shell.execute('mkdir /ctx/data\necho hello > /ctx/data/file.txt')
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/data/file.txt')).toBe('hello\n')
+    })
+
+    it('stops on first error', async () => {
+      const result = await shell.execute('cat /ctx/missing\necho should-not-run > /ctx/out')
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('No such file')
+      expect(shell.getFS().exists('/ctx/out')).toBe(false)
+    })
+
+    it('concatenates stdout from multiple commands', async () => {
+      const result = await shell.execute('echo first\necho second')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('first\nsecond\n')
+    })
+
+    it('handles comments between sequential commands', async () => {
+      const result = await shell.execute('echo one\n# skip this\necho two')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('one\ntwo\n')
+    })
+  })
+
+  describe('heredoc', () => {
+    it('supports basic heredoc with cat', async () => {
+      const input = `cat << EOF > /ctx/data.json\n{"name": "Alice"}\nEOF`
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/data.json')).toBe('{"name": "Alice"}')
+    })
+
+    it('supports multi-line heredoc content', async () => {
+      const input = [
+        'cat << EOF > /ctx/plan.json',
+        '{',
+        '  "title": "My Plan",',
+        '  "days": [1, 2, 3]',
+        '}',
+        'EOF'
+      ].join('\n')
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      const content = shell.getFS().read('/ctx/plan.json')
+      expect(content).toContain('"title": "My Plan"')
+      expect(content).toContain('"days": [1, 2, 3]')
+    })
+
+    it('supports heredoc with append redirection', async () => {
+      shell.getFS().write('/ctx/log', 'line1\n')
+      const input = `cat << EOF >> /ctx/log\nline2\nline3\nEOF`
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/log')).toBe('line1\nline2\nline3')
+    })
+
+    it('supports heredoc without quotes around delimiter', async () => {
+      const input = `cat <<EOF > /ctx/out\nhello heredoc\nEOF`
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/out')).toBe('hello heredoc')
+    })
+
+    it('supports commands before heredoc', async () => {
+      const input = [
+        'mkdir /ctx/meals',
+        'cat << EOF > /ctx/meals/day1.json',
+        '{"day": "Monday", "calories": 1800}',
+        'EOF'
+      ].join('\n')
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/meals/day1.json')).toBe('{"day": "Monday", "calories": 1800}')
+    })
+
+    it('supports comments before heredoc', async () => {
+      const input = [
+        '# Create meal plan',
+        'cat << EOF > /ctx/plan.json',
+        '{"plan": true}',
+        'EOF'
+      ].join('\n')
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(shell.getFS().read('/ctx/plan.json')).toBe('{"plan": true}')
+    })
+
+    it('pipes heredoc content through commands', async () => {
+      const input = `cat << EOF | grep apple\napple\nbanana\napricot\nEOF`
+      const result = await shell.execute(input)
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain('apple')
+      expect(result.stdout).not.toContain('banana')
+    })
+  })
+
   describe('register', () => {
     it('registers a custom command handler', async () => {
       shell.register({

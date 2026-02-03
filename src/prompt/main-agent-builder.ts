@@ -10,6 +10,7 @@ import type {
   MainAgentPromptConfig
 } from './types.js'
 import type { Tool, SubAgentConfig } from '../types.js'
+import { getBuiltInAgents } from '../built-in-agents/index.js'
 import {
   roleSection,
   subAgentsTable,
@@ -172,18 +173,28 @@ export class MainAgentBuilder {
   build(): string {
     const sections: string[] = []
 
+    // Auto-inject built-in agent defs (unless user already added same name)
+    const userAgentNames = new Set((this.config.subAgents || []).map(a => a.name))
+    const builtInAgents = getBuiltInAgents()
+    const newBuiltIns = builtInAgents.filter(a => !userAgentNames.has(a.name))
+    const builtInDefs = newBuiltIns.map(a => ({
+      name: a.name,
+      purpose: a.description,
+      whenToUse: a.description,
+    }))
+    const allSubAgents = [...(this.config.subAgents || []), ...builtInDefs]
+
     // Role section (required, with default)
     const role = this.config.role || 'an AI assistant'
     sections.push(roleSection(role, this.config.description))
 
     // Your Role header if we have sub-agents (orchestrator pattern)
-    if (this.config.subAgents && this.config.subAgents.length > 0) {
+    if (allSubAgents.length > 0) {
       sections.push('')
       sections.push('## Your Role')
       sections.push('')
       sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
-      sections.push('2. **Relay questions** - When sub-agent needs input, call __ask_user__ tool')
-      sections.push('3. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
       sections.push('')
       sections.push('⚠️ CRITICAL:')
       sections.push('- Make actual tool calls, never write tool names as text')
@@ -192,16 +203,31 @@ export class MainAgentBuilder {
     }
 
     // Sub-agents table
-    if (this.config.subAgents && this.config.subAgents.length > 0) {
+    if (allSubAgents.length > 0) {
       sections.push('')
-      sections.push(subAgentsTable(this.config.subAgents))
+      sections.push(subAgentsTable(allSubAgents))
 
       // Add sub-agent parameters documentation
-      const paramsSection = subAgentParametersSection(this.config.subAgents)
+      const paramsSection = subAgentParametersSection(allSubAgents)
       if (paramsSection) {
         sections.push('')
         sections.push(paramsSection)
       }
+    }
+
+    // Built-in agents usage instructions (always present)
+    if (builtInDefs.length > 0) {
+      sections.push('')
+      sections.push('## Built-in Agents')
+      sections.push('')
+      sections.push('The following agents are always available via __sub_agent__ and should be used proactively:')
+      sections.push('')
+      for (const agent of newBuiltIns) {
+        sections.push(`- **${agent.name}**: ${agent.description}`)
+      }
+      sections.push('')
+      sections.push('Use **explore** before acting when you need to understand what data exists in context.')
+      sections.push('Use **plan** before complex or multi-step tasks to design an approach first.')
     }
 
     // Question handling (only when explicitly configured)

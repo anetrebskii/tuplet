@@ -93,4 +93,6 @@ export interface ParsedCommand {
   appendFile?: string
   /** Pipe to next command */
   pipe?: ParsedCommand
+  /** Heredoc content (<< DELIMITER ... DELIMITER) */
+  stdinContent?: string
 }

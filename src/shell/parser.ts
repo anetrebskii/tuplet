@@ -6,27 +6,85 @@
 
 import type { ParsedCommand } from './types.js'
 
+/**
+ * Heredoc regex: matches << WORD, <<-WORD, << 'WORD', << "WORD"
+ */
+const HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/
+
 export function parseCommand(input: string): ParsedCommand[] {
   const commands: ParsedCommand[] = []
+  const lines = input.split('\n')
 
-  // Split by pipe, respecting quotes
-  const segments = splitByPipe(input)
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i].trim()
 
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i].trim()
-    if (!segment) continue
+    // Skip empty lines and comment lines
+    if (line === '' || line.startsWith('#')) {
+      i++
+      continue
+    }
 
-    const parsed = parseSegment(segment)
+    // Check for heredoc (e.g. cat << EOF > /ctx/file.json)
+    const heredocMatch = line.match(HEREDOC_RE)
+    if (heredocMatch) {
+      const delimiter = heredocMatch[1]
+      // Remove the << DELIMITER portion, keep the rest (command + redirections)
+      const cleanedLine = line.replace(HEREDOC_RE, '').trim()
 
-    // Link pipes
-    if (i > 0 && commands.length > 0) {
-      commands[commands.length - 1].pipe = parsed
-    } else {
+      // Collect heredoc body until matching delimiter
+      const heredocLines: string[] = []
+      i++
+      while (i < lines.length && lines[i].trim() !== delimiter) {
+        heredocLines.push(lines[i])
+        i++
+      }
+      i++ // skip the delimiter line
+
+      if (cleanedLine) {
+        const parsed = parsePipeline(cleanedLine)
+        if (parsed) {
+          parsed.stdinContent = heredocLines.join('\n')
+          commands.push(parsed)
+        }
+      }
+      continue
+    }
+
+    // Regular command line (may contain pipes)
+    const parsed = parsePipeline(line)
+    if (parsed) {
       commands.push(parsed)
     }
+    i++
   }
 
   return commands
+}
+
+/**
+ * Parse a single line that may contain pipes into a linked ParsedCommand chain.
+ */
+function parsePipeline(line: string): ParsedCommand | null {
+  const segments = splitByPipe(line)
+  let first: ParsedCommand | null = null
+  let prev: ParsedCommand | null = null
+
+  for (const segment of segments) {
+    const trimmed = segment.trim()
+    if (!trimmed) continue
+
+    const parsed = parseSegment(trimmed)
+    if (!first) {
+      first = parsed
+    }
+    if (prev) {
+      prev.pipe = parsed
+    }
+    prev = parsed
+  }
+
+  return first
 }
 
 function parseSegment(segment: string): ParsedCommand {

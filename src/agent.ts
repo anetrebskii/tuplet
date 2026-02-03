@@ -23,6 +23,7 @@ import {
   TaskManager,
   createTaskTools,
 } from "./tools/index.js";
+import { getBuiltInAgents } from "./built-in-agents/index.js";
 
 /**
  * Hive Agent Class
@@ -55,15 +56,21 @@ export class Hive {
       this.tools.push(createAskUserTool());
     }
 
+    // Auto-merge built-in agents (user-defined agents with same name take priority)
+    const builtIn = getBuiltInAgents();
+    const userAgentNames = new Set((this.config.agents || []).map((a) => a.name));
+    const newAgents = builtIn.filter((a) => !userAgentNames.has(a.name));
+    this.config.agents = [...(this.config.agents || []), ...newAgents];
+
     // Add __sub_agent__ tool if sub-agents are defined
-    if (config.agents && config.agents.length > 0) {
+    if (this.config.agents && this.config.agents.length > 0) {
       this.tools.push(
         createSubAgentTool(
           {
             config: this.config,
             getCurrentTraceBuilder: () => this.getCurrentTraceBuilder(),
           },
-          config.agents,
+          this.config.agents!,
           (subConfig) => new Hive(subConfig)
         )
       );

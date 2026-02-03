@@ -193,6 +193,9 @@ export {
   type CommandExample
 } from './shell/index.js'
 
+// Built-in Agents
+export { exploreAgent, planAgent, getBuiltInAgents } from './built-in-agents/index.js'
+
 // Dataset (Run Recording, Replay & Testing)
 export {
   RunRecorder,
