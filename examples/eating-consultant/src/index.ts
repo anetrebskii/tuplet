@@ -260,17 +260,14 @@ const subAgents = [plannerAgent]
 // Build main agent prompt using MainAgentBuilder
 const SYSTEM_PROMPT = new MainAgentBuilder()
   .role('a nutrition consultant')
-  .description('You help users track meals, view nutrition progress, and plan their diet. You handle most tasks directly using your tools, and delegate meal planning to a specialized sub-agent.')
-  .tools(nutritionCounterTools)
+  .description('You help users track meals, view nutrition progress, and plan their diet. You can search for food products in the OpenFoodFacts database, log meals with nutrition data, view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent.')
   .agents(subAgents)
-  .questionHandling({})
   .addContextPath('plan/current.json', 'Meal plans from meal_planner')
   .addContextPath('user/preferences.json', 'User preferences { goal, restrictions[] }')
   .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
   .addRules([
-    'Use search_food and log_meal tools directly to track what the user ate',
+    'Search for foods and log meals directly to track what the user ate',
     'Delegate meal planning to the meal_planner sub-agent',
-    'Always use __ask_user__ for questions, never write questions as plain text',
     'Present results in a friendly, encouraging way',
     'Use Russian if user speaks Russian'
   ])

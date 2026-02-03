@@ -118,6 +118,12 @@ async function executeTool(
   } else if (tool.name === '__sub_agent__') {
     const agent = (params as { agent?: string }).agent
     progressMessage = `Delegating to ${agent}...`
+  } else if (tool.name === '__shell__') {
+    const command = (params as { command?: string }).command
+    if (command) {
+      const app = command.trim().split(/[\s|><;]+/)[0]
+      progressMessage = `Running ${app}...`
+    }
   }
 
   logger?.onProgress?.({
@@ -455,6 +461,47 @@ export async function executeLoop(
 
       // Record in trace
       traceBuilder?.recordToolCall(toolUse.name, toolUse.input, result, durationMs)
+
+      // If a sub-agent needs user input, propagate needs_input immediately
+      // We add the __sub_agent__ tool result to history, then synthesize an __ask_user__
+      // tool call so the existing resume logic in agent.ts works correctly
+      if (toolUse.name === '__sub_agent__' && !result.success && result.error === 'Sub-agent needs user input' && result.data) {
+        const subAgentData = result.data as { questions?: import('./types.js').EnhancedQuestion[] }
+        if (subAgentData.questions && Array.isArray(subAgentData.questions) && subAgentData.questions.length > 0) {
+          // Add the __sub_agent__ tool result to close the pending tool_use
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result),
+            is_error: true
+          })
+          messages.push({ role: 'user', content: toolResults })
+
+          // Synthesize an __ask_user__ tool call so resume logic works
+          const syntheticAskUserId = `synthetic_ask_user_${Date.now()}`
+          messages.push({
+            role: 'assistant',
+            content: [{
+              type: 'tool_use',
+              id: syntheticAskUserId,
+              name: ASK_USER_TOOL_NAME,
+              input: { questions: subAgentData.questions }
+            }]
+          })
+
+          const pendingQuestion: PendingQuestion = { questions: subAgentData.questions }
+          const tasks = taskManager.getAll()
+          return {
+            response: '',
+            history: messages,
+            toolCalls: toolCallLogs,
+            thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
+            tasks: tasks.length > 0 ? tasks : undefined,
+            pendingQuestion,
+            status: 'needs_input'
+          }
+        }
+      }
 
       toolResults.push({
         type: 'tool_result',

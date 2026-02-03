@@ -204,8 +204,8 @@ export class MainAgentBuilder {
       }
     }
 
-    // Question handling
-    if (this.config.questionHandling || (this.config.subAgents && this.config.subAgents.length > 0)) {
+    // Question handling (only when explicitly configured)
+    if (this.config.questionHandling) {
       sections.push('')
       sections.push(questionHandlingSection(
         this.config.questionHandling?.description,
