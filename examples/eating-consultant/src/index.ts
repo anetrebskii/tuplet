@@ -2,13 +2,13 @@
  * Eating Consultant - Demo Terminal App
  *
  * An AI-powered nutrition assistant using OpenFoodFacts API.
- * Demonstrates sub-agent architecture with a Nutrition Counter agent.
+ * Main agent handles meals directly; delegates meal planning to a sub-agent.
  */
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TodoUpdate } from '@alexnetrebskii/hive-agent'
-import { nutritionCounterTools, mainAgentTools, searchFoodTool, logMealTool } from './tools.js'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
 function getOptionLabel(opt: string | QuestionOption): string {
@@ -106,12 +106,12 @@ function showProgress(update: ProgressUpdate): void {
   }
 }
 
-// Todo update display helper
-function showTodoUpdate(update: TodoUpdate): void {
+// Task update display helper
+function showTaskUpdate(update: TaskUpdateNotification): void {
   const agentLabel = update.agentName ? `[${update.agentName}]` : '[Main]'
-  const actionEmoji = update.action === 'set' ? '📋' : update.action === 'complete' ? '✅' : '🔄'
+  const actionEmoji = update.action === 'create' ? '📋' : update.action === 'delete' ? '🗑️' : '🔄'
 
-  console.log(`\n${actionEmoji} ${agentLabel} Todo ${update.action}:`)
+  console.log(`\n${actionEmoji} ${agentLabel} Task ${update.action}:`)
 
   // Show progress
   const { completed, total, inProgress } = update.progress
@@ -119,16 +119,18 @@ function showTodoUpdate(update: TodoUpdate): void {
 
   // Show current task if any
   if (update.current) {
-    const label = update.current.activeForm || update.current.content
+    const label = update.current.activeForm || update.current.subject
     console.log(`   Current: ${label}`)
   }
 
   // Show task list
-  if (update.todos.length > 0) {
-    update.todos.forEach(todo => {
-      const icon = todo.status === 'completed' ? '✅' :
-                   todo.status === 'in_progress' ? '🔄' : '⬜'
-      console.log(`   ${icon} ${todo.content}`)
+  if (update.tasks.length > 0) {
+    update.tasks.forEach(task => {
+      const icon = task.status === 'completed' ? '✅' :
+                   task.status === 'in_progress' ? '🔄' : '⬜'
+      const owner = task.owner ? ` [@${task.owner}]` : ''
+      const blocked = task.blockedBy?.length ? ` (blocked by: ${task.blockedBy.join(', ')})` : ''
+      console.log(`   ${task.id}. ${icon} ${task.subject}${owner}${blocked}`)
     })
   }
   console.log('')
@@ -143,133 +145,21 @@ function createProgressLogger() {
     warn: base.warn.bind(base),
     error: base.error.bind(base),
     onProgress: showProgress,
-    // Show todo list updates in real-time
-    onTodoUpdate: showTodoUpdate,
+    // Show task list updates in real-time
+    onTaskUpdate: showTaskUpdate,
     // Show tool inputs and outputs for debugging
     onToolCall: (toolName: string, params: unknown) => {
-      if (toolName.startsWith('context_')) {
+      if (toolName.startsWith('workspace_')) {
         console.log(`\n📥 ${toolName} input:`, JSON.stringify(params, null, 2))
       }
     },
     onToolResult: (toolName: string, result: { success: boolean; data?: unknown; error?: string }) => {
-      if (toolName.startsWith('context_')) {
+      if (toolName.startsWith('workspace_')) {
         const status = result.success ? '✓' : '✗'
         console.log(`📤 ${toolName} ${status}:`, JSON.stringify(result, null, 2))
       }
     }
   }
-}
-
-// Define output schema for nutrition counter (used by both builder and config)
-const nutritionOutputSchema = {
-  type: 'object' as const,
-  properties: {
-    logged: { type: 'boolean', description: 'Whether the food was successfully logged' },
-    food: { type: 'string', description: 'Name of the food that was logged' },
-    calories: { type: 'number', description: 'Total calories for the portion' },
-    protein: { type: 'number', description: 'Protein in grams' },
-    carbs: { type: 'number', description: 'Carbs in grams' },
-    fat: { type: 'number', description: 'Fat in grams' }
-  },
-  required: ['logged', 'food', 'calories'] as string[]
-}
-
-// Build nutrition counter prompt using SubAgentBuilder (type-safe)
-const nutritionCounterPrompt = new SubAgentBuilder()
-  .role('a Nutrition Counter assistant')
-  .task('Log food the user ate.')
-  .tools(nutritionCounterTools)  // Auto-documents available tools
-  .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
-  .addQuestionStep('Check for Missing Information', {
-    condition: 'If portionGrams is missing or 0',
-    question: 'What was the portion size?',
-    options: ['Small (150g)', 'Medium (250g)', 'Large (350g)']
-  })
-  .addQuestionStep('Ask for Meal Type', {
-    condition: 'If meal type is missing',
-    question: 'Which meal was this?',
-    options: ['Breakfast', 'Lunch', 'Dinner', 'Snack']
-  })
-  .addToolsStep('Search and Log', [
-    { tool: searchFoodTool, purpose: 'find nutrition data' },
-    { tool: logMealTool, purpose: 'log with nutrition per 100g scaled to portion' }
-  ])
-  .outputSchema(nutritionOutputSchema)  // Uses same schema as config
-  .build()
-
-// Nutrition Counter sub-agent - specialized in food lookup and tracking
-const nutritionCounterAgent: SubAgentConfig = {
-  name: 'nutrition_counter',
-  description: 'Specialized agent for logging food the user ate.',
-  systemPrompt: nutritionCounterPrompt,
-
-  inputSchema: {
-    type: 'object',
-    properties: {
-      food: {
-        type: 'string',
-        description: 'Food item to log (e.g., "pasta", "chicken breast", "apple")'
-      },
-      portionGrams: {
-        type: 'number',
-        description: 'Portion size in grams (agent will ask if not provided)'
-      },
-      meal: {
-        type: 'string',
-        description: 'Meal type: breakfast, lunch, dinner, or snack (agent will ask if not provided)'
-      }
-    },
-    required: ['food']
-  },
-
-  outputSchema: nutritionOutputSchema,  // Reuses same schema
-
-  tools: nutritionCounterTools
-}
-
-// Define output schema for greeter
-const greeterOutputSchema = {
-  type: 'object' as const,
-  properties: {
-    greeting: { type: 'string', description: 'The greeting message to display' }
-  },
-  required: ['greeting'] as string[]
-}
-
-// Build greeter prompt using SubAgentBuilder
-const greeterPrompt = new SubAgentBuilder()
-  .role('a friendly greeter for a nutrition consultant app')
-  .task('Generate a warm, welcoming greeting for the user.')
-  .addContextPath('user/preferences.json', 'User preferences including name and language')
-  .addGuidelines([
-    'Be friendly and encouraging',
-    'Mention you can help with: logging meals, viewing nutrition progress, and meal planning',
-    'Keep it brief (2-3 sentences)',
-    'Use the language specified (Russian or English)',
-    'Adapt tone to time of day if provided'
-  ])
-  .outputSchema(greeterOutputSchema)
-  .build()
-
-// Greeter sub-agent - handles initial greetings and welcomes
-const greeterAgent: SubAgentConfig = {
-  name: 'greeter',
-  description: 'Greet the user with a friendly welcome message',
-  systemPrompt: greeterPrompt,
-
-  inputSchema: {
-    type: 'object',
-    properties: {
-      userName: { type: 'string', description: 'User name if known (optional)' },
-      language: { type: 'string', description: 'Preferred language: "ru" for Russian, "en" for English' },
-      timeOfDay: { type: 'string', description: 'Time of day: morning, afternoon, evening' }
-    },
-    required: []
-  },
-
-  outputSchema: greeterOutputSchema,
-
-  tools: []
 }
 
 // Define output schema for meal planner
@@ -286,20 +176,20 @@ const mealPlannerOutputSchema = {
 const mealPlannerPrompt = new SubAgentBuilder()
   .role('a meal planning specialist')
   .task('Gather requirements and create a detailed meal plan.')
-  .addContextPath('user/preferences.json', 'User preferences with goal and restrictions')
-  .addContextPath('meals/today.json', 'Today\'s nutrition totals')
+  .addWorkspacePath('user/preferences.json', 'User preferences with goal and restrictions')
+  .addWorkspacePath('meals/today.json', 'Today\'s nutrition totals')
   // Enable todo tracking - AI creates own plan
   .useTodoTracking({
     exampleSteps: [
-      'Reading user preferences from context',
+      'Reading user preferences from workspace',
       'Asking user about calorie target',
       'Creating 5-day meal plan for weight loss',
-      'Saving plan to context'
+      'Saving plan to workspace'
     ]
   })
   // Questions to ask if info is missing
   .addQuestionStep('Gather Goal', {
-    condition: 'If goal is not in context and not provided',
+    condition: 'If goal is not in workspace and not provided',
     question: "What's your goal?",
     options: ['Weight loss', 'Muscle gain', 'Maintain weight', 'Eat healthier']
   })
@@ -364,23 +254,20 @@ const plannerAgent: SubAgentConfig = {
   tools: []
 }
 
-// All sub-agents for the main agent
-const subAgents = [greeterAgent, nutritionCounterAgent, plannerAgent]
+// Sub-agents for specialized tasks only
+const subAgents = [plannerAgent]
 
 // Build main agent prompt using MainAgentBuilder
-// Uses .tools() and .agents() to extract descriptions from actual objects
 const SYSTEM_PROMPT = new MainAgentBuilder()
-  .role('the orchestrator of a nutrition consultant app')
-  .description('Your role is to delegate work to sub-agents and communicate with the user.')
+  .role('a nutrition consultant')
+  .description('You help users track meals, view nutrition progress, and plan their diet. You can search for food products in the OpenFoodFacts database, log meals with nutrition data, view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent.')
   .agents(subAgents)
-  .tools(mainAgentTools)
-  .questionHandling({})
-  .addContextPath('plan/current.json', 'Meal plans from meal_planner')
-  .addContextPath('user/preferences.json', 'User preferences { goal, restrictions[] }')
+  .addWorkspacePath('plan/current.json', 'Meal plans from meal_planner')
+  .addWorkspacePath('user/preferences.json', 'User preferences { goal, restrictions[] }')
+  .addWorkspacePath('meals/today.json', 'Today\'s nutrition totals and logged meals')
   .addRules([
-    'Delegate first, never answer domain questions yourself',
-    'Always use __ask_user__ for questions, never write questions as plain text',
-    'Pass all relevant context from conversation history to sub-agents',
+    'Search for foods and log meals directly to track what the user ate',
+    'Delegate meal planning to the meal_planner sub-agent',
     'Present results in a friendly, encouraging way',
     'Use Russian if user speaks Russian'
   ])
@@ -400,8 +287,10 @@ async function main() {
     maxTokens: 2000
   })
 
-  // Create context for agent communication with validation
-  const context = new Context({
+  // Create workspace for agent communication with validation
+  // FileWorkspaceProvider persists workspace data to disk across sessions
+  const workspace = new Workspace({
+    provider: new FileWorkspaceProvider('./workspace-data'),
     strict: false,  // Allow any path (set to true to restrict to defined paths only)
     paths: {
       // Meal plan with schema validation
@@ -452,10 +341,13 @@ async function main() {
     }
   })
 
+  // Load persisted workspace data from disk
+  await workspace.init()
+
   // Create the main agent with sub-agent and run recorder
   const agent = new Hive({
     systemPrompt: SYSTEM_PROMPT,
-    tools: mainAgentTools,
+    tools: nutritionCounterTools,
     agents: subAgents,
     llm: llmProvider,
     logger: createProgressLogger(),
@@ -525,7 +417,7 @@ async function main() {
     const greeting = await agent.run('Start the conversation with a greeting.', {
       history,
       signal: currentController.signal,
-      context
+      workspace
     })
 
     stopEscHandler()
@@ -570,10 +462,8 @@ async function main() {
         const result = await agent.run(trimmed, {
           history,
           signal: currentController.signal,
-          context
+          workspace
         })
-
-        console.log('result', JSON.stringify(result));
 
         stopEscHandler()
         isProcessing = false
@@ -611,7 +501,7 @@ async function main() {
           const continuedResult = await agent.run(combinedAnswer, {
             history: currentResult.history,
             signal: currentController.signal,
-            context
+            workspace
           })
 
           stopEscHandler()
@@ -631,13 +521,14 @@ async function main() {
           console.log(`\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`)
         }
 
-        // Show todos if any (from final result)
-        if (finalResult.todos && finalResult.todos.length > 0) {
+        // Show tasks if any (from final result)
+        if (finalResult.tasks && finalResult.tasks.length > 0) {
           console.log('\n📋 Tasks:')
-          finalResult.todos.forEach(todo => {
-            const icon = todo.status === 'completed' ? '✅' :
-                         todo.status === 'in_progress' ? '🔄' : '⬜'
-            console.log(`  ${icon} ${todo.content}`)
+          finalResult.tasks.forEach(task => {
+            const icon = task.status === 'completed' ? '✅' :
+                         task.status === 'in_progress' ? '🔄' : '⬜'
+            const blocked = task.blockedBy?.length ? ` (blocked by: ${task.blockedBy.join(', ')})` : ''
+            console.log(`  ${task.id}. ${icon} ${task.subject}${blocked}`)
           })
         }
 
@@ -657,10 +548,10 @@ async function main() {
           }
         }
 
-        // Check if a plan was saved to context
-        const plan = context.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
+        // Check if a plan was saved to workspace
+        const plan = workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
         if (plan) {
-          console.log('\n📝 Plan saved to context:')
+          console.log('\n📝 Plan saved to workspace:')
           console.log(`  Title: ${plan.title || 'Meal Plan'}`)
           if (plan.goal) {
             console.log(`  Goal: ${plan.goal}`)
@@ -673,11 +564,11 @@ async function main() {
           }
         }
 
-        // Show all context entries if any exist
-        const contextItems = context.list()
-        if (contextItems.length > 0) {
-          console.log('\n📦 Context:')
-          for (const item of contextItems) {
+        // Show all workspace entries if any exist
+        const workspaceItems = workspace.list()
+        if (workspaceItems.length > 0) {
+          console.log('\n📦 Workspace:')
+          for (const item of workspaceItems) {
             console.log(`  ${item.path}: ${item.preview}`)
           }
         }

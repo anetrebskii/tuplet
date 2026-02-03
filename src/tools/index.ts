@@ -10,17 +10,29 @@ export { createAskUserTool } from "./ask-user.js";
 // Output Tool
 export { OUTPUT_TOOL_NAME, createOutputTool } from "./output.js";
 
-// Task Tool
+// Sub-Agent Tool (sub-agent delegation)
 export {
   createTaskTool,
   type TaskToolContext,
   type CreateSubHive,
-} from "./task.js";
+} from "./sub-agent.js";
 
-// Todo Tool
+// Task Management Tools (Claude Code 4-Tool Approach)
 export {
+  TaskManager,
+  formatTaskList,
+  createTaskTools,
+  createTaskCreateTool,
+  createTaskUpdateTool,
+  createTaskGetTool,
+  createTaskListTool,
+  type TaskToolOptions,
+  // Backward compatibility aliases
   TodoManager,
   formatTodoList,
   createTodoTool,
   type TodoToolOptions,
-} from "./todo.js";
+} from "./tasks.js";
+
+// Shell Tool (bash-like context access)
+export { createShellTool } from "./shell.js";

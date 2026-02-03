@@ -48,7 +48,7 @@ export function buildRemindersSection(reminders: string[]): string {
 }
 
 /**
- * Build agent list section for __task__ tool description
+ * Build agent list section for __sub_agent__ tool description
  */
 export function buildAgentListSection(agents: SubAgentConfig[]): string {
   if (agents.length === 0) {

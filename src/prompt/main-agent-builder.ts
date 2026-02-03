@@ -5,18 +5,19 @@
  */
 
 import type {
-  ContextPathDef,
+  WorkspacePathDef,
   TaskExample,
   MainAgentPromptConfig
 } from './types.js'
 import type { Tool, SubAgentConfig } from '../types.js'
+import { getBuiltInAgents } from '../built-in-agents/index.js'
 import {
   roleSection,
   subAgentsTable,
   subAgentParametersSection,
   questionHandlingSection,
   directToolsSection,
-  contextStorageSection,
+  workspaceStorageSection,
   rulesSection,
   taskExamplesSection
 } from './templates.js'
@@ -25,7 +26,7 @@ export class MainAgentBuilder {
   private config: MainAgentPromptConfig = {
     subAgents: [],
     directTools: [],
-    contextPaths: [],
+    workspacePaths: [],
     rules: [],
     examples: [],
     customSections: []
@@ -104,18 +105,18 @@ export class MainAgentBuilder {
   }
 
   /**
-   * Add a context path definition
+   * Add a workspace path definition
    */
-  addContextPath(path: string, description: string): this {
-    this.config.contextPaths!.push({ path, description })
+  addWorkspacePath(path: string, description: string): this {
+    this.config.workspacePaths!.push({ path, description })
     return this
   }
 
   /**
-   * Add multiple context paths at once
+   * Add multiple workspace paths at once
    */
-  addContextPaths(paths: ContextPathDef[]): this {
-    this.config.contextPaths!.push(...paths)
+  addWorkspacePaths(paths: WorkspacePathDef[]): this {
+    this.config.workspacePaths!.push(...paths)
     return this
   }
 
@@ -172,18 +173,35 @@ export class MainAgentBuilder {
   build(): string {
     const sections: string[] = []
 
+    // Auto-inject built-in agent defs (unless user already added same name)
+    const userAgentNames = new Set((this.config.subAgents || []).map(a => a.name))
+    const builtInAgents = getBuiltInAgents()
+    const newBuiltIns = builtInAgents.filter(a => !userAgentNames.has(a.name))
+    const builtInDefs = newBuiltIns.map(a => ({
+      name: a.name,
+      purpose: a.description,
+      whenToUse: a.description,
+    }))
+    const allSubAgents = [...(this.config.subAgents || []), ...builtInDefs]
+
     // Role section (required, with default)
     const role = this.config.role || 'an AI assistant'
     sections.push(roleSection(role, this.config.description))
 
     // Your Role header if we have sub-agents (orchestrator pattern)
-    if (this.config.subAgents && this.config.subAgents.length > 0) {
+    if (allSubAgents.length > 0) {
       sections.push('')
       sections.push('## Your Role')
       sections.push('')
-      sections.push('1. **Delegate** - Call __task__ tool to spawn sub-agents')
-      sections.push('2. **Relay questions** - When sub-agent needs input, call __ask_user__ tool')
-      sections.push('3. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      if (builtInDefs.length > 0) {
+        sections.push('1. **Explore first** - Use the `explore` sub-agent to check what data exists in workspace before handling a task')
+        sections.push('2. **Plan if needed** - For complex or multi-step tasks, use the `plan` sub-agent to design an approach')
+        sections.push('3. **Delegate** - Call __sub_agent__ tool to spawn domain-specific sub-agents')
+        sections.push('4. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      } else {
+        sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
+        sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      }
       sections.push('')
       sections.push('⚠️ CRITICAL:')
       sections.push('- Make actual tool calls, never write tool names as text')
@@ -192,20 +210,33 @@ export class MainAgentBuilder {
     }
 
     // Sub-agents table
-    if (this.config.subAgents && this.config.subAgents.length > 0) {
+    if (allSubAgents.length > 0) {
       sections.push('')
-      sections.push(subAgentsTable(this.config.subAgents))
+      sections.push(subAgentsTable(allSubAgents))
 
       // Add sub-agent parameters documentation
-      const paramsSection = subAgentParametersSection(this.config.subAgents)
+      const paramsSection = subAgentParametersSection(allSubAgents)
       if (paramsSection) {
         sections.push('')
         sections.push(paramsSection)
       }
     }
 
-    // Question handling
-    if (this.config.questionHandling || (this.config.subAgents && this.config.subAgents.length > 0)) {
+    // Built-in agents usage instructions (always present)
+    if (builtInDefs.length > 0) {
+      sections.push('')
+      sections.push('## Built-in Agents — Mandatory Usage')
+      sections.push('')
+      sections.push('These read-only agents are always available. You MUST use them:')
+      sections.push('')
+      sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
+      sections.push('- **plan**: Call this before complex or multi-step tasks to design an approach before execution.')
+      sections.push('')
+      sections.push('Both agents are read-only — they cannot modify workspace data.')
+    }
+
+    // Question handling (only when explicitly configured)
+    if (this.config.questionHandling) {
       sections.push('')
       sections.push(questionHandlingSection(
         this.config.questionHandling?.description,
@@ -219,10 +250,10 @@ export class MainAgentBuilder {
       sections.push(directToolsSection(this.config.directTools))
     }
 
-    // Context storage
-    if (this.config.contextPaths && this.config.contextPaths.length > 0) {
+    // Workspace storage
+    if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {
       sections.push('')
-      sections.push(contextStorageSection(this.config.contextPaths))
+      sections.push(workspaceStorageSection(this.config.workspacePaths))
     }
 
     // Task examples
@@ -239,11 +270,16 @@ export class MainAgentBuilder {
       sections.push(section.content)
     }
 
-    // Rules (always at the end)
-    if (this.config.rules && this.config.rules.length > 0) {
-      sections.push('')
-      sections.push(rulesSection(this.config.rules))
-    }
+    // Rules (always at the end): combine default rules with user rules
+    const defaultRules = [
+      'ALWAYS call the `explore` sub-agent at the start of each user request to check workspace state before doing anything else',
+      'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user first using __ask_user__',
+      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
+      'If a tool call fails, analyze the error and try a different approach instead of giving up',
+    ]
+    const allRules = [...defaultRules, ...(this.config.rules || [])]
+    sections.push('')
+    sections.push(rulesSection(allRules))
 
     return sections.join('\n')
   }
@@ -255,7 +291,7 @@ export class MainAgentBuilder {
     this.config = {
       subAgents: [],
       directTools: [],
-      contextPaths: [],
+      workspacePaths: [],
       rules: [],
       examples: [],
       customSections: []

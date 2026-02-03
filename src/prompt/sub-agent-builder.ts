@@ -9,7 +9,7 @@ import type {
   OutputFormat,
   OutputSchema,
   SubAgentPromptConfig,
-  ContextPathDef,
+  WorkspacePathDef,
   ToolStepRef,
   ChecklistItem,
   SubAgentExample
@@ -37,8 +37,8 @@ export class SubAgentBuilder {
     instructions: [],
     constraints: [],
     examples: [],
-    contextPaths: [],
-    useContext: false,
+    workspacePaths: [],
+    useWorkspace: false,
     customSections: [],
     availableTools: []
   }
@@ -182,28 +182,28 @@ export class SubAgentBuilder {
   }
 
   /**
-   * Enable context discovery - agent will check context before starting work
+   * Enable workspace discovery - agent will check workspace before starting work
    */
-  useContext(): this {
-    this.config.useContext = true
+  useWorkspace(): this {
+    this.config.useWorkspace = true
     return this
   }
 
   /**
-   * Add a context path the agent should check
+   * Add a workspace path the agent should check
    */
-  addContextPath(path: string, description: string): this {
-    this.config.contextPaths!.push({ path, description })
-    this.config.useContext = true
+  addWorkspacePath(path: string, description: string): this {
+    this.config.workspacePaths!.push({ path, description })
+    this.config.useWorkspace = true
     return this
   }
 
   /**
-   * Add multiple context paths at once
+   * Add multiple workspace paths at once
    */
-  addContextPaths(paths: ContextPathDef[]): this {
-    this.config.contextPaths!.push(...paths)
-    this.config.useContext = true
+  addWorkspacePaths(paths: WorkspacePathDef[]): this {
+    this.config.workspacePaths!.push(...paths)
+    this.config.useWorkspace = true
     return this
   }
 
@@ -317,27 +317,28 @@ export class SubAgentBuilder {
       sections.push(checklistSection(this.config.checklist))
     }
 
-    // Available tools section (before context discovery)
+    // Available tools section (before workspace discovery)
     if (this.config.availableTools && this.config.availableTools.length > 0) {
       sections.push('')
       sections.push(availableToolsSection(this.config.availableTools))
     }
 
-    // Context discovery section (before workflow)
-    if (this.config.useContext) {
+    // Workspace discovery section (before workflow)
+    if (this.config.useWorkspace) {
       sections.push('')
-      sections.push('## Context Discovery (Do This First!)')
+      sections.push('## Workspace Discovery (Do This First!)')
       sections.push('')
-      sections.push('⚠️ ALWAYS check context BEFORE asking questions or starting work:')
+      sections.push('⚠️ ALWAYS check workspace BEFORE asking questions or starting work:')
       sections.push('')
-      sections.push('1. Use **context_ls** to see what data exists')
-      sections.push('2. Use **context_read** to read relevant paths')
-      sections.push('3. Use information from context instead of asking the user')
+      sections.push('1. Use `ls /` to see what data exists')
+      sections.push('2. Use `cat /path/file.json` to read relevant paths')
+      sections.push('3. Use `grep "keyword" /**/*.json` to search workspace')
+      sections.push('4. Use information from workspace instead of asking the user')
 
-      if (this.config.contextPaths && this.config.contextPaths.length > 0) {
+      if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {
         sections.push('')
         sections.push('Check these paths:')
-        for (const path of this.config.contextPaths) {
+        for (const path of this.config.workspacePaths) {
           sections.push(`- ${path.path} - ${path.description}`)
         }
       }
@@ -364,11 +365,15 @@ export class SubAgentBuilder {
       sections.push(guidelinesSection(this.config.guidelines))
     }
 
-    // Constraints section
-    if (this.config.constraints && this.config.constraints.length > 0) {
-      sections.push('')
-      sections.push(constraintsSection(this.config.constraints))
-    }
+    // Constraints section: combine default constraints with user constraints
+    const defaultConstraints = [
+      'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user via __ask_user__',
+      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
+      'If a tool call fails, analyze the error and try a different approach instead of giving up',
+    ]
+    const allConstraints = [...defaultConstraints, ...(this.config.constraints || [])]
+    sections.push('')
+    sections.push(constraintsSection(allConstraints))
 
     // Examples section
     if (this.config.examples && this.config.examples.length > 0) {
@@ -407,8 +412,8 @@ export class SubAgentBuilder {
       instructions: [],
       constraints: [],
       examples: [],
-      contextPaths: [],
-      useContext: false,
+      workspacePaths: [],
+      useWorkspace: false,
       customSections: [],
       availableTools: []
     }

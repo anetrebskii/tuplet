@@ -271,6 +271,9 @@ export class TraceBuilder {
     this.provider?.onAgentEnd(rootSpan, this.trace)
     this.provider?.onTraceEnd(this.trace)
 
+    // Strip circular parent references (parentSpanId is kept for identification)
+    stripParentRefs(rootSpan)
+
     return this.trace
   }
 
@@ -279,5 +282,16 @@ export class TraceBuilder {
    */
   getTrace(): Trace {
     return this.trace
+  }
+}
+
+/**
+ * Recursively remove `parent` references from spans to eliminate circular structures.
+ * The `parentSpanId` field is preserved for hierarchy identification.
+ */
+function stripParentRefs(span: AgentSpan): void {
+  delete span.parent
+  for (const child of span.children) {
+    stripParentRefs(child)
   }
 }

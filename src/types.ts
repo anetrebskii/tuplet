@@ -65,8 +65,8 @@ export interface ToolContext {
   remainingTokens: number
   conversationId?: string
   userId?: string
-  /** Context for tool/agent communication */
-  context?: import('./context.js').Context
+  /** Workspace for tool/agent communication */
+  workspace?: import('./workspace.js').Workspace
 }
 
 export interface Tool {
@@ -106,7 +106,7 @@ export interface SubAgentConfig {
   maxIterations?: number
   /**
    * Input schema for structured parameters passed to this agent.
-   * If defined, the __task__ tool will require these parameters instead of a free-form prompt.
+   * If defined, the __sub_agent__ tool will require these parameters instead of a free-form prompt.
    * The agent receives these as JSON in its initial message.
    */
   inputSchema?: JSONSchema
@@ -116,6 +116,10 @@ export interface SubAgentConfig {
    * Parent receives: { summary: string, data: <outputSchema> }
    */
   outputSchema?: JSONSchema
+  /** Disable __ask_user__ tool for this sub-agent */
+  disableAskUser?: boolean
+  /** Runtime-injected tool names for display (e.g., ['shell (read-only)']) */
+  builtInToolNames?: string[]
 }
 
 // ============================================================================
@@ -183,7 +187,10 @@ export interface LogProvider {
   /** Called with progress updates for real-time UI feedback */
   onProgress?(update: ProgressUpdate): void
 
-  /** Called when todo list is created or updated */
+  /** Called when task list is created or updated */
+  onTaskUpdate?(update: TaskUpdateNotification): void
+
+  /** @deprecated Use onTaskUpdate instead */
   onTodoUpdate?(update: TodoUpdate): void
 }
 
@@ -241,10 +248,10 @@ export interface RunOptions {
   history?: Message[]
 
   /**
-   * Context for tool/agent communication.
+   * Workspace for tool/agent communication.
    * Pre-populate before run, read results after run.
    */
-  context?: import('./context.js').Context
+  workspace?: import('./workspace.js').Workspace
 
   /**
    * AbortSignal for cancellation (e.g., from AbortController)
@@ -266,6 +273,14 @@ export interface RunOptions {
    * ```
    */
   shouldContinue?: () => Promise<boolean>
+
+  /**
+   * Agent execution mode:
+   * - `'plan'` — Read-only. Shell blocks writes (except plan file). Only TaskList/TaskGet available. System prompt includes plan-mode instructions.
+   * - `'execute'` — Full access. Plan from `.hive/plan.md` injected into system prompt as context.
+   * - `undefined` (default) — Full access, no plan injection. Backward compatible.
+   */
+  mode?: 'plan' | 'execute'
 
   /** @internal Trace builder passed from parent agent */
   _traceBuilder?: import('./trace.js').TraceBuilder
@@ -307,6 +322,8 @@ export interface AgentResult {
   toolCalls: ToolCallLog[]
   thinking?: string[]
   pendingQuestion?: PendingQuestion
+  tasks?: TaskItem[]
+  /** @deprecated Use tasks instead */
   todos?: TodoItem[]
   status: AgentStatus
 
@@ -326,43 +343,89 @@ export interface AgentResult {
 }
 
 // ============================================================================
-// Todo List Types
+// Task Management Types (Claude Code 4-Tool Approach)
 // ============================================================================
 
-export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
 
-export interface TodoItem {
-  id: string
+export interface TaskComment {
+  /** Agent ID that authored the comment */
+  author: string
+  /** Comment content */
   content: string
+  /** Timestamp when comment was added */
+  createdAt: number
+}
+
+export interface TaskItem {
+  id: string
+  /** Brief, actionable title in imperative form (e.g., "Fix authentication bug") */
+  subject: string
+  /** Detailed description of what needs to be done */
+  description?: string
   /** Present continuous form shown when task is in_progress (e.g., "Running tests") */
   activeForm?: string
-  status: TodoStatus
+  status: TaskStatus
+  /** Agent ID that owns this task */
+  owner?: string
+  /** Task IDs that cannot start until this task completes */
+  blocks?: string[]
+  /** Task IDs that must complete before this task can start */
+  blockedBy?: string[]
+  /** Progress notes and discussions */
+  comments?: TaskComment[]
+  /** Arbitrary metadata attached to the task */
+  metadata?: Record<string, unknown>
   createdAt: number
   completedAt?: number
 }
 
-export interface TodoList {
-  items: TodoItem[]
-  currentTaskId?: string
-}
-
-export interface TodoProgress {
+export interface TaskProgress {
   total: number
   completed: number
   pending: number
   inProgress: number
 }
 
-export interface TodoUpdate {
+export interface TaskUpdateNotification {
   /** Agent name (undefined for main agent, set for sub-agents) */
   agentName?: string
   /** Action that triggered the update */
-  action: 'set' | 'complete' | 'update'
-  /** Full list of todos */
-  todos: TodoItem[]
+  action: 'create' | 'update' | 'delete' | 'list'
+  /** Full list of tasks */
+  tasks: TaskItem[]
   /** Currently active task (if any) */
-  current?: TodoItem
+  current?: TaskItem
   /** Progress statistics */
+  progress: TaskProgress
+}
+
+// ============================================================================
+// Backward Compatibility Aliases (Deprecated)
+// ============================================================================
+
+/** @deprecated Use TaskStatus instead */
+export type TodoStatus = TaskStatus
+
+/** @deprecated Use TaskItem instead */
+export interface TodoItem {
+  id: string
+  content: string
+  activeForm?: string
+  status: TodoStatus
+  createdAt: number
+  completedAt?: number
+}
+
+/** @deprecated Use TaskProgress instead */
+export type TodoProgress = TaskProgress
+
+/** @deprecated Use TaskUpdateNotification instead */
+export interface TodoUpdate {
+  agentName?: string
+  action: 'set' | 'complete' | 'update'
+  todos: TodoItem[]
+  current?: TodoItem
   progress: TodoProgress
 }
 

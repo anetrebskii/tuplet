@@ -21,7 +21,7 @@ import type {
   PendingQuestion
 } from './types.js'
 import { ContextManager } from './context-manager.js'
-import { TodoManager } from './tools/todo.js'
+import { TaskManager } from './tools/tasks.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 
@@ -32,7 +32,7 @@ export interface ExecutorConfig {
   logger?: LogProvider
   maxIterations: number
   contextManager: ContextManager
-  todoManager: TodoManager
+  taskManager: TaskManager
   llmOptions?: LLMOptions
 
   /** AbortSignal for cancellation */
@@ -97,19 +97,34 @@ async function executeTool(
 
   // Progress: tool starting (with context for specific tools)
   let progressMessage = `Running ${tool.name}...`
-  if (tool.name === '__todo__') {
-    const action = (params as { action?: string }).action
-    const items = (params as { items?: string[] }).items
-    if (action === 'set' && items) {
-      progressMessage = `Creating ${items.length} tasks...`
-    } else if (action === 'complete') {
-      progressMessage = `Marking task complete...`
-    } else if (action === 'list') {
-      progressMessage = `Checking tasks...`
+  if (tool.name === 'TaskCreate') {
+    const subject = (params as { subject?: string }).subject
+    progressMessage = subject ? `Creating task: "${subject}"...` : 'Creating task...'
+  } else if (tool.name === 'TaskUpdate') {
+    const status = (params as { status?: string }).status
+    if (status === 'completed') {
+      progressMessage = 'Marking task complete...'
+    } else if (status === 'in_progress') {
+      progressMessage = 'Starting task...'
+    } else if (status === 'deleted') {
+      progressMessage = 'Deleting task...'
+    } else {
+      progressMessage = 'Updating task...'
     }
-  } else if (tool.name === '__task__') {
+  } else if (tool.name === 'TaskList') {
+    progressMessage = 'Checking tasks...'
+  } else if (tool.name === 'TaskGet') {
+    progressMessage = 'Getting task details...'
+  } else if (tool.name === '__sub_agent__') {
     const agent = (params as { agent?: string }).agent
     progressMessage = `Delegating to ${agent}...`
+  } else if (tool.name === '__shell__') {
+    const command = (params as { command?: string }).command
+    if (command) {
+      // Show the full command, truncated if too long
+      const truncated = command.length > 80 ? command.slice(0, 80) + '...' : command
+      progressMessage = `$ ${truncated}`
+    }
   }
 
   logger?.onProgress?.({
@@ -135,15 +150,26 @@ async function executeTool(
         logger?.debug(`[Tool: ${tool.name}] Result data: ${truncateForLog(result.data)}`)
       }
     } else {
-      logger?.debug(`[Tool: ${tool.name}] Error: ${result.error}`)
+      logger?.warn(`[Tool: ${tool.name}] Error: ${result.error}`)
     }
 
     // Progress: tool completed (with result context)
     let completionMessage = `${tool.name} completed`
-    if (tool.name === '__todo__' && result.success && result.data) {
-      const data = result.data as { message?: string; currentTask?: string }
-      if (data.message) {
-        completionMessage = data.message
+    if (!result.success) {
+      completionMessage = `${tool.name} failed: ${result.error}`
+    } else if (tool.name === '__shell__') {
+      const command = (params as { command?: string }).command
+      if (command) {
+        const truncated = command.length > 80 ? command.slice(0, 80) + '...' : command
+        completionMessage = `$ ${truncated}`
+      }
+    } else {
+      const isTaskTool = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name)
+      if (isTaskTool && result.data) {
+        const data = result.data as { message?: string }
+        if (data.message) {
+          completionMessage = data.message
+        }
       }
     }
 
@@ -216,16 +242,16 @@ function buildInterruptedResult(
   messages: Message[],
   toolCallLogs: ToolCallLog[],
   thinkingBlocks: string[],
-  todoManager: TodoManager
+  taskManager: TaskManager
 ): AgentResult {
-  const todos = todoManager.getAll()
+  const tasks = taskManager.getAll()
 
   return {
     response: '',
     history: messages,
     toolCalls: toolCallLogs,
     thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
-    todos: todos.length > 0 ? todos : undefined,
+    tasks: tasks.length > 0 ? tasks : undefined,
     status: 'interrupted',
     interrupted: {
       reason,
@@ -249,7 +275,7 @@ export async function executeLoop(
     logger,
     maxIterations,
     contextManager,
-    todoManager,
+    taskManager,
     llmOptions,
     signal,
     shouldContinue,
@@ -276,7 +302,7 @@ export async function executeLoop(
         messages,
         toolCallLogs,
         thinkingBlocks,
-        todoManager
+        taskManager
       )
     }
 
@@ -326,20 +352,20 @@ export async function executeLoop(
 
     // Check if done (no tool use)
     if (response.stopReason !== 'tool_use') {
-      const todos = todoManager.getAll()
-      const incompleteTodos = todos.filter(t => t.status !== 'completed')
+      const tasks = taskManager.getAll()
+      const incompleteTasks = tasks.filter(t => t.status !== 'completed')
 
-      // If there are incomplete todos, force the agent to continue working
-      if (incompleteTodos.length > 0) {
+      // If there are incomplete tasks, force the agent to continue working
+      if (incompleteTasks.length > 0) {
         logger?.onProgress?.({
           type: 'status',
-          message: `${incompleteTodos.length} tasks remaining, continuing...`
+          message: `${incompleteTasks.length} tasks remaining, continuing...`
         })
 
-        // Add a reminder to continue working on todos
-        const reminderContent = `You have ${incompleteTodos.length} incomplete task(s) in your todo list:\n${
-          incompleteTodos.map(t => `- ${t.status === 'in_progress' ? '[IN PROGRESS] ' : ''}${t.content}`).join('\n')
-        }\n\nYou MUST continue working on these tasks. Use the __todo__ tool with action "complete" after finishing each task. Do not respond to the user until all tasks are completed.`
+        // Add a reminder to continue working on tasks
+        const reminderContent = `You have ${incompleteTasks.length} incomplete task(s) in your task list:\n${
+          incompleteTasks.map(t => `- ${t.status === 'in_progress' ? '[IN PROGRESS] ' : ''}${t.subject}`).join('\n')
+        }\n\nYou MUST continue working on these tasks. Use the TaskUpdate tool with status "completed" after finishing each task. Do not respond to the user until all tasks are completed.`
 
         messages.push({
           role: 'user',
@@ -355,7 +381,7 @@ export async function executeLoop(
         history: messages,
         toolCalls: toolCallLogs,
         thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
-        todos: todos.length > 0 ? todos : undefined,
+        tasks: tasks.length > 0 ? tasks : undefined,
         status: 'complete'
       }
 
@@ -384,7 +410,7 @@ export async function executeLoop(
           messages,
           toolCallLogs,
           thinkingBlocks,
-          todoManager
+          taskManager
         )
       }
 
@@ -401,13 +427,13 @@ export async function executeLoop(
 
         const pendingQuestion: PendingQuestion = { questions }
 
-        const todos = todoManager.getAll()
+        const tasks = taskManager.getAll()
         return {
           response: '',
           history: messages,
           toolCalls: toolCallLogs,
           thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
-          todos: todos.length > 0 ? todos : undefined,
+          tasks: tasks.length > 0 ? tasks : undefined,
           pendingQuestion,
           status: 'needs_input'
         }
@@ -443,6 +469,47 @@ export async function executeLoop(
       // Record in trace
       traceBuilder?.recordToolCall(toolUse.name, toolUse.input, result, durationMs)
 
+      // If a sub-agent needs user input, propagate needs_input immediately
+      // We add the __sub_agent__ tool result to history, then synthesize an __ask_user__
+      // tool call so the existing resume logic in agent.ts works correctly
+      if (toolUse.name === '__sub_agent__' && !result.success && result.error === 'Sub-agent needs user input' && result.data) {
+        const subAgentData = result.data as { questions?: import('./types.js').EnhancedQuestion[] }
+        if (subAgentData.questions && Array.isArray(subAgentData.questions) && subAgentData.questions.length > 0) {
+          // Add the __sub_agent__ tool result to close the pending tool_use
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result),
+            is_error: true
+          })
+          messages.push({ role: 'user', content: toolResults })
+
+          // Synthesize an __ask_user__ tool call so resume logic works
+          const syntheticAskUserId = `synthetic_ask_user_${Date.now()}`
+          messages.push({
+            role: 'assistant',
+            content: [{
+              type: 'tool_use',
+              id: syntheticAskUserId,
+              name: ASK_USER_TOOL_NAME,
+              input: { questions: subAgentData.questions }
+            }]
+          })
+
+          const pendingQuestion: PendingQuestion = { questions: subAgentData.questions }
+          const tasks = taskManager.getAll()
+          return {
+            response: '',
+            history: messages,
+            toolCalls: toolCallLogs,
+            thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
+            tasks: tasks.length > 0 ? tasks : undefined,
+            pendingQuestion,
+            status: 'needs_input'
+          }
+        }
+      }
+
       toolResults.push({
         type: 'tool_result',
         tool_use_id: toolUse.id,
@@ -467,6 +534,6 @@ export async function executeLoop(
     messages,
     toolCallLogs,
     thinkingBlocks,
-    todoManager
+    taskManager
   )
 }

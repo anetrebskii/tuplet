@@ -1,6 +1,6 @@
 # Quick Start
 
-Get up and running with Hive Agent in minutes.
+Get up and running with Hive Agent.
 
 ## Installation
 
@@ -11,14 +11,18 @@ pnpm add @alexnetrebskii/hive-agent
 ## Basic Agent
 
 ```typescript
-import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, MainAgentBuilder } from '@alexnetrebskii/hive-agent'
 
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY
 })
 
+const systemPrompt = new MainAgentBuilder()
+  .role('a helpful assistant')
+  .build()
+
 const agent = new Hive({
-  systemPrompt: 'You are a helpful assistant.',
+  systemPrompt,
   tools: [],
   llm: provider
 })
@@ -30,7 +34,7 @@ console.log(result.response)
 ## Adding a Tool
 
 ```typescript
-import { Hive, ClaudeProvider, type Tool } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, MainAgentBuilder, type Tool } from '@alexnetrebskii/hive-agent'
 
 const weatherTool: Tool = {
   name: 'get_weather',
@@ -48,8 +52,13 @@ const weatherTool: Tool = {
   }
 }
 
+const systemPrompt = new MainAgentBuilder()
+  .role('a weather assistant')
+  .tools([weatherTool])
+  .build()
+
 const agent = new Hive({
-  systemPrompt: 'You help users check weather.',
+  systemPrompt,
   tools: [weatherTool],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
 })
@@ -77,17 +86,31 @@ console.log(result2.response)
 ## Adding a Sub-Agent
 
 ```typescript
-import { Hive, ClaudeProvider, type SubAgentConfig } from '@alexnetrebskii/hive-agent'
+import {
+  Hive, ClaudeProvider, MainAgentBuilder, SubAgentBuilder,
+  type SubAgentConfig, type Tool
+} from '@alexnetrebskii/hive-agent'
+
+const webSearchTool: Tool = { /* ... */ }
 
 const researcher: SubAgentConfig = {
   name: 'researcher',
   description: 'Research topics using web search',
-  systemPrompt: 'You research topics and provide summaries.',
+  systemPrompt: new SubAgentBuilder()
+    .role('a research specialist')
+    .task('Research topics thoroughly and summarize findings.')
+    .tools([webSearchTool])
+    .build(),
   tools: [webSearchTool]
 }
 
+const systemPrompt = new MainAgentBuilder()
+  .role('the orchestrator of a research app')
+  .agents([researcher])
+  .build()
+
 const agent = new Hive({
-  systemPrompt: 'You help users with various tasks.',
+  systemPrompt,
   tools: [],
   agents: [researcher],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -97,34 +120,39 @@ const agent = new Hive({
 const result = await agent.run('Research the latest news about TypeScript')
 ```
 
-## Using Context
+## Using Workspace
 
 ```typescript
-import { Hive, ClaudeProvider, Context } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, MainAgentBuilder, Workspace } from '@alexnetrebskii/hive-agent'
 
-const context = new Context()
+const workspace = new Workspace()
 
 // Pre-populate data
-context.write('user/name', 'Alex')
+workspace.write('user/name.txt', 'Alex')
+
+const systemPrompt = new MainAgentBuilder()
+  .role('a helpful assistant')
+  .addWorkspacePath('user/name.txt', 'User name')
+  .addWorkspacePath('output/greeting.md', 'Generated greeting')
+  .build()
 
 const agent = new Hive({
-  systemPrompt: `You are a helpful assistant.
-Use context_read to get user data.
-Use context_write to save results.`,
+  systemPrompt,
   tools: [],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
 })
 
-const result = await agent.run('Create a personalized greeting', { context })
+const result = await agent.run('Create a personalized greeting', { workspace })
 
 // Read what agent wrote
-const greeting = context.read('greeting')
+const greeting = workspace.read('output/greeting.md')
 ```
 
 ## Next Steps
 
 - [Tools](./tools.md) - Creating custom tools
 - [Sub-Agents](./sub-agents.md) - Delegating to specialized agents
-- [Context](./context.md) - Sharing data between agents
+- [Workspace](./workspace.md) - Sharing data between agents
+- [Prompt Builder](./prompt-builder.md) - Fluent API for system prompts
 - [Tracing](./tracing.md) - Monitoring execution and costs
 - [Configuration](./configuration.md) - All configuration options

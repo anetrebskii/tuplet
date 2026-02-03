@@ -5,7 +5,7 @@
  */
 
 // Main agent class
-export { Hive } from './agent.js'
+export { Hive, PLAN_PATH, PLAN_FS_PATH } from './agent.js'
 
 // Types
 export type {
@@ -36,10 +36,16 @@ export type {
   QuestionOption,
   EnhancedQuestion,
 
-  // Todo types
+  // Task types (new)
+  TaskItem,
+  TaskStatus,
+  TaskComment,
+  TaskProgress,
+  TaskUpdateNotification,
+
+  // Todo types (deprecated - use Task types instead)
   TodoItem,
   TodoStatus,
-  TodoList,
   TodoProgress,
   TodoUpdate,
 
@@ -105,7 +111,7 @@ export {
   subAgentsTable,
   questionHandlingSection,
   directToolsSection,
-  contextStorageSection,
+  workspaceStorageSection,
   rulesSection,
   taskExamplesSection,
   subAgentRoleSection,
@@ -116,7 +122,7 @@ export {
   // Builder types
   type SubAgentDef,
   type ToolDef,
-  type ContextPathDef,
+  type WorkspacePathDef,
   type TaskExample,
   type WorkflowStep,
   type OutputFormat,
@@ -124,12 +130,22 @@ export {
   type SubAgentPromptConfig
 } from './prompt.js'
 
-// Todo utilities
+// Task Management utilities (new 4-tool approach)
 export {
+  TaskManager,
+  formatTaskList,
+  createTaskTools,
+  createTaskCreateTool,
+  createTaskUpdateTool,
+  createTaskGetTool,
+  createTaskListTool,
+  type TaskToolOptions,
+  // Backward compatibility (deprecated)
   TodoManager,
   formatTodoList,
+  createTodoTool,
   type TodoToolOptions
-} from './tools/todo.js'
+} from './tools/tasks.js'
 
 // Tracing
 export {
@@ -152,19 +168,43 @@ export {
   type ConsoleTraceConfig
 } from './trace.js'
 
-// Context
+// Workspace
 export {
-  Context,
-  createContextTools,
-  type ContextEntry,
-  type ContextListItem,
-  type ContextConfig,
+  Workspace,
+  type WorkspaceEntry,
+  type WorkspaceListItem,
+  type WorkspaceConfig,
+  type WorkspaceConfigExt,
   type PathConfig,
   type ValidatorFn,
   type ZodLike,
   type ValidationError,
   type WriteResult
-} from './context.js'
+} from './workspace.js'
+
+// Workspace Providers
+export {
+  type WorkspaceProvider,
+  type WorkspaceChange,
+  type WorkspaceChangeListener,
+  MemoryWorkspaceProvider,
+  FileWorkspaceProvider
+} from './providers/workspace/index.js'
+
+// Shell (Virtual FS for context)
+export {
+  Shell,
+  VirtualFS,
+  type ShellConfig,
+  type ShellResult,
+  type CommandHandler,
+  type CommandHelp,
+  type CommandFlag,
+  type CommandExample
+} from './shell/index.js'
+
+// Built-in Agents
+export { exploreAgent, planAgent, getBuiltInAgents } from './built-in-agents/index.js'
 
 // Dataset (Run Recording, Replay & Testing)
 export {

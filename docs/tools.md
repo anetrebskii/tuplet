@@ -83,16 +83,16 @@ interface ToolContext {
   remainingTokens: number      // Tokens left in context window
   conversationId?: string      // Current conversation ID
   userId?: string              // Current user ID
-  context?: Context            // Shared context for data storage
+  workspace?: Workspace        // Shared workspace for data storage
 }
 ```
 
-### Using Context
+### Using Workspace
 
 ```typescript
 const saveTool: Tool = {
   name: 'save_result',
-  description: 'Save analysis result to context',
+  description: 'Save analysis result to workspace',
   parameters: {
     type: 'object',
     properties: {
@@ -101,9 +101,9 @@ const saveTool: Tool = {
     required: ['result']
   },
   execute: async ({ result }, toolCtx) => {
-    // Access shared context
-    if (toolCtx.context) {
-      toolCtx.context.write('analysis/result.md', result, 'save_tool')
+    // Access shared workspace
+    if (toolCtx.workspace) {
+      toolCtx.workspace.write('analysis/result.md', result, 'save_tool')
     }
 
     // Check remaining tokens
@@ -265,7 +265,7 @@ interface ToolContext {
   remainingTokens: number
   conversationId?: string
   userId?: string
-  context?: Context
+  workspace?: Workspace
 }
 
 interface JSONSchema {

@@ -35,7 +35,7 @@ export type CreateSubHive = (config: HiveConfig) => {
 };
 
 /**
- * Build description for agent in __task__ tool
+ * Build description for agent in __sub_agent__ tool
  */
 function buildAgentDescription(agent: SubAgentConfig): string {
   let desc = `- **${agent.name}**: ${agent.description}`;
@@ -58,7 +58,11 @@ function buildAgentDescription(agent: SubAgentConfig): string {
     desc += `\n  Returns: structured data (summary + data object)`;
   }
 
-  desc += `\n  Tools: ${agent.tools.map((t) => t.name).join(", ")}`;
+  const toolNames = [
+    ...agent.tools.map((t) => t.name),
+    ...(agent.builtInToolNames || []),
+  ];
+  desc += `\n  Tools: ${toolNames.length > 0 ? toolNames.join(", ") : "none"}`;
 
   return desc;
 }
@@ -111,7 +115,7 @@ function createSubLogger(
 }
 
 /**
- * Create the __task__ tool for spawning sub-agents
+ * Create the __sub_agent__ tool for spawning sub-agents
  */
 export function createTaskTool(
   context: TaskToolContext,
@@ -152,7 +156,7 @@ export function createTaskTool(
     }
   }
 
-  const toolName = "__task__";
+  const toolName = "__sub_agent__";
   return {
     name: toolName,
     description: `The ${toolName} tool activates specialized agents designed to autonomously execute complex operations. Each agent variant possesses distinct capabilities and has access to specific tools.
@@ -195,7 +199,7 @@ Day 5: Meiji Shrine, Harajuku, departure preparation
 Since a detailed travel plan has been created, now deploy the travel-planner agent to add specific restaurant recommendations, booking details, and transportation information
 </commentary>
 assistant: Let me now employ the travel-planner agent to enhance this itinerary with detailed logistics
-assistant: Invokes the __task__ tool to activate the travel-planner agent
+assistant: Invokes the __sub_agent__ tool to activate the travel-planner agent
 </example>
 
 <example>
@@ -203,7 +207,7 @@ user: "Hello"
 <commentary>
 The user has initiated a greeting, so deploy the welcome-handler agent to provide a friendly response
 </commentary>
-assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
+assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler agent"
 </example>
 `,
 
@@ -271,7 +275,7 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
           llm: subLlm,
           logger: subLogger,
           maxIterations: agentConfig.maxIterations || context.config.maxIterations,
-          disableAskUser: false, // Sub-agents can ask questions via __ask_user__
+          disableAskUser: agentConfig.disableAskUser ?? false,
           // Pass parent's trace config for nested sub-agents
           trace: context.config.trace,
           agentName: agentName,
@@ -280,11 +284,11 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
         const result = await subHive.run(inputMessage, {
           // Pass trace builder for nested tracing
           _traceBuilder: parentTraceBuilder,
-          // Pass context to sub-agent so its tools receive the same context
+          // Pass workspace to sub-agent so its tools receive the same workspace
           conversationId: toolCtx.conversationId,
           userId: toolCtx.userId,
-          // Pass context so sub-agent can read/write to same context
-          context: toolCtx.context,
+          // Pass workspace so sub-agent can read/write to same workspace
+          workspace: toolCtx.workspace,
         });
 
         // End sub-agent span in trace

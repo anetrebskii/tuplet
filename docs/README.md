@@ -32,7 +32,7 @@ See [Quick Start Guide](./quickstart.md) for more examples.
 | [Quick Start](./quickstart.md) | Installation, basic agent, first tool |
 | [Tools](./tools.md) | Creating custom tools, parameters, validation |
 | [Sub-Agents](./sub-agents.md) | Delegating tasks to specialized agents |
-| [Context](./context.md) | Virtual file system for sharing data |
+| [Workspace](./workspace.md) | Virtual file system for sharing data |
 | [Configuration](./configuration.md) | All configuration options |
 
 ### Providers
@@ -46,6 +46,7 @@ See [Quick Start Guide](./quickstart.md) for more examples.
 
 | Guide | Description |
 |-------|-------------|
+| [Task Management](./task-management.md) | 4-tool system for tracking tasks with dependencies |
 | [Prompt Builder](./prompt-builder.md) | Battle-tested templates for multi-agent prompts |
 | [Interactive](./interactive.md) | Agent asking clarifying questions |
 | [Interruption](./interruption.md) | Stopping and continuing agent execution |

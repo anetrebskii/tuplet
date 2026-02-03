@@ -1,38 +1,38 @@
 /**
- * Context - A virtual filesystem for agent communication
+ * Workspace - A virtual filesystem for agent communication
  *
- * Enables tools and sub-agents to read/write shared data without passing
- * content through return values. Similar to how Claude Code uses the
- * actual filesystem for agent coordination.
+ * Wraps VirtualFS from the shell module. AI agents interact with workspace
+ * using bash-like commands (cat, echo, ls, grep, etc.) through the shell.
  *
  * Usage:
  * ```typescript
- * const context = new Context({
- *   schemas: {
- *     'plan/current': {
- *       type: 'object',
- *       properties: {
- *         title: { type: 'string' },
- *         days: { type: 'array' }
- *       },
- *       required: ['title', 'days']
- *     }
+ * const workspace = new Workspace({
+ *   paths: {
+ *     'user/preferences.json': { value: { theme: 'dark' } }
  *   }
  * })
  *
- * // Pre-populate before run
- * context.write('user/preferences', { theme: 'dark' })
+ * // Get the shell for AI to use
+ * const shell = workspace.getShell()
  *
- * const result = await hive.run(message, { context })
+ * // AI uses bash commands:
+ * // cat /user/preferences.json
+ * // echo '{"theme": "light"}' > /user/preferences.json
+ * // ls /
+ * // grep "theme" /
  *
- * // Read results after run (validated against schema)
- * const plan = context.read('plan/current')
+ * // Read results after run
+ * const prefs = workspace.read('/user/preferences.json')
  * ```
  */
 
 import type { JSONSchema } from './types.js'
+import { VirtualFS } from './shell/fs.js'
+import { Shell } from './shell/shell.js'
+import type { ShellConfig } from './shell/types.js'
+import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
 
-export interface ContextEntry {
+export interface WorkspaceEntry {
   value: unknown
   createdAt: number
   updatedAt: number
@@ -40,7 +40,7 @@ export interface ContextEntry {
   writtenBy?: string
 }
 
-export interface ContextListItem {
+export interface WorkspaceListItem {
   path: string
   updatedAt: number
   writtenBy?: string
@@ -69,7 +69,7 @@ export interface PathConfig {
   description?: string
 }
 
-export interface ContextConfig {
+export interface WorkspaceConfig {
   /**
    * Strict mode: only allow writing to defined paths.
    * - true: writes to undefined paths will fail
@@ -96,7 +96,7 @@ export interface ContextConfig {
    *
    * @example
    * ```typescript
-   * const context = new Context({
+   * const workspace = new Workspace({
    *   strict: true,
    *   paths: {
    *     // Format validation only
@@ -142,16 +142,26 @@ interface ValidatorEntry {
   description?: string
 }
 
+export interface WorkspaceConfigExt extends WorkspaceConfig {
+  /** Shell configuration for HTTP requests */
+  shell?: ShellConfig
+  /** Async persistence provider (sits behind VirtualFS) */
+  provider?: WorkspaceProvider
+}
+
 /**
- * Context provides a virtual filesystem for agent communication
+ * Workspace provides a virtual filesystem for agent communication.
+ * Wraps VirtualFS and provides Shell access for AI to use bash commands.
  */
-export class Context {
-  private data: Map<string, ContextEntry> = new Map()
+export class Workspace {
+  private fs: VirtualFS
+  private shell: Shell
   private validators: Map<string, ValidatorEntry> = new Map()
-  /** Set of all defined paths (for strict mode) */
   private definedPaths: Set<string> = new Set()
-  /** Strict mode: only allow writing to defined paths */
   private strict: boolean = false
+  private provider: WorkspaceProvider | undefined
+  private initialized: boolean = false
+  private unsubscribe: (() => void) | undefined
 
   /** Extension to type mapping */
   private static readonly EXT_MAP: Record<string, ValidatorType> = {
@@ -165,14 +175,95 @@ export class Context {
     '.validate': 'validate'
   }
 
-  constructor(config?: ContextConfig) {
+  constructor(config?: WorkspaceConfigExt) {
     this.strict = config?.strict ?? false
+    this.fs = new VirtualFS()
+    this.shell = new Shell({
+      ...config?.shell,
+      fs: this.fs // Share VirtualFS instance with shell
+    })
+    this.provider = config?.provider
+
+    // Wire onChange to forward writes/deletes to provider (fire-and-forget)
+    if (this.provider) {
+      const provider = this.provider
+      this.fs.setOnChange((type, path, content) => {
+        if (type === 'write') {
+          provider.write(path, content!).catch(() => {})
+        } else if (type === 'delete') {
+          provider.delete(path).catch(() => {})
+        }
+      })
+    }
 
     if (config?.paths) {
       for (const [key, value] of Object.entries(config.paths)) {
         this.registerPath(key, value)
       }
     }
+  }
+
+  /**
+   * Get the shell instance for AI to execute bash commands.
+   * AI uses: cat, echo, ls, grep, find, curl, jq, etc.
+   */
+  getShell(): Shell {
+    return this.shell
+  }
+
+  /**
+   * Get the underlying VirtualFS
+   */
+  getFS(): VirtualFS {
+    return this.fs
+  }
+
+  /**
+   * Initialize the workspace provider.
+   * Loads persisted data into VirtualFS and sets up real-time subscriptions.
+   * No-op when no provider is configured (backward compatible).
+   */
+  async init(): Promise<void> {
+    if (this.initialized || !this.provider) return
+    this.initialized = true
+
+    // Load persisted data into VirtualFS (without triggering onChange)
+    const data = await this.provider.load()
+    this.fs.hydrate(data)
+
+    // Subscribe to external changes if provider supports it
+    if (this.provider.subscribe) {
+      this.unsubscribe = this.provider.subscribe((changes: WorkspaceChange[]) => {
+        // Temporarily disable onChange to prevent feedback loop
+        const prevHandler = this.fs['onChange']
+        this.fs.setOnChange(null)
+        try {
+          for (const change of changes) {
+            if (change.type === 'write' && change.content !== undefined) {
+              this.fs.write(change.path, change.content)
+            } else if (change.type === 'delete') {
+              this.fs.delete(change.path)
+            }
+          }
+        } finally {
+          this.fs.setOnChange(prevHandler)
+        }
+      })
+    }
+  }
+
+  /**
+   * Dispose the workspace provider.
+   * Unsubscribes, flushes pending writes, and disposes the provider.
+   */
+  async dispose(): Promise<void> {
+    if (!this.provider) return
+
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+
+    await this.provider.flush?.()
+    await this.provider.dispose?.()
   }
 
   /**
@@ -257,7 +348,7 @@ export class Context {
 
   /** Parse path and extension */
   private parsePathExt(key: string): { path: string; ext: ValidatorType | null } {
-    for (const [suffix, type] of Object.entries(Context.EXT_MAP)) {
+    for (const [suffix, type] of Object.entries(Workspace.EXT_MAP)) {
       if (key.endsWith(suffix)) {
         return { path: key.slice(0, -suffix.length), ext: type }
       }
@@ -281,14 +372,14 @@ export class Context {
   }
 
   /**
-   * Write a value to the context at the given path
+   * Write a value to the workspace at the given path
    *
    * @param path - Dot-separated path (e.g., 'meals.today', 'user.preferences')
    * @param value - Any JSON-serializable value
-   * @param writtenBy - Optional identifier of who wrote this (tool name, agent name)
+   * @param _writtenBy - Optional identifier of who wrote this (unused, kept for API compatibility)
    * @returns WriteResult with success status and any validation errors
    */
-  write(path: string, value: unknown, writtenBy?: string): WriteResult {
+  write(path: string, value: unknown, _writtenBy?: string): WriteResult {
     // Strict mode: only allow writing to defined paths
     if (this.strict && !this.definedPaths.has(path)) {
       return {
@@ -330,15 +421,12 @@ export class Context {
       return { success: false, errors }
     }
 
-    const now = Date.now()
-    const existing = this.data.get(path)
+    // Normalize path to VirtualFS format
+    const fsPath = path.startsWith('/') ? path : `/${path}`
 
-    this.data.set(path, {
-      value,
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-      writtenBy
-    })
+    // Serialize value for VirtualFS storage
+    const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+    this.fs.write(fsPath, content)
 
     return { success: true }
   }
@@ -566,52 +654,68 @@ export class Context {
   }
 
   /**
-   * Read a value from the context
+   * Read a value from the workspace
    *
-   * @param path - Path to read from
+   * @param path - Path to read from (with or without / prefix)
    * @returns The value, or undefined if not found
    */
   read<T = unknown>(path: string): T | undefined {
-    return this.data.get(path)?.value as T | undefined
+    const fsPath = path.startsWith('/') ? path : `/${path}`
+    const content = this.fs.read(fsPath)
+    if (content === null) return undefined
+
+    try {
+      return JSON.parse(content) as T
+    } catch {
+      return content as T
+    }
   }
 
   /**
-   * Check if a path exists in the context
+   * Check if a path exists in the workspace
    */
   has(path: string): boolean {
-    return this.data.has(path)
+    const fsPath = path.startsWith('/') ? path : `/${path}`
+    return this.fs.exists(fsPath)
   }
 
   /**
-   * Delete a path from the context
+   * Delete a path from the workspace
    */
   delete(path: string): boolean {
-    return this.data.delete(path)
+    const fsPath = path.startsWith('/') ? path : `/${path}`
+    return this.fs.delete(fsPath)
   }
 
   /**
    * List all paths, optionally filtered by prefix
-   *
-   * @param prefix - Optional prefix to filter paths (e.g., 'meals' lists 'meals.today', 'meals.yesterday')
-   * @returns Array of context items with metadata
    */
-  list(prefix?: string): ContextListItem[] {
-    const items: ContextListItem[] = []
+  list(prefix?: string): WorkspaceListItem[] {
+    const fsPrefix = prefix
+      ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
+      : '/'
 
-    for (const [path, entry] of this.data) {
-      if (prefix && !path.startsWith(prefix)) {
-        continue
+    const files = this.fs.glob(fsPrefix + '**/*')
+    const items: WorkspaceListItem[] = []
+
+    for (const path of files) {
+      if (this.fs.isDirectory(path)) continue
+
+      const content = this.fs.read(path)
+      let value: unknown = content
+      try {
+        value = content ? JSON.parse(content) : null
+      } catch {
+        // Keep as string
       }
 
       items.push({
         path,
-        updatedAt: entry.updatedAt,
-        writtenBy: entry.writtenBy,
-        preview: this.getPreview(entry.value)
+        updatedAt: Date.now(),
+        preview: this.getPreview(value)
       })
     }
 
-    // Sort by path for consistent ordering
     return items.sort((a, b) => a.path.localeCompare(b.path))
   }
 
@@ -619,45 +723,36 @@ export class Context {
    * Get all paths (just the keys, no metadata)
    */
   keys(prefix?: string): string[] {
-    if (!prefix) {
-      return Array.from(this.data.keys()).sort()
-    }
-    return Array.from(this.data.keys())
-      .filter(k => k.startsWith(prefix))
+    const fsPrefix = prefix
+      ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
+      : '/'
+
+    return this.fs.glob(fsPrefix + '**/*')
+      .filter(p => !this.fs.isDirectory(p))
       .sort()
   }
 
   /**
-   * Clear all data from the context
+   * Clear all data from the workspace
    */
   clear(): void {
-    this.data.clear()
-  }
-
-  /**
-   * Get the full entry with metadata
-   */
-  getEntry(path: string): ContextEntry | undefined {
-    return this.data.get(path)
+    this.fs.delete('/')
+    this.fs.mkdir('/')
   }
 
   /**
    * Export all data as a plain object
    */
   toObject(): Record<string, unknown> {
-    const obj: Record<string, unknown> = {}
-    for (const [path, entry] of this.data) {
-      obj[path] = entry.value
-    }
-    return obj
+    return this.fs.export()
   }
 
   /**
    * Import data from a plain object
    */
-  fromObject(obj: Record<string, unknown>, writtenBy?: string): void {
+  fromObject(obj: Record<string, unknown>, _writtenBy?: string): void {
     for (const [path, value] of Object.entries(obj)) {
-      this.write(path, value, writtenBy)
+      this.write(path, value)
     }
   }
 
@@ -665,7 +760,7 @@ export class Context {
    * Get number of entries
    */
   get size(): number {
-    return this.data.size
+    return this.keys().length
   }
 
   private getPreview(value: unknown): string {
@@ -699,188 +794,9 @@ export class Context {
   }
 }
 
-/**
- * Create context tools for agents to interact with Context
- */
-export function createContextTools(context: Context, agentName?: string): import('./types.js').Tool[] {
-  // Build path info for tool descriptions
-  const definedPaths = context.getDefinedPaths()
-  const strictMode = context.isStrict()
-
-  const pathInfo = definedPaths.length > 0
-    ? `\n\n${strictMode ? 'Allowed' : 'Defined'} paths:\n${definedPaths.map(p => {
-        const v = context.getValidator(p)
-        const desc = v?.description || (v?.type === 'schema' ? 'JSON Schema' : v?.type || 'format validation')
-        return `- ${p}: ${desc}`
-      }).join('\n')}`
-    : ''
-
-  const strictInfo = strictMode
-    ? '\n\nNOTE: Strict mode is enabled. Only defined paths can be written to.'
-    : ''
-
-  return [
-    {
-      name: 'context_ls',
-      description: `List all paths in the context, optionally filtered by prefix.
-
-The context is a virtual filesystem where tools and agents can read/write data.
-Use this to discover what data is available.${pathInfo}${strictInfo}
-
-Examples:
-- { } - list all paths
-- { "prefix": "meals" } - list paths starting with "meals"`,
-      parameters: {
-        type: 'object',
-        properties: {
-          prefix: {
-            type: 'string',
-            description: 'Optional prefix to filter paths'
-          }
-        }
-      },
-      execute: async (params) => {
-        const prefix = params.prefix as string | undefined
-        const items = context.list(prefix)
-
-        // Include defined paths info in response
-        const paths = context.getDefinedPaths()
-          .filter(p => !prefix || p.startsWith(prefix))
-          .map(p => {
-            const v = context.getValidator(p)
-            return {
-              path: p,
-              type: v?.type || 'format',
-              description: v?.description,
-              schema: v?.schema,
-              hasValue: context.has(p)
-            }
-          })
-
-        return {
-          success: true,
-          data: {
-            strict: context.isStrict(),
-            count: items.length,
-            items,
-            definedPaths: paths.length > 0 ? paths : undefined
-          }
-        }
-      }
-    },
-    {
-      name: 'context_read',
-      description: `Read a value from the shared context.
-
-Returns the stored value at the given path, or null if not found.
-
-Examples:
-- { "path": "meals.today" }
-- { "path": "user.preferences" }`,
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'The path to read from'
-          }
-        },
-        required: ['path']
-      },
-      execute: async (params) => {
-        const path = params.path as string
-        const entry = context.getEntry(path)
-
-        if (!entry) {
-          return {
-            success: true,
-            data: {
-              found: false,
-              path,
-              value: null
-            }
-          }
-        }
-
-        return {
-          success: true,
-          data: {
-            found: true,
-            path,
-            value: entry.value,
-            updatedAt: entry.updatedAt,
-            writtenBy: entry.writtenBy
-          }
-        }
-      }
-    },
-    {
-      name: 'context_write',
-      description: `Write a value to the context.
-
-Use this to store data that should be available to other tools, agents, or after the run completes.
-Some paths have validators - if validation fails, you'll get an error with details.${pathInfo}${strictInfo}
-
-IMPORTANT: For .json paths, pass the value as a JSON object, NOT as a string.
-
-Examples:
-- { "path": "meals/today.json", "value": { "breakfast": "eggs", "calories": 200 } }
-- { "path": "notes/advice.md", "value": "Eat more vegetables" }`,
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'The path to write to'
-          },
-          value: {
-            type: 'object',
-            description: 'The value to store. For .json paths use object/array, for .md/.txt use string.'
-          }
-        },
-        required: ['path', 'value']
-      },
-      execute: async (params) => {
-        const path = params.path as string
-        let value = params.value
-
-        // If value is a string that looks like JSON, try to parse it
-        if (typeof value === 'string') {
-          const trimmed = value.trim()
-          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-              (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-            try {
-              value = JSON.parse(value)
-            } catch {
-              // Keep as string if parse fails
-            }
-          }
-        }
-
-        const result = context.write(path, value, agentName)
-
-        if (!result.success) {
-          // Get schema for helpful error message
-          const schema = context.getSchema(path)
-          return {
-            success: false,
-            error: 'Validation failed',
-            data: {
-              path,
-              errors: result.errors,
-              expectedSchema: schema
-            }
-          }
-        }
-
-        return {
-          success: true,
-          data: {
-            path,
-            written: true
-          }
-        }
-      }
-    }
-  ]
-}
+// Note: Workspace tools (context_ls, context_read, context_write) have been removed.
+// AI agents now use shell commands to interact with workspace:
+//   ls /           - list context
+//   cat /file.json - read from context
+//   echo '...' > /file.json - write to context
+//   grep "pattern" / - search context

@@ -7,7 +7,7 @@
 import type {
   SubAgentDef,
   ToolDef,
-  ContextPathDef,
+  WorkspacePathDef,
   TaskExample,
   WorkflowStep,
   OutputFormat,
@@ -135,12 +135,12 @@ export function directToolsSection(tools: ToolDef[]): string {
 }
 
 /**
- * Generate context storage section
+ * Generate workspace storage section
  */
-export function contextStorageSection(paths: ContextPathDef[]): string {
+export function workspaceStorageSection(paths: WorkspacePathDef[]): string {
   if (paths.length === 0) return ''
 
-  const lines = ['## Context Storage', '']
+  const lines = ['## Workspace Storage', '']
   for (const path of paths) {
     lines.push(`- ${path.path} - ${path.description}`)
   }
@@ -196,7 +196,10 @@ export function inputParametersSection(): string {
 ⚠️ IMPORTANT: Check these sources FIRST before using __ask_user__:
 
 1. **Check your input parameters** - values like goal, dailyCalories, days may already be provided
-2. **Check context** - use context_ls and context_read to find stored information
+2. **Check context** - use shell commands to find stored information:
+   - \`ls /\` - list what's in context
+   - \`cat /path/file.json\` - read context data
+   - \`grep "keyword" /**/*.json\` - search context
 3. **Only ask if truly missing** - use __ask_user__ ONLY when info is not in input or context
 
 NEVER ask for information that was already provided or exists in context.`
@@ -350,10 +353,12 @@ export function instructionsSection(instructions: string[]): string {
 export function checklistSection(config: ChecklistConfig): string {
   const lines = ['## Task Tracking', '']
 
-  // When trackProgress is enabled, instruct to use the __todo__ tool
+  // When trackProgress is enabled, instruct to use the __tasks__ tool
   if (config.trackProgress) {
-    lines.push('Use the __todo__ tool to plan and track your work.')
-    lines.push('Create your own todos based on the task. Example items you might track:')
+    lines.push('Plan ALL tasks upfront before doing any work.')
+    lines.push('Call TaskCreate for each task, then work through them in order.')
+    lines.push('')
+    lines.push('Example items you might track:')
     lines.push('')
 
     for (const item of config.items) {
@@ -362,7 +367,7 @@ export function checklistSection(config: ChecklistConfig): string {
     }
 
     lines.push('')
-    lines.push('Mark each todo as in_progress when starting, then completed when done.')
+    lines.push('Mark each task as in_progress when starting, then completed when done.')
   } else {
     // Static checklist without todo tracking - just guidance
     lines.push('Consider these aspects:')

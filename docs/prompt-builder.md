@@ -29,7 +29,7 @@ const subPrompt = new SubAgentBuilder()
   .role('a nutrition counter assistant')
   .task('Log food the user ate')
   .tools(nutritionTools)
-  .addContextPath('meals/today.json', 'Today\'s logged meals')
+  .addWorkspacePath('meals/today.json', 'Today\'s logged meals')
   .outputSchema(outputSchema)
   .build()
 ```
@@ -88,23 +88,23 @@ Pass your Tool array - automatically extracts names and descriptions.
 builder.tools([getDailyTotals, clearMealLog])
 ```
 
-### Context Paths
+### Workspace Paths
 
-#### `.addContextPath(path, description)`
+#### `.addWorkspacePath(path, description)`
 
 Document a context path the agent can use.
 
 ```typescript
-.addContextPath('user/preferences.json', 'User settings and goals')
-.addContextPath('plan/current.json', 'Active meal plan')
+.addWorkspacePath('user/preferences.json', 'User settings and goals')
+.addWorkspacePath('plan/current.json', 'Active meal plan')
 ```
 
-#### `.addContextPaths(paths: ContextPathDef[])`
+#### `.addWorkspacePaths(paths: WorkspacePathDef[])`
 
 Add multiple context paths.
 
 ```typescript
-.addContextPaths([
+.addWorkspacePaths([
   { path: 'user/profile.json', description: 'User profile data' },
   { path: 'history/logs.json', description: 'Activity history' }
 ])
@@ -238,23 +238,23 @@ Describe what the agent should accomplish.
 
 Generates an "Available Tools" section listing each tool with its description.
 
-### Context Discovery
+### Workspace Discovery
 
-#### `.addContextPath(path, description)`
+#### `.addWorkspacePath(path, description)`
 
-Add a context path the agent should check. Automatically enables context discovery.
+Add a workspace path the agent should check. Automatically enables workspace discovery.
 
 ```typescript
-.addContextPath('user/preferences.json', 'User dietary goals and restrictions')
-.addContextPath('meals/today.json', 'Today\'s logged meals')
+.addWorkspacePath('user/preferences.json', 'User dietary goals and restrictions')
+.addWorkspacePath('meals/today.json', 'Today\'s logged meals')
 ```
 
-#### `.useContext()`
+#### `.useWorkspace()`
 
-Enable context discovery without specifying paths.
+Enable workspace discovery without specifying paths.
 
 ```typescript
-.useContext()  // Agent will use context_ls to discover available data
+.useWorkspace()  // Agent will use ls / to discover available data
 ```
 
 ### Workflow Steps
@@ -346,7 +346,7 @@ Enable the `__todo__` tool for the agent to plan and track its own work.
     'Reading user preferences from context',
     'Asking about calorie target',
     'Creating meal plan',
-    'Saving plan to context'
+    'Saving plan to workspace'
   ]
 })
 ```
@@ -366,7 +366,7 @@ Create your own todos based on the task. Example items you might track:
 - Reading user preferences from context
 - Asking about calorie target
 - Creating meal plan
-- Saving plan to context
+- Saving plan to workspace
 
 Mark each todo as in_progress when starting, then completed when done.
 ```
@@ -486,8 +486,8 @@ const mainPrompt = new MainAgentBuilder()
   .agents([greeterAgent, nutritionAgent, plannerAgent])
   .tools([getDailyTotals, clearMealLog])
   .questionHandling({})
-  .addContextPath('plan/current.json', 'Meal plans from planner')
-  .addContextPath('user/preferences.json', 'User preferences')
+  .addWorkspacePath('plan/current.json', 'Meal plans from planner')
+  .addWorkspacePath('user/preferences.json', 'User preferences')
   .addRules([
     'Delegate first, never answer domain questions yourself',
     'Always use __ask_user__ for questions',
@@ -506,7 +506,7 @@ const nutritionPrompt = new SubAgentBuilder()
   .role('a Nutrition Counter assistant')
   .task('Log food the user ate.')
   .tools([searchFood, logMeal, getDailyTotals])
-  .addContextPath('meals/today.json', 'Today\'s logged meals')
+  .addWorkspacePath('meals/today.json', 'Today\'s logged meals')
   .addQuestionStep('Check Portion', {
     condition: 'If portionGrams is missing',
     question: 'What was the portion size?',
@@ -543,7 +543,7 @@ const nutritionPrompt = new SubAgentBuilder()
 You are {role}. {description}
 
 ## Your Role
-1. **Delegate** - Call __task__ tool to spawn sub-agents
+1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents
 2. **Relay questions** - When sub-agent needs input, call __ask_user__ tool
 3. **Present results** - After sub-agent completes, output a text message
 
@@ -565,7 +565,7 @@ When sub-agent returns status "needs_input":
 ## Direct Tools
 - **get_daily_totals** - Get nutrition totals
 
-## Context Storage
+## Workspace Storage
 - plan/current.json - Meal plans
 
 ## Rules
@@ -584,10 +584,10 @@ Your task: {task}
 - **search_food**: Search food database
 - **log_meal**: Log a meal
 
-## Context Discovery (Do This First!)
-⚠️ ALWAYS check context BEFORE asking questions:
-1. Use context_ls to see what data exists
-2. Use context_read to read relevant paths
+## Workspace Discovery (Do This First!)
+⚠️ ALWAYS check workspace BEFORE asking questions or starting work:
+1. Use `ls /` to see what data exists
+2. Use `cat /path/file.json` to read relevant paths
 
 Check these paths:
 - meals/today.json - Today's logged meals
@@ -629,7 +629,7 @@ When done, call __output__ with:
 ## Type Definitions
 
 ```typescript
-interface ContextPathDef {
+interface WorkspacePathDef {
   path: string
   description: string
 }

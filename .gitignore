@@ -47,7 +47,6 @@ internal/
 **/.DS_Store
 .settings
 **/.vs
-**/.vscode/*
 !**/.vscode/tasks.json
 !**/.vscode/settings.template.json
 !**/.vscode/launch.template.json
