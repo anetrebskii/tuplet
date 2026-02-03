@@ -187,21 +187,21 @@ When finished, use __output__ with:
 }
 ```
 
-## Shared Context
+## Shared Workspace
 
-Sub-agents automatically receive the parent's context:
+Sub-agents automatically receive the parent's workspace:
 
 ```typescript
-const context = new Context()
-context.write('user/preferences', { language: 'en', style: 'formal' })
+const workspace = new Workspace()
+workspace.write('user/preferences', { language: 'en', style: 'formal' })
 
-const result = await agent.run('Write an article', { context })
+const result = await agent.run('Write an article', { workspace })
 
-// Sub-agent can read: context_read({ path: 'user/preferences' })
-// Sub-agent can write: context_write({ path: 'draft/article.md', value: '...' })
+// Sub-agent can read: cat /ctx/user/preferences
+// Sub-agent can write: echo '...' > /ctx/draft/article.md
 
 // Parent can read sub-agent's output
-const draft = context.read('draft/article.md')
+const draft = workspace.read('draft/article.md')
 ```
 
 ## Configuration Options
@@ -257,4 +257,4 @@ const agent = new Hive({
 2. **Clear descriptions**: Help the main agent choose the right sub-agent
 3. **Use structured I/O**: Prefer schemas over free-form text
 4. **Limit iterations**: Set reasonable `maxIterations` to prevent runaway
-5. **Share context**: Use Context for data that spans agents
+5. **Share workspace**: Use Workspace for data that spans agents

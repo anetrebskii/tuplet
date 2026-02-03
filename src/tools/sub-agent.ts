@@ -284,11 +284,11 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         const result = await subHive.run(inputMessage, {
           // Pass trace builder for nested tracing
           _traceBuilder: parentTraceBuilder,
-          // Pass context to sub-agent so its tools receive the same context
+          // Pass workspace to sub-agent so its tools receive the same workspace
           conversationId: toolCtx.conversationId,
           userId: toolCtx.userId,
-          // Pass context so sub-agent can read/write to same context
-          context: toolCtx.context,
+          // Pass workspace so sub-agent can read/write to same workspace
+          workspace: toolCtx.workspace,
         });
 
         // End sub-agent span in trace

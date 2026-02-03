@@ -26,9 +26,9 @@ export interface ToolDef {
 }
 
 /**
- * Context path definition
+ * Workspace path definition
  */
-export interface ContextPathDef {
+export interface WorkspacePathDef {
   path: string
   description: string
 }
@@ -80,7 +80,7 @@ export interface MainAgentPromptConfig {
     exampleFlow?: string[]
   }
   directTools?: ToolDef[]
-  contextPaths?: ContextPathDef[]
+  workspacePaths?: WorkspacePathDef[]
   rules?: string[]
   examples?: TaskExample[]
   customSections?: Array<{
@@ -159,8 +159,8 @@ export interface SubAgentPromptConfig {
   outputSchema?: OutputSchema
   /** Available tools for the sub-agent */
   availableTools?: ToolDef[]
-  contextPaths?: ContextPathDef[]
-  useContext?: boolean
+  workspacePaths?: WorkspacePathDef[]
+  useWorkspace?: boolean
   customSections?: Array<{
     title: string
     content: string

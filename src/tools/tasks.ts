@@ -6,9 +6,9 @@
  */
 
 import type { Tool, TaskItem, TaskStatus, TaskComment, LogProvider, TaskProgress, TaskUpdateNotification, TodoItem, TodoUpdate, TodoProgress } from "../types.js";
-import type { Context } from "../context.js";
+import type { Workspace } from "../workspace.js";
 
-/** Path where tasks are persisted in Context */
+/** Path where tasks are persisted in Workspace */
 const TASKS_CONTEXT_PATH = '.hive/tasks.json';
 
 /** Serialized task state for persistence */
@@ -414,26 +414,26 @@ export class TaskManager {
   }
 
   /**
-   * Save tasks to Context (if provided)
+   * Save tasks to Workspace (if provided)
    */
-  saveToContext(context: Context | undefined, agentName?: string): void {
-    if (!context) return;
+  saveToWorkspace(workspace: Workspace | undefined, agentName?: string): void {
+    if (!workspace) return;
     try {
       const state = this.serialize();
-      context.write(TASKS_CONTEXT_PATH, state, agentName || 'task-manager');
+      workspace.write(TASKS_CONTEXT_PATH, state, agentName || 'task-manager');
     } catch {
-      // Silently ignore write errors (context may not support this path)
+      // Silently ignore write errors (workspace may not support this path)
     }
   }
 
   /**
-   * Restore tasks from Context (if available)
+   * Restore tasks from Workspace (if available)
    * Returns true if tasks were restored
    */
-  restoreFromContext(context: Context | undefined): boolean {
-    if (!context) return false;
+  restoreFromWorkspace(workspace: Workspace | undefined): boolean {
+    if (!workspace) return false;
     try {
-      const state = context.read<TaskManagerState>(TASKS_CONTEXT_PATH);
+      const state = workspace.read<TaskManagerState>(TASKS_CONTEXT_PATH);
       if (state && state.items && Array.isArray(state.items)) {
         this.restore(state);
         return true;
@@ -457,8 +457,8 @@ export interface TaskToolOptions {
   agentId?: string;
   /** Agent type for permission checks (defaults to CLAUDE_CODE_AGENT_TYPE env var) */
   agentType?: 'team-lead' | string;
-  /** Context for task persistence across __ask_user__ pauses */
-  context?: Context;
+  /** Workspace for task persistence across __ask_user__ pauses */
+  workspace?: Workspace;
 }
 
 /**
@@ -488,18 +488,18 @@ function canUpdateTask(task: TaskItem, options: TaskToolOptions): boolean {
 export type TodoToolOptions = TaskToolOptions;
 
 /**
- * Notify logger about task list changes and persist to context
+ * Notify logger about task list changes and persist to workspace
  */
 function notifyTaskUpdate(
   manager: TaskManager,
   action: 'create' | 'update' | 'delete' | 'list',
   options: TaskToolOptions
 ): void {
-  const { logger, agentName, context } = options;
+  const { logger, agentName, workspace } = options;
 
-  // Persist to context on mutations (not on list)
-  if (action !== 'list' && context) {
-    manager.saveToContext(context, agentName);
+  // Persist to workspace on mutations (not on list)
+  if (action !== 'list' && workspace) {
+    manager.saveToWorkspace(workspace, agentName);
   }
 
   if (logger?.onTaskUpdate) {

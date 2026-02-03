@@ -106,7 +106,7 @@ const tester = new RunTester({
 
   runOptions: {
     // Fresh context for each test
-    context: new Context({ strict: false }),
+    workspace: new Workspace({ strict: false }),
 
     // Custom conversation ID
     conversationId: 'test-run',
@@ -304,7 +304,7 @@ interface RunRecord {
 
 ```typescript
 // test/regression.ts
-import { Hive, ClaudeProvider, RunTester, Context } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, RunTester, Workspace } from '@alexnetrebskii/hive-agent'
 
 async function main() {
   const agent = new Hive({
@@ -319,7 +319,7 @@ async function main() {
   const tester = new RunTester({
     runsDir: './fixtures/runs',
     runOptions: {
-      context: new Context({ strict: false })
+      workspace: new Workspace({ strict: false })
     },
     afterEach: (result) => {
       // Log for CI visibility
@@ -350,7 +350,7 @@ npx tsx test/regression.ts
 
 3. **Use descriptive recording names** - Rename recordings to describe the scenario: `greeting.json`, `log_meal_chicken.json`
 
-4. **Reset state in beforeEach** - If using Context or external state, reset it before each test
+4. **Reset state in beforeEach** - If using Workspace or external state, reset it before each test
 
 5. **Keep recordings small** - Record specific scenarios, not entire conversations
 

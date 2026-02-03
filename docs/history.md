@@ -214,25 +214,25 @@ interface ToolResultBlock {
 }
 ```
 
-## History with Context
+## History with Workspace
 
-Combine history with shared context:
+Combine history with shared workspace:
 
 ```typescript
-const context = new Context()
+const workspace = new Workspace()
 
-// Load saved context data
-const savedContext = await db.collection('contexts').doc(userId).get()
-if (savedContext.exists) {
-  context.fromObject(savedContext.data())
+// Load saved workspace data
+const savedData = await db.collection('workspaces').doc(userId).get()
+if (savedData.exists) {
+  workspace.fromObject(savedData.data())
 }
 
-// Run with both history and context
+// Run with both history and workspace
 const result = await agent.run(message, {
   conversationId: `${userId}-${chatId}`,
-  context
+  workspace
 })
 
-// Save context after run
-await db.collection('contexts').doc(userId).set(context.toObject())
+// Save workspace after run
+await db.collection('workspaces').doc(userId).set(workspace.toObject())
 ```

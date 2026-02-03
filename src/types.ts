@@ -65,8 +65,8 @@ export interface ToolContext {
   remainingTokens: number
   conversationId?: string
   userId?: string
-  /** Context for tool/agent communication */
-  context?: import('./context.js').Context
+  /** Workspace for tool/agent communication */
+  workspace?: import('./workspace.js').Workspace
 }
 
 export interface Tool {
@@ -248,10 +248,10 @@ export interface RunOptions {
   history?: Message[]
 
   /**
-   * Context for tool/agent communication.
+   * Workspace for tool/agent communication.
    * Pre-populate before run, read results after run.
    */
-  context?: import('./context.js').Context
+  workspace?: import('./workspace.js').Workspace
 
   /**
    * AbortSignal for cancellation (e.g., from AbortController)

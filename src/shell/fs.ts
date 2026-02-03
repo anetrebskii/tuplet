@@ -7,6 +7,9 @@
 
 import type { VirtualFSInterface } from './types.js'
 
+export type VirtualFSChangeType = 'write' | 'delete'
+export type VirtualFSChangeHandler = (type: VirtualFSChangeType, path: string, content?: string) => void
+
 /**
  * Simple glob pattern matcher
  */
@@ -26,6 +29,7 @@ function matchGlob(path: string, pattern: string): boolean {
 export class VirtualFS implements VirtualFSInterface {
   private data: Map<string, string> = new Map()
   private directories: Set<string> = new Set(['/ctx', '/tmp', '/env'])
+  private onChange: VirtualFSChangeHandler | null = null
 
   constructor(initial?: Record<string, unknown>) {
     if (initial) {
@@ -33,6 +37,23 @@ export class VirtualFS implements VirtualFSInterface {
         const path = key.startsWith('/') ? key : `/ctx/${key}`
         this.write(path, typeof value === 'string' ? value : JSON.stringify(value, null, 2))
       }
+    }
+  }
+
+  /** Register a change handler. Called on every write/delete. */
+  setOnChange(handler: VirtualFSChangeHandler | null): void {
+    this.onChange = handler
+  }
+
+  /** Bulk load data without triggering onChange. Used by providers to hydrate cache. */
+  hydrate(data: Record<string, string>): void {
+    for (const [key, value] of Object.entries(data)) {
+      const normalized = this.normalizePath(key)
+      const parent = this.getParentDir(normalized)
+      if (parent !== '/') {
+        this.mkdir(parent)
+      }
+      this.data.set(normalized, value)
     }
   }
 
@@ -62,6 +83,7 @@ export class VirtualFS implements VirtualFSInterface {
     }
 
     this.data.set(normalized, content)
+    this.onChange?.('write', normalized, content)
   }
 
   delete(path: string): boolean {
@@ -70,16 +92,25 @@ export class VirtualFS implements VirtualFSInterface {
     // If directory, delete all children
     if (this.directories.has(normalized)) {
       const prefix = normalized + '/'
+      const deletedKeys: string[] = []
       for (const key of this.data.keys()) {
         if (key.startsWith(prefix)) {
-          this.data.delete(key)
+          deletedKeys.push(key)
         }
+      }
+      for (const key of deletedKeys) {
+        this.data.delete(key)
+        this.onChange?.('delete', key)
       }
       this.directories.delete(normalized)
       return true
     }
 
-    return this.data.delete(normalized)
+    const deleted = this.data.delete(normalized)
+    if (deleted) {
+      this.onChange?.('delete', normalized)
+    }
+    return deleted
   }
 
   exists(path: string): boolean {

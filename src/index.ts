@@ -111,7 +111,7 @@ export {
   subAgentsTable,
   questionHandlingSection,
   directToolsSection,
-  contextStorageSection,
+  workspaceStorageSection,
   rulesSection,
   taskExamplesSection,
   subAgentRoleSection,
@@ -122,7 +122,7 @@ export {
   // Builder types
   type SubAgentDef,
   type ToolDef,
-  type ContextPathDef,
+  type WorkspacePathDef,
   type TaskExample,
   type WorkflowStep,
   type OutputFormat,
@@ -168,18 +168,28 @@ export {
   type ConsoleTraceConfig
 } from './trace.js'
 
-// Context
+// Workspace
 export {
-  Context,
-  type ContextEntry,
-  type ContextListItem,
-  type ContextConfig,
+  Workspace,
+  type WorkspaceEntry,
+  type WorkspaceListItem,
+  type WorkspaceConfig,
+  type WorkspaceConfigExt,
   type PathConfig,
   type ValidatorFn,
   type ZodLike,
   type ValidationError,
   type WriteResult
-} from './context.js'
+} from './workspace.js'
+
+// Workspace Providers
+export {
+  type WorkspaceProvider,
+  type WorkspaceChange,
+  type WorkspaceChangeListener,
+  MemoryWorkspaceProvider,
+  FileWorkspaceProvider
+} from './providers/workspace/index.js'
 
 // Shell (Virtual FS for context)
 export {

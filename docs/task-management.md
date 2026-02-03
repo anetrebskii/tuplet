@@ -69,31 +69,31 @@ interface TaskComment {
 2. **Auto-progression**: Completing a task automatically starts the next unblocked pending task
 3. **Single active**: Setting a task to `in_progress` pauses any other active task
 4. **Blocked tasks**: Tasks with unresolved `blockedBy` dependencies won't auto-start
-5. **Context persistence**: When Context is provided, tasks auto-save to `.hive/tasks.json`
+5. **Workspace persistence**: When Workspace is provided, tasks auto-save to `.hive/tasks.json`
 
 ## Persistence
 
-Tasks are automatically persisted to Context (if provided) at `.hive/tasks.json`. This enables:
+Tasks are automatically persisted to Workspace (if provided) at `.hive/tasks.json`. This enables:
 
 - **Resume after `__ask_user__`**: When the agent pauses for user input, tasks are preserved
 - **Multi-turn conversations**: Task state persists across multiple `agent.run()` calls
-- **Shared state**: Sub-agents can access the same task list via shared Context
+- **Shared state**: Sub-agents can access the same task list via shared Workspace
 
 ```typescript
-// Tasks persist automatically when Context is provided
-const context = new Context({ paths: {} })
+// Tasks persist automatically when Workspace is provided
+const workspace = new Workspace({ paths: {} })
 
-const result = await agent.run('Create a task list', { context })
+const result = await agent.run('Create a task list', { workspace })
 // result.status === 'needs_input' (agent asks a question)
 
 // Later, when user responds - tasks are restored automatically
 const continued = await agent.run('User answer here', {
   history: result.history,
-  context  // Same context - tasks restored from .hive/tasks.json
+  workspace  // Same workspace - tasks restored from .hive/tasks.json
 })
 ```
 
-No manual setup required - persistence is automatic when Context is passed to `run()`.
+No manual setup required - persistence is automatic when Workspace is passed to `run()`.
 
 ## Dependencies
 

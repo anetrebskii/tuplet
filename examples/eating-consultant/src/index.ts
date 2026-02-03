@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -149,12 +149,12 @@ function createProgressLogger() {
     onTaskUpdate: showTaskUpdate,
     // Show tool inputs and outputs for debugging
     onToolCall: (toolName: string, params: unknown) => {
-      if (toolName.startsWith('context_')) {
+      if (toolName.startsWith('workspace_')) {
         console.log(`\n📥 ${toolName} input:`, JSON.stringify(params, null, 2))
       }
     },
     onToolResult: (toolName: string, result: { success: boolean; data?: unknown; error?: string }) => {
-      if (toolName.startsWith('context_')) {
+      if (toolName.startsWith('workspace_')) {
         const status = result.success ? '✓' : '✗'
         console.log(`📤 ${toolName} ${status}:`, JSON.stringify(result, null, 2))
       }
@@ -176,20 +176,20 @@ const mealPlannerOutputSchema = {
 const mealPlannerPrompt = new SubAgentBuilder()
   .role('a meal planning specialist')
   .task('Gather requirements and create a detailed meal plan.')
-  .addContextPath('user/preferences.json', 'User preferences with goal and restrictions')
-  .addContextPath('meals/today.json', 'Today\'s nutrition totals')
+  .addWorkspacePath('user/preferences.json', 'User preferences with goal and restrictions')
+  .addWorkspacePath('meals/today.json', 'Today\'s nutrition totals')
   // Enable todo tracking - AI creates own plan
   .useTodoTracking({
     exampleSteps: [
-      'Reading user preferences from context',
+      'Reading user preferences from workspace',
       'Asking user about calorie target',
       'Creating 5-day meal plan for weight loss',
-      'Saving plan to context'
+      'Saving plan to workspace'
     ]
   })
   // Questions to ask if info is missing
   .addQuestionStep('Gather Goal', {
-    condition: 'If goal is not in context and not provided',
+    condition: 'If goal is not in workspace and not provided',
     question: "What's your goal?",
     options: ['Weight loss', 'Muscle gain', 'Maintain weight', 'Eat healthier']
   })
@@ -262,9 +262,9 @@ const SYSTEM_PROMPT = new MainAgentBuilder()
   .role('a nutrition consultant')
   .description('You help users track meals, view nutrition progress, and plan their diet. You can search for food products in the OpenFoodFacts database, log meals with nutrition data, view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent.')
   .agents(subAgents)
-  .addContextPath('plan/current.json', 'Meal plans from meal_planner')
-  .addContextPath('user/preferences.json', 'User preferences { goal, restrictions[] }')
-  .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
+  .addWorkspacePath('plan/current.json', 'Meal plans from meal_planner')
+  .addWorkspacePath('user/preferences.json', 'User preferences { goal, restrictions[] }')
+  .addWorkspacePath('meals/today.json', 'Today\'s nutrition totals and logged meals')
   .addRules([
     'Search for foods and log meals directly to track what the user ate',
     'Delegate meal planning to the meal_planner sub-agent',
@@ -287,8 +287,8 @@ async function main() {
     maxTokens: 2000
   })
 
-  // Create context for agent communication with validation
-  const context = new Context({
+  // Create workspace for agent communication with validation
+  const workspace = new Workspace({
     strict: false,  // Allow any path (set to true to restrict to defined paths only)
     paths: {
       // Meal plan with schema validation
@@ -412,7 +412,7 @@ async function main() {
     const greeting = await agent.run('Start the conversation with a greeting.', {
       history,
       signal: currentController.signal,
-      context
+      workspace
     })
 
     stopEscHandler()
@@ -457,7 +457,7 @@ async function main() {
         const result = await agent.run(trimmed, {
           history,
           signal: currentController.signal,
-          context
+          workspace
         })
 
         stopEscHandler()
@@ -496,7 +496,7 @@ async function main() {
           const continuedResult = await agent.run(combinedAnswer, {
             history: currentResult.history,
             signal: currentController.signal,
-            context
+            workspace
           })
 
           stopEscHandler()
@@ -543,10 +543,10 @@ async function main() {
           }
         }
 
-        // Check if a plan was saved to context
-        const plan = context.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
+        // Check if a plan was saved to workspace
+        const plan = workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
         if (plan) {
-          console.log('\n📝 Plan saved to context:')
+          console.log('\n📝 Plan saved to workspace:')
           console.log(`  Title: ${plan.title || 'Meal Plan'}`)
           if (plan.goal) {
             console.log(`  Goal: ${plan.goal}`)
@@ -559,11 +559,11 @@ async function main() {
           }
         }
 
-        // Show all context entries if any exist
-        const contextItems = context.list()
-        if (contextItems.length > 0) {
-          console.log('\n📦 Context:')
-          for (const item of contextItems) {
+        // Show all workspace entries if any exist
+        const workspaceItems = workspace.list()
+        if (workspaceItems.length > 0) {
+          console.log('\n📦 Workspace:')
+          for (const item of workspaceItems) {
             console.log(`  ${item.path}: ${item.preview}`)
           }
         }

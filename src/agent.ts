@@ -1,7 +1,7 @@
 /**
  * Hive Agent
  *
- * Main agent class that orchestrates tool execution, sub-agents, and context management.
+ * Main agent class that orchestrates tool execution, sub-agents, and workspace management.
  */
 
 import type {
@@ -15,7 +15,7 @@ import type {
 import { ContextManager } from "./context-manager.js";
 import { executeLoop } from "./executor.js";
 import { TraceBuilder } from "./trace.js";
-import { Context } from "./context.js";
+import { Workspace } from "./workspace.js";
 import { createShellTool } from "./tools/shell.js";
 import {
   createAskUserTool,
@@ -96,7 +96,7 @@ export class Hive {
    */
   private getRunTools(
     taskManager: TaskManager,
-    context: Context,
+    workspace: Workspace,
     agentName?: string
   ): Tool[] {
     return [
@@ -104,9 +104,9 @@ export class Hive {
       ...createTaskTools(taskManager, {
         logger: this.config.logger,
         agentName,
-        context,
+        workspace,
       }),
-      createShellTool(context.getShell()),
+      createShellTool(workspace.getShell()),
     ];
   }
 
@@ -120,7 +120,7 @@ export class Hive {
       history: providedHistory,
       signal,
       shouldContinue,
-      context,
+      workspace,
     } = options;
 
     // Load history from repository or use provided
@@ -200,20 +200,21 @@ export class Hive {
       messages.push({ role: "user", content: message });
     }
 
-    // Ensure context always exists (create default if not provided)
-    const ctx = context ?? new Context();
+    // Ensure workspace always exists (create default if not provided)
+    const ws = workspace ?? new Workspace();
+    await ws.init();
 
-    // Create task manager for this run and restore from context if available
+    // Create task manager for this run and restore from workspace if available
     // This preserves task state across __ask_user__ pauses
     const taskManager = new TaskManager();
-    taskManager.restoreFromContext(ctx);
+    taskManager.restoreFromWorkspace(ws);
 
     // Create tool context
     const toolContext: ToolContext = {
       remainingTokens: this.contextManager.getRemainingTokens(),
       conversationId,
       userId,
-      context: ctx,
+      workspace: ws,
     };
 
     // Create or use existing trace builder
@@ -236,7 +237,7 @@ export class Hive {
     const result = await executeLoop(
       {
         systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(taskManager, ctx, this.config.agentName),
+        tools: this.getRunTools(taskManager, ws, this.config.agentName),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,

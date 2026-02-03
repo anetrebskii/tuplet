@@ -7,7 +7,7 @@
 import type {
   SubAgentDef,
   ToolDef,
-  ContextPathDef,
+  WorkspacePathDef,
   TaskExample,
   WorkflowStep,
   OutputFormat,
@@ -135,12 +135,12 @@ export function directToolsSection(tools: ToolDef[]): string {
 }
 
 /**
- * Generate context storage section
+ * Generate workspace storage section
  */
-export function contextStorageSection(paths: ContextPathDef[]): string {
+export function workspaceStorageSection(paths: WorkspacePathDef[]): string {
   if (paths.length === 0) return ''
 
-  const lines = ['## Context Storage', '']
+  const lines = ['## Workspace Storage', '']
   for (const path of paths) {
     lines.push(`- ${path.path} - ${path.description}`)
   }

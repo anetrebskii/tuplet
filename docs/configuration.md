@@ -62,7 +62,7 @@ interface RunOptions {
   history?: Message[]           // Manual history management
 
   // Shared data
-  context?: Context             // Shared context for tools/agents
+  workspace?: Workspace         // Shared workspace for tools/agents
 
   // Cancellation
   signal?: AbortSignal          // AbortController signal
@@ -79,7 +79,7 @@ import {
   ConsoleLogger,
   ConsoleTraceProvider,
   MemoryRepository,
-  Context
+  Workspace
 } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
@@ -135,7 +135,7 @@ const agent = new Hive({
 ## Example: Run with Options
 
 ```typescript
-const context = new Context({
+const workspace = new Workspace({
   paths: {
     'result/data.json': { type: 'object', required: ['status'] }
   }
@@ -146,7 +146,7 @@ const controller = new AbortController()
 const result = await agent.run('Analyze this data', {
   conversationId: 'user-123-chat-456',
   userId: 'user-123',
-  context,
+  workspace,
   signal: controller.signal
 })
 ```
@@ -314,7 +314,7 @@ When a sub-agent creates tasks:
   1. 🔄 Read user preferences
   2. ⬜ Ask about calorie target
   3. ⬜ Create meal plan (blocked by: 1, 2)
-  4. ⬜ Save plan to context (blocked by: 3)
+  4. ⬜ Save plan to workspace (blocked by: 3)
 
 [meal_planner] Task update:
   Progress: 1/4
@@ -322,7 +322,7 @@ When a sub-agent creates tasks:
   1. ✅ Read user preferences
   2. 🔄 Ask about calorie target
   3. ⬜ Create meal plan (blocked by: 2)
-  4. ⬜ Save plan to context (blocked by: 3)
+  4. ⬜ Save plan to workspace (blocked by: 3)
 ```
 
 Main agent updates show `agentName: undefined`:

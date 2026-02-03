@@ -32,7 +32,7 @@ See [Quick Start Guide](./quickstart.md) for more examples.
 | [Quick Start](./quickstart.md) | Installation, basic agent, first tool |
 | [Tools](./tools.md) | Creating custom tools, parameters, validation |
 | [Sub-Agents](./sub-agents.md) | Delegating tasks to specialized agents |
-| [Context](./context.md) | Virtual file system for sharing data |
+| [Workspace](./workspace.md) | Virtual file system for sharing data |
 | [Configuration](./configuration.md) | All configuration options |
 
 ### Providers

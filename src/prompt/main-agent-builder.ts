@@ -5,7 +5,7 @@
  */
 
 import type {
-  ContextPathDef,
+  WorkspacePathDef,
   TaskExample,
   MainAgentPromptConfig
 } from './types.js'
@@ -17,7 +17,7 @@ import {
   subAgentParametersSection,
   questionHandlingSection,
   directToolsSection,
-  contextStorageSection,
+  workspaceStorageSection,
   rulesSection,
   taskExamplesSection
 } from './templates.js'
@@ -26,7 +26,7 @@ export class MainAgentBuilder {
   private config: MainAgentPromptConfig = {
     subAgents: [],
     directTools: [],
-    contextPaths: [],
+    workspacePaths: [],
     rules: [],
     examples: [],
     customSections: []
@@ -105,18 +105,18 @@ export class MainAgentBuilder {
   }
 
   /**
-   * Add a context path definition
+   * Add a workspace path definition
    */
-  addContextPath(path: string, description: string): this {
-    this.config.contextPaths!.push({ path, description })
+  addWorkspacePath(path: string, description: string): this {
+    this.config.workspacePaths!.push({ path, description })
     return this
   }
 
   /**
-   * Add multiple context paths at once
+   * Add multiple workspace paths at once
    */
-  addContextPaths(paths: ContextPathDef[]): this {
-    this.config.contextPaths!.push(...paths)
+  addWorkspacePaths(paths: WorkspacePathDef[]): this {
+    this.config.workspacePaths!.push(...paths)
     return this
   }
 
@@ -226,7 +226,7 @@ export class MainAgentBuilder {
         sections.push(`- **${agent.name}**: ${agent.description}`)
       }
       sections.push('')
-      sections.push('Use **explore** before acting when you need to understand what data exists in context.')
+      sections.push('Use **explore** before acting when you need to understand what data exists in workspace.')
       sections.push('Use **plan** before complex or multi-step tasks to design an approach first.')
     }
 
@@ -245,10 +245,10 @@ export class MainAgentBuilder {
       sections.push(directToolsSection(this.config.directTools))
     }
 
-    // Context storage
-    if (this.config.contextPaths && this.config.contextPaths.length > 0) {
+    // Workspace storage
+    if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {
       sections.push('')
-      sections.push(contextStorageSection(this.config.contextPaths))
+      sections.push(workspaceStorageSection(this.config.workspacePaths))
     }
 
     // Task examples
@@ -268,7 +268,7 @@ export class MainAgentBuilder {
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
       'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user first using __ask_user__',
-      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in context, ask the user',
+      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
       'If a tool call fails, analyze the error and try a different approach instead of giving up',
     ]
     const allRules = [...defaultRules, ...(this.config.rules || [])]
@@ -285,7 +285,7 @@ export class MainAgentBuilder {
     this.config = {
       subAgents: [],
       directTools: [],
-      contextPaths: [],
+      workspacePaths: [],
       rules: [],
       examples: [],
       customSections: []

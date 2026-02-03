@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config'
-import { Hive, ClaudeProvider, RunTester, Context, type TestResult } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, RunTester, Workspace, type TestResult } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools, mainAgentTools } from './tools.js'
 
 // System prompt (same as main app)
@@ -19,16 +19,16 @@ const SYSTEM_PROMPT = `You are a friendly nutrition consultant powered by real f
 3. **Meal Planning** - Create meal plans, use todo list to track progress
 4. **Give Advice** - Provide nutrition guidance based on intake
 
-## Context Storage
+## Workspace Storage
 
-Save important data to context:
+Save important data to workspace:
 
 - plan/current.json - Meal plans { title, goal, dailyCalories, days[] }
 - meals/today.json - Today's nutrition { totalCalories, totalProtein, totalCarbs, totalFat, meals[] }
 - user/preferences.json - User preferences { goal, restrictions[] }
 - notes/advice.md - Nutritional recommendations (markdown)
 
-Always save meal plans and user preferences to context.
+Always save meal plans and user preferences to workspace.
 
 ## Workflow
 
@@ -43,7 +43,7 @@ When user asks for a meal plan:
 1. Ask clarifying questions: goal, daily calories, restrictions
 2. Create todo list to track each day
 3. Write out the full plan with meals and calories
-4. Save plan to context
+4. Save plan to workspace
 
 ## Rules
 
@@ -115,15 +115,15 @@ async function main() {
   // Create tester
   const tester = new RunTester({
     runsDir: './runs',
-    // Pass fresh context for each test
+    // Pass fresh workspace for each test
     beforeEach: () => {
-      console.log('  Setting up test context...')
+      console.log('  Setting up test workspace...')
     },
     afterEach: (result: TestResult) => {
       console.log(`  Test ${result.runId}: ${result.passed ? 'PASS' : 'FAIL'} (${result.durationMs}ms)`)
     },
     runOptions: {
-      context: new Context({ strict: false })
+      workspace: new Workspace({ strict: false })
     }
   })
 

@@ -1,19 +1,19 @@
 /**
- * Context - A virtual filesystem for agent communication
+ * Workspace - A virtual filesystem for agent communication
  *
- * Wraps VirtualFS from the shell module. AI agents interact with context
+ * Wraps VirtualFS from the shell module. AI agents interact with workspace
  * using bash-like commands (cat, echo, ls, grep, etc.) through the shell.
  *
  * Usage:
  * ```typescript
- * const context = new Context({
+ * const workspace = new Workspace({
  *   paths: {
  *     'user/preferences.json': { value: { theme: 'dark' } }
  *   }
  * })
  *
  * // Get the shell for AI to use
- * const shell = context.getShell()
+ * const shell = workspace.getShell()
  *
  * // AI uses bash commands:
  * // cat /ctx/user/preferences.json
@@ -22,7 +22,7 @@
  * // grep "theme" /ctx/
  *
  * // Read results after run
- * const prefs = context.read('/ctx/user/preferences.json')
+ * const prefs = workspace.read('/ctx/user/preferences.json')
  * ```
  */
 
@@ -30,8 +30,9 @@ import type { JSONSchema } from './types.js'
 import { VirtualFS } from './shell/fs.js'
 import { Shell } from './shell/shell.js'
 import type { ShellConfig } from './shell/types.js'
+import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
 
-export interface ContextEntry {
+export interface WorkspaceEntry {
   value: unknown
   createdAt: number
   updatedAt: number
@@ -39,7 +40,7 @@ export interface ContextEntry {
   writtenBy?: string
 }
 
-export interface ContextListItem {
+export interface WorkspaceListItem {
   path: string
   updatedAt: number
   writtenBy?: string
@@ -68,7 +69,7 @@ export interface PathConfig {
   description?: string
 }
 
-export interface ContextConfig {
+export interface WorkspaceConfig {
   /**
    * Strict mode: only allow writing to defined paths.
    * - true: writes to undefined paths will fail
@@ -95,7 +96,7 @@ export interface ContextConfig {
    *
    * @example
    * ```typescript
-   * const context = new Context({
+   * const workspace = new Workspace({
    *   strict: true,
    *   paths: {
    *     // Format validation only
@@ -141,21 +142,26 @@ interface ValidatorEntry {
   description?: string
 }
 
-export interface ContextConfigExt extends ContextConfig {
+export interface WorkspaceConfigExt extends WorkspaceConfig {
   /** Shell configuration for HTTP requests */
   shell?: ShellConfig
+  /** Async persistence provider (sits behind VirtualFS) */
+  provider?: WorkspaceProvider
 }
 
 /**
- * Context provides a virtual filesystem for agent communication.
+ * Workspace provides a virtual filesystem for agent communication.
  * Wraps VirtualFS and provides Shell access for AI to use bash commands.
  */
-export class Context {
+export class Workspace {
   private fs: VirtualFS
   private shell: Shell
   private validators: Map<string, ValidatorEntry> = new Map()
   private definedPaths: Set<string> = new Set()
   private strict: boolean = false
+  private provider: WorkspaceProvider | undefined
+  private initialized: boolean = false
+  private unsubscribe: (() => void) | undefined
 
   /** Extension to type mapping */
   private static readonly EXT_MAP: Record<string, ValidatorType> = {
@@ -169,13 +175,26 @@ export class Context {
     '.validate': 'validate'
   }
 
-  constructor(config?: ContextConfigExt) {
+  constructor(config?: WorkspaceConfigExt) {
     this.strict = config?.strict ?? false
     this.fs = new VirtualFS()
     this.shell = new Shell({
       ...config?.shell,
       fs: this.fs // Share VirtualFS instance with shell
     })
+    this.provider = config?.provider
+
+    // Wire onChange to forward writes/deletes to provider (fire-and-forget)
+    if (this.provider) {
+      const provider = this.provider
+      this.fs.setOnChange((type, path, content) => {
+        if (type === 'write') {
+          provider.write(path, content!).catch(() => {})
+        } else if (type === 'delete') {
+          provider.delete(path).catch(() => {})
+        }
+      })
+    }
 
     if (config?.paths) {
       for (const [key, value] of Object.entries(config.paths)) {
@@ -197,6 +216,54 @@ export class Context {
    */
   getFS(): VirtualFS {
     return this.fs
+  }
+
+  /**
+   * Initialize the workspace provider.
+   * Loads persisted data into VirtualFS and sets up real-time subscriptions.
+   * No-op when no provider is configured (backward compatible).
+   */
+  async init(): Promise<void> {
+    if (this.initialized || !this.provider) return
+    this.initialized = true
+
+    // Load persisted data into VirtualFS (without triggering onChange)
+    const data = await this.provider.load()
+    this.fs.hydrate(data)
+
+    // Subscribe to external changes if provider supports it
+    if (this.provider.subscribe) {
+      this.unsubscribe = this.provider.subscribe((changes: WorkspaceChange[]) => {
+        // Temporarily disable onChange to prevent feedback loop
+        const prevHandler = this.fs['onChange']
+        this.fs.setOnChange(null)
+        try {
+          for (const change of changes) {
+            if (change.type === 'write' && change.content !== undefined) {
+              this.fs.write(change.path, change.content)
+            } else if (change.type === 'delete') {
+              this.fs.delete(change.path)
+            }
+          }
+        } finally {
+          this.fs.setOnChange(prevHandler)
+        }
+      })
+    }
+  }
+
+  /**
+   * Dispose the workspace provider.
+   * Unsubscribes, flushes pending writes, and disposes the provider.
+   */
+  async dispose(): Promise<void> {
+    if (!this.provider) return
+
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+
+    await this.provider.flush?.()
+    await this.provider.dispose?.()
   }
 
   /**
@@ -281,7 +348,7 @@ export class Context {
 
   /** Parse path and extension */
   private parsePathExt(key: string): { path: string; ext: ValidatorType | null } {
-    for (const [suffix, type] of Object.entries(Context.EXT_MAP)) {
+    for (const [suffix, type] of Object.entries(Workspace.EXT_MAP)) {
       if (key.endsWith(suffix)) {
         return { path: key.slice(0, -suffix.length), ext: type }
       }
@@ -305,7 +372,7 @@ export class Context {
   }
 
   /**
-   * Write a value to the context at the given path
+   * Write a value to the workspace at the given path
    *
    * @param path - Dot-separated path (e.g., 'meals.today', 'user.preferences')
    * @param value - Any JSON-serializable value
@@ -587,7 +654,7 @@ export class Context {
   }
 
   /**
-   * Read a value from the context
+   * Read a value from the workspace
    *
    * @param path - Path to read from (with or without /ctx/ prefix)
    * @returns The value, or undefined if not found
@@ -605,7 +672,7 @@ export class Context {
   }
 
   /**
-   * Check if a path exists in the context
+   * Check if a path exists in the workspace
    */
   has(path: string): boolean {
     const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
@@ -613,7 +680,7 @@ export class Context {
   }
 
   /**
-   * Delete a path from the context
+   * Delete a path from the workspace
    */
   delete(path: string): boolean {
     const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
@@ -623,13 +690,13 @@ export class Context {
   /**
    * List all paths, optionally filtered by prefix
    */
-  list(prefix?: string): ContextListItem[] {
+  list(prefix?: string): WorkspaceListItem[] {
     const fsPrefix = prefix
       ? (prefix.startsWith('/ctx/') ? prefix : `/ctx/${prefix}`)
       : '/ctx/'
 
     const files = this.fs.glob(fsPrefix + '**/*')
-    const items: ContextListItem[] = []
+    const items: WorkspaceListItem[] = []
 
     for (const path of files) {
       if (this.fs.isDirectory(path)) continue
@@ -666,7 +733,7 @@ export class Context {
   }
 
   /**
-   * Clear all data from the context
+   * Clear all data from the workspace
    */
   clear(): void {
     this.fs.delete('/ctx')
@@ -727,8 +794,8 @@ export class Context {
   }
 }
 
-// Note: Context tools (context_ls, context_read, context_write) have been removed.
-// AI agents now use shell commands to interact with context:
+// Note: Workspace tools (context_ls, context_read, context_write) have been removed.
+// AI agents now use shell commands to interact with workspace:
 //   ls /ctx/           - list context
 //   cat /ctx/file.json - read from context
 //   echo '...' > /ctx/file.json - write to context

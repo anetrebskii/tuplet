@@ -8,7 +8,7 @@
 export type {
   SubAgentDef,
   ToolDef,
-  ContextPathDef,
+  WorkspacePathDef,
   TaskExample,
   WorkflowStep,
   OutputFormat,
@@ -26,7 +26,7 @@ export {
   subAgentsTable,
   questionHandlingSection,
   directToolsSection,
-  contextStorageSection,
+  workspaceStorageSection,
   rulesSection,
   taskExamplesSection,
   subAgentRoleSection,

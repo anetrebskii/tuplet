@@ -47,7 +47,7 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 
 ## Usage by category
 
-**Context (read/write):**
+**Workspace (read/write):**
 - \`cat /ctx/data.json\` — read file
 - \`echo '{"name":"John"}' > /ctx/user.json\` — write file
 - \`head -n 10 /ctx/log.txt\` / \`tail -n 5 /ctx/log.txt\` — partial reads
