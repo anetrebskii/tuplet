@@ -106,7 +106,7 @@ export interface SubAgentConfig {
   maxIterations?: number
   /**
    * Input schema for structured parameters passed to this agent.
-   * If defined, the __task__ tool will require these parameters instead of a free-form prompt.
+   * If defined, the __sub_agent__ tool will require these parameters instead of a free-form prompt.
    * The agent receives these as JSON in its initial message.
    */
   inputSchema?: JSONSchema

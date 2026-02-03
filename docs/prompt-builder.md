@@ -543,7 +543,7 @@ const nutritionPrompt = new SubAgentBuilder()
 You are {role}. {description}
 
 ## Your Role
-1. **Delegate** - Call __task__ tool to spawn sub-agents
+1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents
 2. **Relay questions** - When sub-agent needs input, call __ask_user__ tool
 3. **Present results** - After sub-agent completes, output a text message
 

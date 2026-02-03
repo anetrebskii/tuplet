@@ -35,7 +35,7 @@ export type CreateSubHive = (config: HiveConfig) => {
 };
 
 /**
- * Build description for agent in __task__ tool
+ * Build description for agent in __sub_agent__ tool
  */
 function buildAgentDescription(agent: SubAgentConfig): string {
   let desc = `- **${agent.name}**: ${agent.description}`;
@@ -111,7 +111,7 @@ function createSubLogger(
 }
 
 /**
- * Create the __task__ tool for spawning sub-agents
+ * Create the __sub_agent__ tool for spawning sub-agents
  */
 export function createTaskTool(
   context: TaskToolContext,
@@ -152,7 +152,7 @@ export function createTaskTool(
     }
   }
 
-  const toolName = "__task__";
+  const toolName = "__sub_agent__";
   return {
     name: toolName,
     description: `The ${toolName} tool activates specialized agents designed to autonomously execute complex operations. Each agent variant possesses distinct capabilities and has access to specific tools.
@@ -195,7 +195,7 @@ Day 5: Meiji Shrine, Harajuku, departure preparation
 Since a detailed travel plan has been created, now deploy the travel-planner agent to add specific restaurant recommendations, booking details, and transportation information
 </commentary>
 assistant: Let me now employ the travel-planner agent to enhance this itinerary with detailed logistics
-assistant: Invokes the __task__ tool to activate the travel-planner agent
+assistant: Invokes the __sub_agent__ tool to activate the travel-planner agent
 </example>
 
 <example>
@@ -203,7 +203,7 @@ user: "Hello"
 <commentary>
 The user has initiated a greeting, so deploy the welcome-handler agent to provide a friendly response
 </commentary>
-assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
+assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler agent"
 </example>
 `,
 

@@ -21,7 +21,7 @@ import type {
   PendingQuestion
 } from './types.js'
 import { ContextManager } from './context-manager.js'
-import { TaskManager } from './tools/todo.js'
+import { TaskManager } from './tools/tasks.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 
@@ -115,7 +115,7 @@ async function executeTool(
     progressMessage = 'Checking tasks...'
   } else if (tool.name === 'TaskGet') {
     progressMessage = 'Getting task details...'
-  } else if (tool.name === '__task__') {
+  } else if (tool.name === '__sub_agent__') {
     const agent = (params as { agent?: string }).agent
     progressMessage = `Delegating to ${agent}...`
   }
@@ -143,16 +143,20 @@ async function executeTool(
         logger?.debug(`[Tool: ${tool.name}] Result data: ${truncateForLog(result.data)}`)
       }
     } else {
-      logger?.debug(`[Tool: ${tool.name}] Error: ${result.error}`)
+      logger?.warn(`[Tool: ${tool.name}] Error: ${result.error}`)
     }
 
     // Progress: tool completed (with result context)
     let completionMessage = `${tool.name} completed`
-    const isTaskTool = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name)
-    if (isTaskTool && result.success && result.data) {
-      const data = result.data as { message?: string }
-      if (data.message) {
-        completionMessage = data.message
+    if (!result.success) {
+      completionMessage = `${tool.name} failed: ${result.error}`
+    } else {
+      const isTaskTool = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name)
+      if (isTaskTool && result.data) {
+        const data = result.data as { message?: string }
+        if (data.message) {
+          completionMessage = data.message
+        }
       }
     }
 

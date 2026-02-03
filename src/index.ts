@@ -145,7 +145,7 @@ export {
   formatTodoList,
   createTodoTool,
   type TodoToolOptions
-} from './tools/todo.js'
+} from './tools/tasks.js'
 
 // Tracing
 export {
@@ -171,7 +171,6 @@ export {
 // Context
 export {
   Context,
-  createContextTools,
   type ContextEntry,
   type ContextListItem,
   type ContextConfig,
@@ -181,6 +180,18 @@ export {
   type ValidationError,
   type WriteResult
 } from './context.js'
+
+// Shell (Virtual FS for context)
+export {
+  Shell,
+  VirtualFS,
+  type ShellConfig,
+  type ShellResult,
+  type CommandHandler,
+  type CommandHelp,
+  type CommandFlag,
+  type CommandExample
+} from './shell/index.js'
 
 // Dataset (Run Recording, Replay & Testing)
 export {

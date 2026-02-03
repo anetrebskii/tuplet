@@ -15,10 +15,11 @@ import type {
 import { ContextManager } from "./context-manager.js";
 import { executeLoop } from "./executor.js";
 import { TraceBuilder } from "./trace.js";
-import { Context, createContextTools } from "./context.js";
+import { Context } from "./context.js";
+import { createShellTool } from "./tools/shell.js";
 import {
   createAskUserTool,
-  createTaskTool,
+  createTaskTool as createSubAgentTool,
   TaskManager,
   createTaskTools,
 } from "./tools/index.js";
@@ -30,7 +31,7 @@ export class Hive {
   readonly config: HiveConfig;
   private contextManager: ContextManager;
   private tools: Tool[];
-  /** Current trace builder (set during run, used by __task__ tool) */
+  /** Current trace builder (set during run, used by __sub_agent__ tool) */
   private currentTraceBuilder?: TraceBuilder;
 
   constructor(config: HiveConfig) {
@@ -54,10 +55,10 @@ export class Hive {
       this.tools.push(createAskUserTool());
     }
 
-    // Add __task__ tool if sub-agents are defined
+    // Add __sub_agent__ tool if sub-agents are defined
     if (config.agents && config.agents.length > 0) {
       this.tools.push(
-        createTaskTool(
+        createSubAgentTool(
           {
             config: this.config,
             getCurrentTraceBuilder: () => this.getCurrentTraceBuilder(),
@@ -70,7 +71,7 @@ export class Hive {
   }
 
   /**
-   * Get the current trace builder (used by __task__ tool for sub-agent tracing)
+   * Get the current trace builder (used by __sub_agent__ tool for sub-agent tracing)
    */
   getCurrentTraceBuilder(): TraceBuilder | undefined {
     return this.currentTraceBuilder;
@@ -88,24 +89,18 @@ export class Hive {
    */
   private getRunTools(
     taskManager: TaskManager,
-    context?: Context,
+    context: Context,
     agentName?: string
   ): Tool[] {
-    const tools = [
+    return [
       ...this.tools,
       ...createTaskTools(taskManager, {
         logger: this.config.logger,
         agentName,
-        context, // Enable task persistence across __ask_user__ pauses
+        context,
       }),
+      createShellTool(context.getShell()),
     ];
-
-    // Add context tools if Context is provided
-    if (context) {
-      tools.push(...createContextTools(context, agentName));
-    }
-
-    return tools;
   }
 
   /**
@@ -198,19 +193,20 @@ export class Hive {
       messages.push({ role: "user", content: message });
     }
 
+    // Ensure context always exists (create default if not provided)
+    const ctx = context ?? new Context();
+
     // Create task manager for this run and restore from context if available
     // This preserves task state across __ask_user__ pauses
     const taskManager = new TaskManager();
-    if (context) {
-      taskManager.restoreFromContext(context);
-    }
+    taskManager.restoreFromContext(ctx);
 
     // Create tool context
     const toolContext: ToolContext = {
       remainingTokens: this.contextManager.getRemainingTokens(),
       conversationId,
       userId,
-      context,
+      context: ctx,
     };
 
     // Create or use existing trace builder
@@ -226,14 +222,14 @@ export class Hive {
           )
         : undefined);
 
-    // Store trace builder for __task__ tool to access
+    // Store trace builder for __sub_agent__ tool to access
     this.setCurrentTraceBuilder(traceBuilder);
 
     // Execute the agent loop
     const result = await executeLoop(
       {
         systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(taskManager, context, this.config.agentName),
+        tools: this.getRunTools(taskManager, ctx, this.config.agentName),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,

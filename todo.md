@@ -11,3 +11,6 @@
 - [x] Review prompts and check how else it should improve SDK? What other features should appear based on the prompts?
 - [x] Sub-agents should not user main agent history, and vise versa. 
 
+
+- [ ] Migrate to tasks from todo. Save tasks in the context.
+- [ ] Emulate bash 

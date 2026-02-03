@@ -21,13 +21,13 @@ const agent = new Hive({
   llm: provider
 })
 
-// Agent can now use __task__ tool to delegate to researcher
+// Agent can now use __sub_agent__ tool to delegate to researcher
 const result = await agent.run('Research the latest AI developments')
 ```
 
 ## How It Works
 
-1. Main agent decides to delegate using the `__task__` tool
+1. Main agent decides to delegate using the `__sub_agent__` tool
 2. Sub-agent runs with its own system prompt and tools
 3. Sub-agent returns summary (and optionally structured data)
 4. Main agent continues with the result
@@ -109,7 +109,7 @@ const agent = new Hive({
 Main agent calls sub-agent with structured input:
 
 ```
-__task__({
+__sub_agent__({
   agent: "nutrition_counter",
   food: "pasta",
   portionGrams: 250,

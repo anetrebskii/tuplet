@@ -181,7 +181,7 @@ export class MainAgentBuilder {
       sections.push('')
       sections.push('## Your Role')
       sections.push('')
-      sections.push('1. **Delegate** - Call __task__ tool to spawn sub-agents')
+      sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
       sections.push('2. **Relay questions** - When sub-agent needs input, call __ask_user__ tool')
       sections.push('3. **Present results** - After sub-agent completes, you MUST output a text message to the user')
       sections.push('')
@@ -239,11 +239,15 @@ export class MainAgentBuilder {
       sections.push(section.content)
     }
 
-    // Rules (always at the end)
-    if (this.config.rules && this.config.rules.length > 0) {
-      sections.push('')
-      sections.push(rulesSection(this.config.rules))
-    }
+    // Rules (always at the end): combine default rules with user rules
+    const defaultRules = [
+      'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user first using __ask_user__',
+      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in context, ask the user',
+      'If a tool call fails, analyze the error and try a different approach instead of giving up',
+    ]
+    const allRules = [...defaultRules, ...(this.config.rules || [])]
+    sections.push('')
+    sections.push(rulesSection(allRules))
 
     return sections.join('\n')
   }

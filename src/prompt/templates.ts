@@ -196,7 +196,10 @@ export function inputParametersSection(): string {
 ⚠️ IMPORTANT: Check these sources FIRST before using __ask_user__:
 
 1. **Check your input parameters** - values like goal, dailyCalories, days may already be provided
-2. **Check context** - use context_ls and context_read to find stored information
+2. **Check context** - use shell commands to find stored information:
+   - \`ls /ctx/\` - list what's in context
+   - \`cat /ctx/path/file.json\` - read context data
+   - \`grep "keyword" /ctx/**/*.json\` - search context
 3. **Only ask if truly missing** - use __ask_user__ ONLY when info is not in input or context
 
 NEVER ask for information that was already provided or exists in context.`

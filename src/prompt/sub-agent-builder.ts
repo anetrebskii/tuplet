@@ -330,9 +330,10 @@ export class SubAgentBuilder {
       sections.push('')
       sections.push('⚠️ ALWAYS check context BEFORE asking questions or starting work:')
       sections.push('')
-      sections.push('1. Use **context_ls** to see what data exists')
-      sections.push('2. Use **context_read** to read relevant paths')
-      sections.push('3. Use information from context instead of asking the user')
+      sections.push('1. Use `ls /ctx/` to see what data exists')
+      sections.push('2. Use `cat /ctx/path/file.json` to read relevant paths')
+      sections.push('3. Use `grep "keyword" /ctx/**/*.json` to search context')
+      sections.push('4. Use information from context instead of asking the user')
 
       if (this.config.contextPaths && this.config.contextPaths.length > 0) {
         sections.push('')
@@ -364,11 +365,15 @@ export class SubAgentBuilder {
       sections.push(guidelinesSection(this.config.guidelines))
     }
 
-    // Constraints section
-    if (this.config.constraints && this.config.constraints.length > 0) {
-      sections.push('')
-      sections.push(constraintsSection(this.config.constraints))
-    }
+    // Constraints section: combine default constraints with user constraints
+    const defaultConstraints = [
+      'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user via __ask_user__',
+      'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in context, ask the user',
+      'If a tool call fails, analyze the error and try a different approach instead of giving up',
+    ]
+    const allConstraints = [...defaultConstraints, ...(this.config.constraints || [])]
+    sections.push('')
+    sections.push(constraintsSection(allConstraints))
 
     // Examples section
     if (this.config.examples && this.config.examples.length > 0) {

@@ -2,13 +2,13 @@
  * Eating Consultant - Demo Terminal App
  *
  * An AI-powered nutrition assistant using OpenFoodFacts API.
- * Demonstrates sub-agent architecture with a Nutrition Counter agent.
+ * Main agent handles meals directly; delegates meal planning to a sub-agent.
  */
 
 import 'dotenv/config'
 import * as readline from 'readline'
 import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
-import { nutritionCounterTools, mainAgentTools, searchFoodTool, logMealTool } from './tools.js'
+import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
 function getOptionLabel(opt: string | QuestionOption): string {
@@ -162,118 +162,6 @@ function createProgressLogger() {
   }
 }
 
-// Define output schema for nutrition counter (used by both builder and config)
-const nutritionOutputSchema = {
-  type: 'object' as const,
-  properties: {
-    logged: { type: 'boolean', description: 'Whether the food was successfully logged' },
-    food: { type: 'string', description: 'Name of the food that was logged' },
-    calories: { type: 'number', description: 'Total calories for the portion' },
-    protein: { type: 'number', description: 'Protein in grams' },
-    carbs: { type: 'number', description: 'Carbs in grams' },
-    fat: { type: 'number', description: 'Fat in grams' }
-  },
-  required: ['logged', 'food', 'calories'] as string[]
-}
-
-// Build nutrition counter prompt using SubAgentBuilder (type-safe)
-const nutritionCounterPrompt = new SubAgentBuilder()
-  .role('a Nutrition Counter assistant')
-  .task('Log food the user ate.')
-  .tools(nutritionCounterTools)  // Auto-documents available tools
-  .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
-  .addQuestionStep('Check for Missing Information', {
-    condition: 'If portionGrams is missing or 0',
-    question: 'What was the portion size?',
-    options: ['Small (150g)', 'Medium (250g)', 'Large (350g)']
-  })
-  .addQuestionStep('Ask for Meal Type', {
-    condition: 'If meal type is missing',
-    question: 'Which meal was this?',
-    options: ['Breakfast', 'Lunch', 'Dinner', 'Snack']
-  })
-  .addToolsStep('Search and Log', [
-    { tool: searchFoodTool, purpose: 'find nutrition data' },
-    { tool: logMealTool, purpose: 'log with nutrition per 100g scaled to portion' }
-  ])
-  .outputSchema(nutritionOutputSchema)  // Uses same schema as config
-  .build()
-
-// Nutrition Counter sub-agent - specialized in food lookup and tracking
-const nutritionCounterAgent: SubAgentConfig = {
-  name: 'nutrition_counter',
-  description: 'Specialized agent for logging food the user ate.',
-  systemPrompt: nutritionCounterPrompt,
-
-  inputSchema: {
-    type: 'object',
-    properties: {
-      food: {
-        type: 'string',
-        description: 'Food item to log (e.g., "pasta", "chicken breast", "apple")'
-      },
-      portionGrams: {
-        type: 'number',
-        description: 'Portion size in grams (agent will ask if not provided)'
-      },
-      meal: {
-        type: 'string',
-        description: 'Meal type: breakfast, lunch, dinner, or snack (agent will ask if not provided)'
-      }
-    },
-    required: ['food']
-  },
-
-  outputSchema: nutritionOutputSchema,  // Reuses same schema
-
-  tools: nutritionCounterTools
-}
-
-// Define output schema for greeter
-const greeterOutputSchema = {
-  type: 'object' as const,
-  properties: {
-    greeting: { type: 'string', description: 'The greeting message to display' }
-  },
-  required: ['greeting'] as string[]
-}
-
-// Build greeter prompt using SubAgentBuilder
-const greeterPrompt = new SubAgentBuilder()
-  .role('a friendly greeter for a nutrition consultant app')
-  .task('Generate a warm, welcoming greeting for the user.')
-  .addContextPath('user/preferences.json', 'User preferences including name and language')
-  .addGuidelines([
-    'Be friendly and encouraging',
-    'Mention you can help with: logging meals, viewing nutrition progress, and meal planning',
-    'Keep it brief (2-3 sentences)',
-    'Use the language specified (Russian or English)',
-    'Adapt tone to time of day if provided'
-  ])
-  .outputSchema(greeterOutputSchema)
-  .build()
-
-// Greeter sub-agent - handles initial greetings and welcomes
-const greeterAgent: SubAgentConfig = {
-  name: 'greeter',
-  description: 'Greet the user with a friendly welcome message',
-  systemPrompt: greeterPrompt,
-
-  inputSchema: {
-    type: 'object',
-    properties: {
-      userName: { type: 'string', description: 'User name if known (optional)' },
-      language: { type: 'string', description: 'Preferred language: "ru" for Russian, "en" for English' },
-      timeOfDay: { type: 'string', description: 'Time of day: morning, afternoon, evening' }
-    },
-    required: []
-  },
-
-  outputSchema: greeterOutputSchema,
-
-  tools: []
-}
-
 // Define output schema for meal planner
 const mealPlannerOutputSchema = {
   type: 'object' as const,
@@ -366,23 +254,23 @@ const plannerAgent: SubAgentConfig = {
   tools: []
 }
 
-// All sub-agents for the main agent
-const subAgents = [greeterAgent, nutritionCounterAgent, plannerAgent]
+// Sub-agents for specialized tasks only
+const subAgents = [plannerAgent]
 
 // Build main agent prompt using MainAgentBuilder
-// Uses .tools() and .agents() to extract descriptions from actual objects
 const SYSTEM_PROMPT = new MainAgentBuilder()
-  .role('the orchestrator of a nutrition consultant app')
-  .description('Your role is to delegate work to sub-agents and communicate with the user.')
+  .role('a nutrition consultant')
+  .description('You help users track meals, view nutrition progress, and plan their diet. You handle most tasks directly using your tools, and delegate meal planning to a specialized sub-agent.')
+  .tools(nutritionCounterTools)
   .agents(subAgents)
-  .tools(mainAgentTools)
   .questionHandling({})
   .addContextPath('plan/current.json', 'Meal plans from meal_planner')
   .addContextPath('user/preferences.json', 'User preferences { goal, restrictions[] }')
+  .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
   .addRules([
-    'Delegate first, never answer domain questions yourself',
+    'Use search_food and log_meal tools directly to track what the user ate',
+    'Delegate meal planning to the meal_planner sub-agent',
     'Always use __ask_user__ for questions, never write questions as plain text',
-    'Pass all relevant context from conversation history to sub-agents',
     'Present results in a friendly, encouraging way',
     'Use Russian if user speaks Russian'
   ])
@@ -457,7 +345,7 @@ async function main() {
   // Create the main agent with sub-agent and run recorder
   const agent = new Hive({
     systemPrompt: SYSTEM_PROMPT,
-    tools: mainAgentTools,
+    tools: nutritionCounterTools,
     agents: subAgents,
     llm: llmProvider,
     logger: createProgressLogger(),
@@ -574,8 +462,6 @@ async function main() {
           signal: currentController.signal,
           context
         })
-
-        console.log('result', JSON.stringify(result));
 
         stopEscHandler()
         isProcessing = false
