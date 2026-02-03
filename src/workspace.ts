@@ -16,13 +16,13 @@
  * const shell = workspace.getShell()
  *
  * // AI uses bash commands:
- * // cat /ctx/user/preferences.json
- * // echo '{"theme": "light"}' > /ctx/user/preferences.json
- * // ls /ctx/
- * // grep "theme" /ctx/
+ * // cat /user/preferences.json
+ * // echo '{"theme": "light"}' > /user/preferences.json
+ * // ls /
+ * // grep "theme" /
  *
  * // Read results after run
- * const prefs = workspace.read('/ctx/user/preferences.json')
+ * const prefs = workspace.read('/user/preferences.json')
  * ```
  */
 
@@ -422,7 +422,7 @@ export class Workspace {
     }
 
     // Normalize path to VirtualFS format
-    const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
+    const fsPath = path.startsWith('/') ? path : `/${path}`
 
     // Serialize value for VirtualFS storage
     const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
@@ -656,11 +656,11 @@ export class Workspace {
   /**
    * Read a value from the workspace
    *
-   * @param path - Path to read from (with or without /ctx/ prefix)
+   * @param path - Path to read from (with or without / prefix)
    * @returns The value, or undefined if not found
    */
   read<T = unknown>(path: string): T | undefined {
-    const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
+    const fsPath = path.startsWith('/') ? path : `/${path}`
     const content = this.fs.read(fsPath)
     if (content === null) return undefined
 
@@ -675,7 +675,7 @@ export class Workspace {
    * Check if a path exists in the workspace
    */
   has(path: string): boolean {
-    const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
+    const fsPath = path.startsWith('/') ? path : `/${path}`
     return this.fs.exists(fsPath)
   }
 
@@ -683,7 +683,7 @@ export class Workspace {
    * Delete a path from the workspace
    */
   delete(path: string): boolean {
-    const fsPath = path.startsWith('/ctx/') ? path : `/ctx/${path}`
+    const fsPath = path.startsWith('/') ? path : `/${path}`
     return this.fs.delete(fsPath)
   }
 
@@ -692,8 +692,8 @@ export class Workspace {
    */
   list(prefix?: string): WorkspaceListItem[] {
     const fsPrefix = prefix
-      ? (prefix.startsWith('/ctx/') ? prefix : `/ctx/${prefix}`)
-      : '/ctx/'
+      ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
+      : '/'
 
     const files = this.fs.glob(fsPrefix + '**/*')
     const items: WorkspaceListItem[] = []
@@ -724,8 +724,8 @@ export class Workspace {
    */
   keys(prefix?: string): string[] {
     const fsPrefix = prefix
-      ? (prefix.startsWith('/ctx/') ? prefix : `/ctx/${prefix}`)
-      : '/ctx/'
+      ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
+      : '/'
 
     return this.fs.glob(fsPrefix + '**/*')
       .filter(p => !this.fs.isDirectory(p))
@@ -736,8 +736,8 @@ export class Workspace {
    * Clear all data from the workspace
    */
   clear(): void {
-    this.fs.delete('/ctx')
-    this.fs.mkdir('/ctx')
+    this.fs.delete('/')
+    this.fs.mkdir('/')
   }
 
   /**
@@ -796,7 +796,7 @@ export class Workspace {
 
 // Note: Workspace tools (context_ls, context_read, context_write) have been removed.
 // AI agents now use shell commands to interact with workspace:
-//   ls /ctx/           - list context
-//   cat /ctx/file.json - read from context
-//   echo '...' > /ctx/file.json - write to context
-//   grep "pattern" /ctx/ - search context
+//   ls /           - list context
+//   cat /file.json - read from context
+//   echo '...' > /file.json - write to context
+//   grep "pattern" / - search context

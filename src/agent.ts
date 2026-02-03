@@ -22,8 +22,58 @@ import {
   createTaskTool as createSubAgentTool,
   TaskManager,
   createTaskTools,
+  createTaskGetTool,
+  createTaskListTool,
 } from "./tools/index.js";
 import { getBuiltInAgents } from "./built-in-agents/index.js";
+
+/** Path where the plan is stored in workspace */
+export const PLAN_PATH = ".hive/plan.md";
+
+/** Full filesystem path for the plan in VirtualFS */
+export const PLAN_FS_PATH = `/${PLAN_PATH}`;
+
+/** System prompt prepended in plan mode */
+const PLAN_MODE_INSTRUCTIONS = `# Plan Mode
+
+You are in **plan mode**. Your job is to understand the current state, then write a plan.
+
+## Workflow
+
+1. **Explore first** — Use the \`explore\` sub-agent to discover what data and state currently exists. This is mandatory before writing a plan.
+2. **Analyze** — Based on the exploration results and the user's request, determine what needs to happen.
+3. **Write the plan** — Save your plan to \`${PLAN_FS_PATH}\` using the shell.
+
+## Rules
+
+- **Read-only**: The shell is in read-only mode. You cannot create, modify, or delete files except the plan file.
+- **Explore before planning**: Always launch the \`explore\` agent first to understand what exists. Do not skip this step.
+- **Allowed tools**: shell (read-only), \`explore\` and \`plan\` sub-agents, TaskList, TaskGet, __ask_user__.
+- **Write your plan**:
+  \`\`\`
+  cat << 'EOF' > ${PLAN_FS_PATH}
+  # Plan
+  ...your plan here...
+  EOF
+  \`\`\`
+- When your plan is complete, tell the user and summarize it.
+
+`;
+
+/** System prompt section appended in execute mode when a plan exists */
+function executeModeSection(planContent: string): string {
+  return `\n\n# Plan Context
+
+The following plan was created during the planning phase. Use it as guidance for your implementation:
+
+<plan>
+${planContent}
+</plan>
+
+Follow the plan steps. Mark tasks as completed as you finish them.
+`;
+}
+
 
 /**
  * Hive Agent Class
@@ -92,20 +142,66 @@ export class Hive {
   }
 
   /**
-   * Get tools including internal tools for a specific run
+   * Get tools including internal tools for a specific run.
+   * In plan mode, only a restricted set of tools is returned.
    */
   private getRunTools(
     taskManager: TaskManager,
     workspace: Workspace,
-    agentName?: string
+    agentName?: string,
+    mode?: "plan" | "execute"
   ): Tool[] {
+    const taskToolOptions = {
+      logger: this.config.logger,
+      agentName,
+      workspace,
+    };
+
+    if (mode === "plan") {
+      // Plan mode: restricted tool set
+      const planTools: Tool[] = [];
+
+      // __ask_user__ (if not disabled)
+      const askUser = this.tools.find((t) => t.name === "__ask_user__");
+      if (askUser) {
+        planTools.push(askUser);
+      }
+
+      // __sub_agent__ restricted to explore + plan agents only
+      const subAgentTool = this.tools.find(
+        (t) => t.name === "__sub_agent__"
+      );
+      if (subAgentTool) {
+        // Create a wrapper that only allows explore and plan agents
+        planTools.push({
+          ...subAgentTool,
+          execute: async (params, context) => {
+            const agentParam = params.agent as string;
+            if (agentParam !== "explore" && agentParam !== "plan") {
+              return {
+                success: false,
+                error: `Plan mode: only 'explore' and 'plan' sub-agents are allowed. Got: '${agentParam}'`,
+              };
+            }
+            return subAgentTool.execute(params, context);
+          },
+        });
+      }
+
+      // TaskList and TaskGet only (no TaskCreate, TaskUpdate)
+      planTools.push(createTaskListTool(taskManager, taskToolOptions));
+      planTools.push(createTaskGetTool(taskManager, taskToolOptions));
+
+      // Shell (already in read-only mode via setReadOnly)
+      planTools.push(createShellTool(workspace.getShell()));
+
+      return planTools;
+    }
+
+    // Default / execute mode: all tools
     return [
       ...this.tools,
-      ...createTaskTools(taskManager, {
-        logger: this.config.logger,
-        agentName,
-        workspace,
-      }),
+      ...createTaskTools(taskManager, taskToolOptions),
       createShellTool(workspace.getShell()),
     ];
   }
@@ -121,6 +217,7 @@ export class Hive {
       signal,
       shouldContinue,
       workspace,
+      mode,
     } = options;
 
     // Load history from repository or use provided
@@ -136,6 +233,10 @@ export class Hive {
     const messages: Message[] = [...history];
     const lastMessage = messages[messages.length - 1];
 
+    // Detect if we're resuming from an interrupted execution (__ask_user__ pause etc.)
+    // This is true when the last message is assistant with pending tool_use blocks.
+    let isResuming = false;
+
     // Check if last message is assistant with tool_use blocks that need results
     if (
       lastMessage?.role === "assistant" &&
@@ -147,6 +248,8 @@ export class Hive {
       );
 
       if (toolUseBlocks.length > 0) {
+        isResuming = true;
+
         // Find __ask_user__ tool if present
         const askUserToolUse = toolUseBlocks.find(
           (block) => block.name === "__ask_user__"
@@ -204,10 +307,35 @@ export class Hive {
     const ws = workspace ?? new Workspace();
     await ws.init();
 
-    // Create task manager for this run and restore from workspace if available
-    // This preserves task state across __ask_user__ pauses
+    // Capture existing plan content before cleanup (for prompt injection)
+    const existingPlan = ws.read<string>(PLAN_PATH);
+    const hasExistingPlan = !!existingPlan && typeof existingPlan === "string";
+
+    // Always delete old plan file — each run starts clean.
+    // The content is already captured above for prompt injection.
+    if (hasExistingPlan) {
+      ws.delete(PLAN_PATH);
+    }
+
+    // Configure shell read-only mode based on mode option
+    const shell = ws.getShell();
+    if (mode === "plan") {
+      // Plan mode: read-only shell, only allow writing to the plan file
+      shell.setReadOnly(true, [PLAN_FS_PATH]);
+    } else {
+      shell.setReadOnly(false);
+    }
+
+    // Create task manager for this run.
+    // Only restore from workspace when resuming from a pause (e.g., __ask_user__) —
+    // detected by pending tool_use blocks in the last history message.
+    // On a normal run (even with conversation history), start with a clean task list.
     const taskManager = new TaskManager();
-    taskManager.restoreFromWorkspace(ws);
+    if (isResuming) {
+      taskManager.restoreFromWorkspace(ws);
+    } else {
+      ws.delete(".hive/tasks.json");
+    }
 
     // Create tool context
     const toolContext: ToolContext = {
@@ -233,11 +361,33 @@ export class Hive {
     // Store trace builder for __sub_agent__ tool to access
     this.setCurrentTraceBuilder(traceBuilder);
 
+    // Build system prompt based on mode
+    let systemPrompt = this.config.systemPrompt;
+    if (mode === "plan") {
+      systemPrompt = PLAN_MODE_INSTRUCTIONS + systemPrompt;
+    } else if (mode === "execute") {
+      if (hasExistingPlan) {
+        systemPrompt = systemPrompt + executeModeSection(existingPlan as string);
+      }
+    }
+
+    // Inject workspace state snapshot so the AI knows what data exists
+    // without needing to call explore first
+    const workspaceItems = ws.list().filter(
+      (item) => !item.path.startsWith("/.hive/")
+    );
+    if (workspaceItems.length > 0) {
+      const stateLines = workspaceItems.map(
+        (item) => `- ${item.path}: ${item.preview}`
+      );
+      systemPrompt += `\n\n## Current Workspace State\n\nThe following data currently exists in workspace:\n\n${stateLines.join("\n")}\n\nUse the shell to read full contents (e.g. \`cat ${workspaceItems[0].path}\`). Do NOT recreate data that already exists — read and present it instead.`;
+    }
+
     // Execute the agent loop
     const result = await executeLoop(
       {
-        systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(taskManager, ws, this.config.agentName),
+        systemPrompt,
+        tools: this.getRunTools(taskManager, ws, this.config.agentName, mode),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,

@@ -15,12 +15,12 @@ export const lsCommand: CommandHandler = {
       { flag: '-a', description: 'Show hidden entries (starting with .)' }
     ],
     examples: [
-      { command: 'ls /ctx/', description: 'List context root' },
-      { command: 'ls -la /ctx/', description: 'List all entries in long format' },
-      { command: 'ls /ctx/**/*.json', description: 'List all JSON files recursively' }
+      { command: 'ls /', description: 'List context root' },
+      { command: 'ls -la /', description: 'List all entries in long format' },
+      { command: 'ls /**/*.json', description: 'List all JSON files recursively' }
     ],
     notes: [
-      'Defaults to /ctx if no path given',
+      'Defaults to / if no path given',
       'Supports glob patterns'
     ]
   },
@@ -45,7 +45,7 @@ export const lsCommand: CommandHandler = {
 
     // Default to current context root
     if (paths.length === 0) {
-      paths.push('/ctx')
+      paths.push('/')
     }
 
     const outputs: string[] = []

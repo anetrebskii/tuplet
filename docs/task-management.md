@@ -21,7 +21,6 @@ Agents should use task management for:
 - Non-trivial tasks requiring planning
 - When the user explicitly requests tracking
 - When given multiple tasks (numbered or comma-separated)
-- After receiving new instructions
 
 Skip task management for:
 
@@ -29,6 +28,27 @@ Skip task management for:
 - Trivial tasks with no organizational benefit
 - Tasks completable in < 3 steps
 - Purely conversational requests
+
+## Best Practice: Plan All Tasks Upfront
+
+Agents should follow a **plan-first** workflow:
+
+1. **Plan** — Create ALL tasks upfront with `TaskCreate` before doing any work
+2. **Execute** — Work through tasks in order (`in_progress` → `completed`)
+3. **No mid-execution additions** — Only create new tasks if genuinely unexpected work is discovered
+
+This prevents a common problem where agents create duplicate or overlapping tasks incrementally as they work, leading to confusing task lists like:
+
+```
+1. ✅ Read user preferences
+2. ✅ Read user preferences from workspace
+3. ✅ Read user preferences from workspace   ← duplicate
+6. 🔄 Read user preferences                  ← duplicate again
+```
+
+### Duplicate Detection
+
+As a safety net, `TaskCreate` automatically rejects duplicate tasks. When a new task's subject matches an existing non-completed task (after normalization), the creation is rejected with an error pointing to the existing task. Normalization strips filler words, lowercases, and collapses whitespace, so "Read the user preferences" and "Read user preferences" are treated as duplicates.
 
 ## Task Schema
 

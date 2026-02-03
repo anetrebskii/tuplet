@@ -19,10 +19,10 @@ export const grepCommand: CommandHandler = {
       { flag: '-E', description: 'Extended regex (enabled by default)' }
     ],
     examples: [
-      { command: 'grep "error" /ctx/log', description: 'Search for pattern in file' },
-      { command: 'grep -i "warn" /ctx/**/*.log', description: 'Case-insensitive search across files' },
-      { command: 'grep -n "TODO" /ctx/notes.txt', description: 'Show matching line numbers' },
-      { command: 'cat /ctx/data | grep "key"', description: 'Search piped input' }
+      { command: 'grep "error" /log', description: 'Search for pattern in file' },
+      { command: 'grep -i "warn" /**/*.log', description: 'Case-insensitive search across files' },
+      { command: 'grep -n "TODO" /notes.txt', description: 'Show matching line numbers' },
+      { command: 'cat /data | grep "key"', description: 'Search piped input' }
     ],
     notes: [
       'Supports JavaScript regex syntax',

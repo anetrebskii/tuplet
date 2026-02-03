@@ -193,8 +193,15 @@ export class MainAgentBuilder {
       sections.push('')
       sections.push('## Your Role')
       sections.push('')
-      sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
-      sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      if (builtInDefs.length > 0) {
+        sections.push('1. **Explore first** - Use the `explore` sub-agent to check what data exists in workspace before handling a task')
+        sections.push('2. **Plan if needed** - For complex or multi-step tasks, use the `plan` sub-agent to design an approach')
+        sections.push('3. **Delegate** - Call __sub_agent__ tool to spawn domain-specific sub-agents')
+        sections.push('4. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      } else {
+        sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
+        sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+      }
       sections.push('')
       sections.push('⚠️ CRITICAL:')
       sections.push('- Make actual tool calls, never write tool names as text')
@@ -218,16 +225,14 @@ export class MainAgentBuilder {
     // Built-in agents usage instructions (always present)
     if (builtInDefs.length > 0) {
       sections.push('')
-      sections.push('## Built-in Agents')
+      sections.push('## Built-in Agents — Mandatory Usage')
       sections.push('')
-      sections.push('The following agents are always available via __sub_agent__ and should be used proactively:')
+      sections.push('These read-only agents are always available. You MUST use them:')
       sections.push('')
-      for (const agent of newBuiltIns) {
-        sections.push(`- **${agent.name}**: ${agent.description}`)
-      }
+      sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
+      sections.push('- **plan**: Call this before complex or multi-step tasks to design an approach before execution.')
       sections.push('')
-      sections.push('Use **explore** before acting when you need to understand what data exists in workspace.')
-      sections.push('Use **plan** before complex or multi-step tasks to design an approach first.')
+      sections.push('Both agents are read-only — they cannot modify workspace data.')
     }
 
     // Question handling (only when explicitly configured)
@@ -267,6 +272,7 @@ export class MainAgentBuilder {
 
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
+      'ALWAYS call the `explore` sub-agent at the start of each user request to check workspace state before doing anything else',
       'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user first using __ask_user__',
       'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
       'If a tool call fails, analyze the error and try a different approach instead of giving up',

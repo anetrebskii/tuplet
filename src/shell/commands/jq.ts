@@ -17,10 +17,10 @@ export const jqCommand: CommandHandler = {
       { flag: '-c', description: 'Compact output (single line)' }
     ],
     examples: [
-      { command: "cat /ctx/data.json | jq '.items'", description: 'Extract field' },
-      { command: "cat /ctx/data.json | jq '.items[]'", description: 'Iterate array' },
-      { command: "cat /ctx/data.json | jq '.name' -r", description: 'Raw string output' },
-      { command: "cat /ctx/data.json | jq '.items | length'", description: 'Count array items' }
+      { command: "cat /data.json | jq '.items'", description: 'Extract field' },
+      { command: "cat /data.json | jq '.items[]'", description: 'Iterate array' },
+      { command: "cat /data.json | jq '.name' -r", description: 'Raw string output' },
+      { command: "cat /data.json | jq '.items | length'", description: 'Count array items' }
     ],
     notes: [
       'Supports: field access (.foo), arrays ([]), index ([0]), keys, values, length',

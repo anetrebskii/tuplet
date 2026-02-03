@@ -18,7 +18,7 @@ export function createShellTool(shell: Shell): Tool {
 
 ## Overview
 
-Commands run against a virtual filesystem rooted at \`/ctx/\`. All context data lives there. Pipes (\`|\`), input redirection (\`<\`), and output redirection (\`>\`, \`>>\`) are supported.
+Commands run against a virtual filesystem rooted at \`/\`. All context data lives there. Pipes (\`|\`), input redirection (\`<\`), and output redirection (\`>\`, \`>>\`) are supported.
 
 Run \`help\` to list all commands, or \`help <command>\` for detailed usage, flags, and examples.
 
@@ -48,14 +48,14 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 ## Usage by category
 
 **Workspace (read/write):**
-- \`cat /ctx/data.json\` — read file
-- \`echo '{"name":"John"}' > /ctx/user.json\` — write file
-- \`head -n 10 /ctx/log.txt\` / \`tail -n 5 /ctx/log.txt\` — partial reads
+- \`cat /data.json\` — read file
+- \`echo '{"name":"John"}' > /user.json\` — write file
+- \`head -n 10 /log.txt\` / \`tail -n 5 /log.txt\` — partial reads
 
 **Search & list:**
-- \`ls /ctx/\`, \`ls /ctx/**/*.json\` — list entries
-- \`find /ctx -name "*.json"\` — find files
-- \`grep "pattern" /ctx/**/*.json\` — search content
+- \`ls /\`, \`ls /**/*.json\` — list entries
+- \`find / -name "*.json"\` — find files
+- \`grep "pattern" /**/*.json\` — search content
 
 **HTTP & web:**
 - \`curl https://api.example.com/users\` — API requests (GET, POST, PUT, DELETE)
@@ -65,14 +65,14 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
   - If \`browse\` returns exitCode 1 with a warning, the content is useless — try a different source.
 
 **JSON processing:**
-- \`cat /ctx/data.json | jq '.items[]'\` — extract, filter, transform JSON
+- \`cat /data.json | jq '.items[]'\` — extract, filter, transform JSON
 
 **File management:**
-- \`mkdir /ctx/reports\` — create directory
-- \`rm /ctx/temp.json\` / \`rm -r /ctx/cache/\` — remove files
+- \`mkdir /reports\` — create directory
+- \`rm /temp.json\` / \`rm -r /cache/\` — remove files
 
 <good-example>
-curl 'https://api.example.com/users?page=1' | jq '.data' > /ctx/users.json
+curl 'https://api.example.com/users?page=1' | jq '.data' > /users.json
 </good-example>
 
 <bad-example>

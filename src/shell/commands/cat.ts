@@ -11,12 +11,12 @@ export const catCommand: CommandHandler = {
     usage: 'cat [FILE...]',
     description: 'Concatenate and print files',
     examples: [
-      { command: 'cat /ctx/data.json', description: 'Print file contents' },
-      { command: 'cat /ctx/a /ctx/b', description: 'Concatenate multiple files' },
-      { command: 'cat /ctx/*.json', description: 'Print all JSON files' }
+      { command: 'cat /data.json', description: 'Print file contents' },
+      { command: 'cat /a /b', description: 'Concatenate multiple files' },
+      { command: 'cat /*.json', description: 'Print all JSON files' }
     ],
     notes: [
-      'Supports glob patterns (e.g. /ctx/*.json)',
+      'Supports glob patterns (e.g. /*.json)',
       'Reads from stdin when no files given and input is piped'
     ]
   },

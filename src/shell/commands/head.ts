@@ -14,9 +14,9 @@ export const headCommand: CommandHandler = {
       { flag: '-n NUM', description: 'Output first NUM lines (default: 10)' }
     ],
     examples: [
-      { command: 'head /ctx/log.txt', description: 'Show first 10 lines' },
-      { command: 'head -n 5 /ctx/data.csv', description: 'Show first 5 lines' },
-      { command: 'cat /ctx/big.json | head -n 20', description: 'First 20 lines of piped input' }
+      { command: 'head /log.txt', description: 'Show first 10 lines' },
+      { command: 'head -n 5 /data.csv', description: 'Show first 5 lines' },
+      { command: 'cat /big.json | head -n 20', description: 'First 20 lines of piped input' }
     ],
     notes: [
       'Also accepts -NUM shorthand (e.g. head -5 file)',

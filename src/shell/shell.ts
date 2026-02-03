@@ -19,6 +19,8 @@ export class Shell {
   private env: Record<string, string>
   private config: ShellConfig
   private handlers: Map<string, CommandHandler>
+  private readOnly: boolean = false
+  private writablePaths: string[] = []
 
   constructor(options: ShellOptions = {}) {
     const { fs: externalFS, ...config } = options
@@ -105,6 +107,21 @@ export class Shell {
     this.handlers.set(handler.name, handler)
   }
 
+  /**
+   * Enable or disable read-only mode.
+   * In read-only mode, write commands (rm, mkdir) and output redirections are blocked
+   * unless the target path is in the writable paths list.
+   */
+  setReadOnly(enabled: boolean, writablePaths?: string[]): void {
+    this.readOnly = enabled
+    this.writablePaths = writablePaths ?? []
+  }
+
+  /** Check if read-only mode is enabled */
+  isReadOnly(): boolean {
+    return this.readOnly
+  }
+
   /** Execute a command string (supports sequential commands, pipes, heredocs, comments) */
   async execute(input: string): Promise<ShellResult> {
     try {
@@ -136,7 +153,61 @@ export class Shell {
     }
   }
 
+  /**
+   * Check if a path is writable in read-only mode.
+   * A path is writable if it matches any of the writable paths
+   * (either exact match or starts with a writable directory path).
+   */
+  private isPathWritable(path: string): boolean {
+    if (!this.readOnly) return true
+    const normalized = path.startsWith('/') ? path : `/${path}`
+    return this.writablePaths.some(wp => {
+      const normalizedWp = wp.startsWith('/') ? wp : `/${wp}`
+      return normalized === normalizedWp || normalized.startsWith(normalizedWp + '/')
+    })
+  }
+
   private async executeCommand(cmd: ParsedCommand, stdin?: string): Promise<ShellResult> {
+    // Handle variable assignment: VAR=value (no command after it)
+    const assignMatch = cmd.command.match(/^(\w+)=(.*)$/)
+    if (assignMatch && cmd.args.length === 0 && !cmd.pipe) {
+      this.env[assignMatch[1]] = assignMatch[2]
+      return { exitCode: 0, stdout: '', stderr: '' }
+    }
+
+    // Expand $VAR references before execution
+    this.expandCommand(cmd)
+
+    // Read-only mode enforcement
+    if (this.readOnly) {
+      // Block write commands (rm, mkdir)
+      if (cmd.command === 'rm' || cmd.command === 'mkdir') {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: `read-only mode: '${cmd.command}' is not allowed`
+        }
+      }
+
+      // Block output redirection to non-writable paths
+      if (cmd.outputFile && !this.isPathWritable(cmd.outputFile)) {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: `read-only mode: cannot write to '${cmd.outputFile}'`
+        }
+      }
+
+      // Block append redirection to non-writable paths
+      if (cmd.appendFile && !this.isPathWritable(cmd.appendFile)) {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: `read-only mode: cannot write to '${cmd.appendFile}'`
+        }
+      }
+    }
+
     const handler = this.handlers.get(cmd.command)
 
     if (!handler) {
@@ -202,6 +273,29 @@ export class Shell {
   /** Set environment variable */
   setEnv(key: string, value: string): void {
     this.env[key] = value
+  }
+
+  /**
+   * Expand $VAR and ${VAR} references in a string using shell env.
+   * Returns the string with variables replaced (unknown vars become empty string).
+   */
+  private expandVars(text: string): string {
+    return text.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, braced, plain) => {
+      const name = braced || plain
+      return this.env[name] ?? ''
+    })
+  }
+
+  /**
+   * Expand variables in a parsed command's args, redirections, and stdin.
+   */
+  private expandCommand(cmd: ParsedCommand): void {
+    cmd.command = this.expandVars(cmd.command)
+    cmd.args = cmd.args.map(arg => this.expandVars(arg))
+    if (cmd.outputFile) cmd.outputFile = this.expandVars(cmd.outputFile)
+    if (cmd.appendFile) cmd.appendFile = this.expandVars(cmd.appendFile)
+    if (cmd.inputFile) cmd.inputFile = this.expandVars(cmd.inputFile)
+    if (cmd.stdinContent) cmd.stdinContent = this.expandVars(cmd.stdinContent)
   }
 
   /** Export context data */

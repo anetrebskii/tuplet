@@ -5,7 +5,7 @@
  */
 
 // Main agent class
-export { Hive } from './agent.js'
+export { Hive, PLAN_PATH, PLAN_FS_PATH } from './agent.js'
 
 // Types
 export type {

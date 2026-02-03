@@ -2,7 +2,6 @@
  * Virtual Filesystem
  *
  * In-memory filesystem for context storage.
- * Paths like /ctx/... map to context data.
  */
 
 import type { VirtualFSInterface } from './types.js'
@@ -28,13 +27,13 @@ function matchGlob(path: string, pattern: string): boolean {
 
 export class VirtualFS implements VirtualFSInterface {
   private data: Map<string, string> = new Map()
-  private directories: Set<string> = new Set(['/ctx', '/tmp', '/env'])
+  private directories: Set<string> = new Set(['/'])
   private onChange: VirtualFSChangeHandler | null = null
 
   constructor(initial?: Record<string, unknown>) {
     if (initial) {
       for (const [key, value] of Object.entries(initial)) {
-        const path = key.startsWith('/') ? key : `/ctx/${key}`
+        const path = key.startsWith('/') ? key : `/${key}`
         this.write(path, typeof value === 'string' ? value : JSON.stringify(value, null, 2))
       }
     }

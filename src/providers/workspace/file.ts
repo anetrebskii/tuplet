@@ -51,17 +51,17 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
     }
   }
 
-  /** Convert a VirtualFS path (e.g. /ctx/user.json) to a local file path */
+  /** Convert a VirtualFS path (e.g. /user.json) to a local file path */
   private toFilePath(fsPath: string): string {
-    // Strip leading /ctx/ prefix for storage
-    const stripped = fsPath.replace(/^\/ctx\//, '')
+    // Strip leading / for storage
+    const stripped = fsPath.replace(/^\//, '')
     return join(this.dir, stripped)
   }
 
   /** Convert a local file path back to a VirtualFS path */
   private toFSPath(filePath: string): string {
     const rel = relative(this.dir, filePath)
-    return `/ctx/${rel}`
+    return `/${rel}`
   }
 
   private async readDirRecursive(dir: string, result: Record<string, string>): Promise<void> {

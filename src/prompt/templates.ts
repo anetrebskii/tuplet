@@ -197,9 +197,9 @@ export function inputParametersSection(): string {
 
 1. **Check your input parameters** - values like goal, dailyCalories, days may already be provided
 2. **Check context** - use shell commands to find stored information:
-   - \`ls /ctx/\` - list what's in context
-   - \`cat /ctx/path/file.json\` - read context data
-   - \`grep "keyword" /ctx/**/*.json\` - search context
+   - \`ls /\` - list what's in context
+   - \`cat /path/file.json\` - read context data
+   - \`grep "keyword" /**/*.json\` - search context
 3. **Only ask if truly missing** - use __ask_user__ ONLY when info is not in input or context
 
 NEVER ask for information that was already provided or exists in context.`
@@ -355,8 +355,10 @@ export function checklistSection(config: ChecklistConfig): string {
 
   // When trackProgress is enabled, instruct to use the __tasks__ tool
   if (config.trackProgress) {
-    lines.push('Use the __tasks__ tool to plan and track your work.')
-    lines.push('Create your own tasks based on the task. Example items you might track:')
+    lines.push('Plan ALL tasks upfront before doing any work.')
+    lines.push('Call TaskCreate for each task, then work through them in order.')
+    lines.push('')
+    lines.push('Example items you might track:')
     lines.push('')
 
     for (const item of config.items) {

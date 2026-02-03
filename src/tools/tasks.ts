@@ -382,6 +382,45 @@ export class TaskManager {
   }
 
   /**
+   * Normalize a subject string for duplicate comparison.
+   * Lowercases, strips common filler words, and collapses whitespace.
+   */
+  normalizeSubject(subject: string): string {
+    const fillerWords = /\b(the|a|an|and|or|to|from|for|in|on|of|with|is|are|was|were|be|been|being|that|this|it)\b/g;
+    return subject
+      .toLowerCase()
+      .replace(fillerWords, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Find a duplicate among non-completed tasks.
+   * Checks for exact normalized match or substring containment.
+   */
+  findDuplicate(subject: string): TaskItem | undefined {
+    const normalized = this.normalizeSubject(subject);
+    if (!normalized) return undefined;
+
+    for (const task of this.items.values()) {
+      if (task.status === 'completed') continue;
+      const existingNormalized = this.normalizeSubject(task.subject);
+      if (!existingNormalized) continue;
+
+      // Exact match after normalization
+      if (normalized === existingNormalized) return task;
+
+      // Substring containment (either direction)
+      if (normalized.includes(existingNormalized) || existingNormalized.includes(normalized)) {
+        return task;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
    * Clear all tasks (used internally)
    */
   clear(): void {
@@ -553,6 +592,12 @@ function notifyTaskUpdate(
 
 // Tool descriptions - shared content
 const TASK_TOOL_USAGE_NOTES = `
+## Workflow: Plan First, Then Execute
+
+1. **Plan** — Create ALL tasks upfront with TaskCreate before doing any work
+2. **Execute** — Work through tasks in order (mark in_progress → do the work → mark completed)
+3. **No mid-execution additions** — Only create new tasks if genuinely unexpected work is discovered
+
 ## When to Use Task Management
 
 Use task management tools proactively in these scenarios:
@@ -562,9 +607,6 @@ Use task management tools proactively in these scenarios:
 - Plan mode - When using plan mode, create a task list to track the work
 - User explicitly requests todo list - When the user directly asks you to use the todo list
 - User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-- After receiving new instructions - Immediately capture user requirements as tasks
-- When you start working on a task - Mark it as in_progress BEFORE beginning work
-- After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
 
 ## When NOT to Use Task Management
 
@@ -581,8 +623,7 @@ Skip using task management when:
 export function createTaskCreateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskCreate",
-    description: `Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
-It also helps the user understand the progress of the task and overall progress of their requests.
+    description: `Create a task in the task list. **Create ALL tasks upfront before starting any work.** Duplicate tasks are automatically rejected.
 ${TASK_TOOL_USAGE_NOTES}
 
 ## Task Fields
@@ -598,7 +639,6 @@ ${TASK_TOOL_USAGE_NOTES}
 - Create tasks with clear, specific subjects that describe the outcome
 - Include enough detail in the description for another agent to understand and complete the task
 - After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
-- Check TaskList first to avoid creating duplicate tasks
 `,
     parameters: {
       type: "object",
@@ -630,6 +670,15 @@ ${TASK_TOOL_USAGE_NOTES}
         activeForm?: string;
         metadata?: string;
       };
+
+      // Check for duplicates before creating
+      const duplicate = manager.findDuplicate(subject);
+      if (duplicate) {
+        return {
+          success: false,
+          error: `Duplicate: task #${duplicate.id} "${duplicate.subject}" already covers this. Use the existing task instead.`,
+        };
+      }
 
       // Parse metadata if provided
       let metadata: Record<string, unknown> | undefined;

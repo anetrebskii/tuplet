@@ -197,8 +197,8 @@ workspace.write('user/preferences', { language: 'en', style: 'formal' })
 
 const result = await agent.run('Write an article', { workspace })
 
-// Sub-agent can read: cat /ctx/user/preferences
-// Sub-agent can write: echo '...' > /ctx/draft/article.md
+// Sub-agent can read: cat /user/preferences
+// Sub-agent can write: echo '...' > /draft/article.md
 
 // Parent can read sub-agent's output
 const draft = workspace.read('draft/article.md')

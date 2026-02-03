@@ -254,7 +254,7 @@ Add a workspace path the agent should check. Automatically enables workspace dis
 Enable workspace discovery without specifying paths.
 
 ```typescript
-.useWorkspace()  // Agent will use ls /ctx/ to discover available data
+.useWorkspace()  // Agent will use ls / to discover available data
 ```
 
 ### Workflow Steps
@@ -586,8 +586,8 @@ Your task: {task}
 
 ## Workspace Discovery (Do This First!)
 ⚠️ ALWAYS check workspace BEFORE asking questions or starting work:
-1. Use `ls /ctx/` to see what data exists
-2. Use `cat /ctx/path/file.json` to read relevant paths
+1. Use `ls /` to see what data exists
+2. Use `cat /path/file.json` to read relevant paths
 
 Check these paths:
 - meals/today.json - Today's logged meals

@@ -121,8 +121,9 @@ async function executeTool(
   } else if (tool.name === '__shell__') {
     const command = (params as { command?: string }).command
     if (command) {
-      const app = command.trim().split(/[\s|><;]+/)[0]
-      progressMessage = `Running ${app}...`
+      // Show the full command, truncated if too long
+      const truncated = command.length > 80 ? command.slice(0, 80) + '...' : command
+      progressMessage = `$ ${truncated}`
     }
   }
 
@@ -156,6 +157,12 @@ async function executeTool(
     let completionMessage = `${tool.name} completed`
     if (!result.success) {
       completionMessage = `${tool.name} failed: ${result.error}`
+    } else if (tool.name === '__shell__') {
+      const command = (params as { command?: string }).command
+      if (command) {
+        const truncated = command.length > 80 ? command.slice(0, 80) + '...' : command
+        completionMessage = `$ ${truncated}`
+      }
     } else {
       const isTaskTool = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(tool.name)
       if (isTaskTool && result.data) {

@@ -24,18 +24,18 @@ export const findCommand: CommandHandler = {
       { flag: '-type d', description: 'Only match directories' }
     ],
     examples: [
-      { command: 'find /ctx -name "*.json"', description: 'Find all JSON files' },
-      { command: 'find /ctx -type d', description: 'Find all directories' },
-      { command: 'find /ctx/reports -name "*.csv" -type f', description: 'Find CSV files in reports' }
+      { command: 'find / -name "*.json"', description: 'Find all JSON files' },
+      { command: 'find / -type d', description: 'Find all directories' },
+      { command: 'find /reports -name "*.csv" -type f', description: 'Find CSV files in reports' }
     ],
     notes: [
-      'Defaults to /ctx if no path given',
+      'Defaults to / if no path given',
       'Searches recursively'
     ]
   },
 
   async execute(args: string[], ctx: CommandContext): Promise<ShellResult> {
-    let basePath = '/ctx'
+    let basePath = '/'
     let namePattern: string | null = null
     let typeFilter: 'f' | 'd' | null = null
 

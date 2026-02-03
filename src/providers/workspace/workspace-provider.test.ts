@@ -20,17 +20,17 @@ describe('VirtualFS onChange + hydrate', () => {
       const handler = vi.fn()
       fs.setOnChange(handler)
 
-      fs.write('/ctx/test.json', '{"a":1}')
-      expect(handler).toHaveBeenCalledWith('write', '/ctx/test.json', '{"a":1}')
+      fs.write('/test.json', '{"a":1}')
+      expect(handler).toHaveBeenCalledWith('write', '/test.json', '{"a":1}')
     })
 
     it('fires on delete with path', () => {
       const handler = vi.fn()
-      fs.write('/ctx/test.json', '{}')
+      fs.write('/test.json', '{}')
       fs.setOnChange(handler)
 
-      fs.delete('/ctx/test.json')
-      expect(handler).toHaveBeenCalledWith('delete', '/ctx/test.json')
+      fs.delete('/test.json')
+      expect(handler).toHaveBeenCalledWith('delete', '/test.json')
     })
 
     it('does not fire when handler is null', () => {
@@ -38,29 +38,29 @@ describe('VirtualFS onChange + hydrate', () => {
       fs.setOnChange(handler)
       fs.setOnChange(null)
 
-      fs.write('/ctx/test', 'data')
+      fs.write('/test', 'data')
       expect(handler).not.toHaveBeenCalled()
     })
 
     it('fires for each child on directory delete', () => {
-      fs.write('/ctx/dir/a', '1')
-      fs.write('/ctx/dir/b', '2')
-      fs.write('/ctx/dir/c', '3')
+      fs.write('/dir/a', '1')
+      fs.write('/dir/b', '2')
+      fs.write('/dir/c', '3')
 
       const handler = vi.fn()
       fs.setOnChange(handler)
 
-      fs.delete('/ctx/dir')
+      fs.delete('/dir')
       expect(handler).toHaveBeenCalledTimes(3)
       const paths = handler.mock.calls.map((c: unknown[]) => c[1]).sort()
-      expect(paths).toEqual(['/ctx/dir/a', '/ctx/dir/b', '/ctx/dir/c'])
+      expect(paths).toEqual(['/dir/a', '/dir/b', '/dir/c'])
     })
 
     it('does not fire on delete of non-existent path', () => {
       const handler = vi.fn()
       fs.setOnChange(handler)
 
-      fs.delete('/ctx/nonexistent')
+      fs.delete('/nonexistent')
       expect(handler).not.toHaveBeenCalled()
     })
   })
@@ -71,26 +71,26 @@ describe('VirtualFS onChange + hydrate', () => {
       fs.setOnChange(handler)
 
       fs.hydrate({
-        '/ctx/a': 'value-a',
-        '/ctx/b': 'value-b'
+        '/a': 'value-a',
+        '/b': 'value-b'
       })
 
       expect(handler).not.toHaveBeenCalled()
-      expect(fs.read('/ctx/a')).toBe('value-a')
-      expect(fs.read('/ctx/b')).toBe('value-b')
+      expect(fs.read('/a')).toBe('value-a')
+      expect(fs.read('/b')).toBe('value-b')
     })
 
     it('creates parent directories', () => {
-      fs.hydrate({ '/ctx/deep/nested/file': 'content' })
-      expect(fs.isDirectory('/ctx/deep')).toBe(true)
-      expect(fs.isDirectory('/ctx/deep/nested')).toBe(true)
-      expect(fs.read('/ctx/deep/nested/file')).toBe('content')
+      fs.hydrate({ '/deep/nested/file': 'content' })
+      expect(fs.isDirectory('/deep')).toBe(true)
+      expect(fs.isDirectory('/deep/nested')).toBe(true)
+      expect(fs.read('/deep/nested/file')).toBe('content')
     })
 
     it('overwrites existing data', () => {
-      fs.write('/ctx/key', 'old')
-      fs.hydrate({ '/ctx/key': 'new' })
-      expect(fs.read('/ctx/key')).toBe('new')
+      fs.write('/key', 'old')
+      fs.hydrate({ '/key': 'new' })
+      expect(fs.read('/key')).toBe('new')
     })
   })
 })
@@ -104,8 +104,8 @@ describe('MemoryWorkspaceProvider', () => {
 
   it('write and delete are no-ops', async () => {
     const provider = new MemoryWorkspaceProvider()
-    await expect(provider.write('/ctx/test', 'data')).resolves.toBeUndefined()
-    await expect(provider.delete('/ctx/test')).resolves.toBeUndefined()
+    await expect(provider.write('/test', 'data')).resolves.toBeUndefined()
+    await expect(provider.delete('/test')).resolves.toBeUndefined()
   })
 })
 
@@ -134,41 +134,41 @@ describe('FileWorkspaceProvider', () => {
   })
 
   it('write persists a file and load reads it back', async () => {
-    await provider.write('/ctx/config.json', '{"port":3000}')
+    await provider.write('/config.json', '{"port":3000}')
 
     const data = await provider.load()
-    expect(data['/ctx/config.json']).toBe('{"port":3000}')
+    expect(data['/config.json']).toBe('{"port":3000}')
   })
 
   it('write creates nested directories', async () => {
-    await provider.write('/ctx/deep/nested/file.txt', 'hello')
+    await provider.write('/deep/nested/file.txt', 'hello')
 
     const content = await readFile(join(tmpDir, 'deep/nested/file.txt'), 'utf-8')
     expect(content).toBe('hello')
   })
 
   it('delete removes a file', async () => {
-    await provider.write('/ctx/to-delete.txt', 'bye')
-    await provider.delete('/ctx/to-delete.txt')
+    await provider.write('/to-delete.txt', 'bye')
+    await provider.delete('/to-delete.txt')
 
     const data = await provider.load()
-    expect(data['/ctx/to-delete.txt']).toBeUndefined()
+    expect(data['/to-delete.txt']).toBeUndefined()
   })
 
   it('delete of non-existent file does not throw', async () => {
-    await expect(provider.delete('/ctx/nope')).resolves.toBeUndefined()
+    await expect(provider.delete('/nope')).resolves.toBeUndefined()
   })
 
   it('round-trip: write, reload, verify', async () => {
-    await provider.write('/ctx/user.json', '{"name":"Alice"}')
-    await provider.write('/ctx/notes.md', '# Notes\nHello')
+    await provider.write('/user.json', '{"name":"Alice"}')
+    await provider.write('/notes.md', '# Notes\nHello')
 
     // Create a new provider pointing at the same dir
     const provider2 = new FileWorkspaceProvider(tmpDir)
     const data = await provider2.load()
 
-    expect(data['/ctx/user.json']).toBe('{"name":"Alice"}')
-    expect(data['/ctx/notes.md']).toBe('# Notes\nHello')
+    expect(data['/user.json']).toBe('{"name":"Alice"}')
+    expect(data['/notes.md']).toBe('# Notes\nHello')
   })
 })
 
@@ -182,7 +182,7 @@ describe('Workspace + Provider integration', () => {
     const provider: WorkspaceProvider = {
       async load() {
         return {
-          '/ctx/loaded.json': '{"from":"provider"}'
+          '/loaded.json': '{"from":"provider"}'
         }
       },
       async write() {},
@@ -207,13 +207,13 @@ describe('Workspace + Provider integration', () => {
     await ws.init()
 
     ws.write('test.json', { hello: 'world' })
-    expect(writeSpy).toHaveBeenCalledWith('/ctx/test.json', '{\n  "hello": "world"\n}')
+    expect(writeSpy).toHaveBeenCalledWith('/test.json', '{\n  "hello": "world"\n}')
   })
 
   it('deletes are forwarded to provider via onChange', async () => {
     const deleteSpy = vi.fn().mockResolvedValue(undefined)
     const provider: WorkspaceProvider = {
-      async load() { return { '/ctx/item': 'data' } },
+      async load() { return { '/item': 'data' } },
       async write() {},
       delete: deleteSpy
     }
@@ -222,7 +222,7 @@ describe('Workspace + Provider integration', () => {
     await ws.init()
 
     ws.delete('item')
-    expect(deleteSpy).toHaveBeenCalledWith('/ctx/item')
+    expect(deleteSpy).toHaveBeenCalledWith('/item')
   })
 
   it('subscribe pushes external changes into VirtualFS', async () => {
@@ -242,7 +242,7 @@ describe('Workspace + Provider integration', () => {
     await ws.init()
 
     // Simulate external write
-    listener!([{ type: 'write', path: '/ctx/external.json', content: '{"source":"remote"}' }])
+    listener!([{ type: 'write', path: '/external.json', content: '{"source":"remote"}' }])
 
     expect(ws.read('external.json')).toEqual({ source: 'remote' })
   })
@@ -266,7 +266,7 @@ describe('Workspace + Provider integration', () => {
     writeSpy.mockClear()
 
     // Simulate external write — should NOT call provider.write
-    listener!([{ type: 'write', path: '/ctx/external', content: 'data' }])
+    listener!([{ type: 'write', path: '/external', content: 'data' }])
     expect(writeSpy).not.toHaveBeenCalled()
   })
 

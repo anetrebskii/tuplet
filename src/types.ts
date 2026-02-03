@@ -274,6 +274,14 @@ export interface RunOptions {
    */
   shouldContinue?: () => Promise<boolean>
 
+  /**
+   * Agent execution mode:
+   * - `'plan'` — Read-only. Shell blocks writes (except plan file). Only TaskList/TaskGet available. System prompt includes plan-mode instructions.
+   * - `'execute'` — Full access. Plan from `.hive/plan.md` injected into system prompt as context.
+   * - `undefined` (default) — Full access, no plan injection. Backward compatible.
+   */
+  mode?: 'plan' | 'execute'
+
   /** @internal Trace builder passed from parent agent */
   _traceBuilder?: import('./trace.js').TraceBuilder
 }

@@ -4,7 +4,7 @@ Workspace is a virtual filesystem that enables tools and sub-agents to share str
 
 ## How It Works
 
-Workspace is backed by an in-memory VirtualFS mounted at `/ctx/`. The framework automatically provides a **shell tool** (`__shell__`) so agents can read/write workspace using bash commands (`cat /ctx/data.json`, `echo '...' > /ctx/result.json`, etc.). You define the paths and validation — the framework handles the rest.
+Workspace is backed by an in-memory VirtualFS. The framework automatically provides a **shell tool** (`__shell__`) so agents can read/write workspace using bash commands (`cat /data.json`, `echo '...' > /result.json`, etc.). You define the paths and validation — the framework handles the rest.
 
 ## Basic Setup
 

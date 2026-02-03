@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -288,7 +288,9 @@ async function main() {
   })
 
   // Create workspace for agent communication with validation
+  // FileWorkspaceProvider persists workspace data to disk across sessions
   const workspace = new Workspace({
+    provider: new FileWorkspaceProvider('./workspace-data'),
     strict: false,  // Allow any path (set to true to restrict to defined paths only)
     paths: {
       // Meal plan with schema validation
@@ -338,6 +340,9 @@ async function main() {
       'analysis/summary.txt': null
     }
   })
+
+  // Load persisted workspace data from disk
+  await workspace.init()
 
   // Create the main agent with sub-agent and run recorder
   const agent = new Hive({

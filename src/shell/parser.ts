@@ -25,7 +25,7 @@ export function parseCommand(input: string): ParsedCommand[] {
       continue
     }
 
-    // Check for heredoc (e.g. cat << EOF > /ctx/file.json)
+    // Check for heredoc (e.g. cat << EOF > /file.json)
     const heredocMatch = line.match(HEREDOC_RE)
     if (heredocMatch) {
       const delimiter = heredocMatch[1]
