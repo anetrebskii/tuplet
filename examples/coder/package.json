@@ -1,0 +1,19 @@
+{
+  "name": "coder-demo",
+  "version": "1.0.0",
+  "description": "Demo terminal app - AI coder that creates software projects",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "@alexnetrebskii/hive-agent": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0"
+  }
+}
