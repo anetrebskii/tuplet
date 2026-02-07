@@ -244,11 +244,15 @@ export class Shell {
 
     // Handle output redirection
     if (cmd.outputFile) {
-      this.fs.write(cmd.outputFile, result.stdout)
+      if (cmd.outputFile !== '/dev/null') {
+        this.fs.write(cmd.outputFile, result.stdout)
+      }
       result = { ...result, stdout: '' }
     } else if (cmd.appendFile) {
-      const existing = this.fs.read(cmd.appendFile) || ''
-      this.fs.write(cmd.appendFile, existing + result.stdout)
+      if (cmd.appendFile !== '/dev/null') {
+        const existing = this.fs.read(cmd.appendFile) || ''
+        this.fs.write(cmd.appendFile, existing + result.stdout)
+      }
       result = { ...result, stdout: '' }
     }
 
