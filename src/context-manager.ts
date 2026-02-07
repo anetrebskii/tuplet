@@ -4,7 +4,7 @@
  * Token estimation and context management utilities.
  */
 
-import type { Message, ContentBlock, ContextStrategy } from './types.js'
+import type { Message, ContentBlock, ContextStrategy, ToolUseBlock, ToolResultBlock } from './types.js'
 
 /**
  * Estimate token count from text (approximately 4 chars per token)
@@ -93,6 +93,64 @@ function groupMessages(messages: Message[]): Message[][] {
 }
 
 /**
+ * Ensure every tool_use block has a matching tool_result in the next message.
+ * Adds dummy tool_result for any orphaned tool_use blocks (from __ask_user__
+ * returns or interrupted executions).
+ */
+export function sanitizeHistory(messages: Message[]): Message[] {
+  const result: Message[] = []
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    result.push(msg)
+
+    if (msg.role !== 'assistant' || typeof msg.content === 'string') continue
+
+    const toolUseBlocks = msg.content.filter(
+      (b): b is ToolUseBlock => b.type === 'tool_use'
+    )
+    if (toolUseBlocks.length === 0) continue
+
+    const next = messages[i + 1]
+    const nextHasResults = next
+      && next.role === 'user'
+      && typeof next.content !== 'string'
+
+    // Find tool_use ids missing a matching tool_result
+    const missingIds = toolUseBlocks.filter(tu => {
+      if (!nextHasResults) return true
+      return !(next.content as ContentBlock[]).some(
+        b => b.type === 'tool_result' && (b as ToolResultBlock).tool_use_id === tu.id
+      )
+    })
+
+    if (missingIds.length === 0) continue
+
+    const dummyResults: ToolResultBlock[] = missingIds.map(tu => ({
+      type: 'tool_result' as const,
+      tool_use_id: tu.id,
+      content: JSON.stringify({ success: false, error: 'Operation was interrupted' }),
+      is_error: true,
+    }))
+
+    if (nextHasResults) {
+      // Merge dummy results into the existing user message
+      const merged: Message = {
+        role: 'user',
+        content: [...dummyResults, ...(next.content as ContentBlock[])],
+      }
+      result.push(merged)
+      i++ // skip original next message, we replaced it
+    } else {
+      // Insert a new user message with dummy results
+      result.push({ role: 'user', content: dummyResults })
+    }
+  }
+
+  return result
+}
+
+/**
  * Truncate old messages to fit within token limit.
  * Preserves tool_use/tool_result pairs as atomic units — never breaks them apart.
  */
@@ -130,7 +188,7 @@ export function truncateOldMessages(
     }
   }
 
-  return [...result, ...kept]
+  return sanitizeHistory([...result, ...kept])
 }
 
 /**
@@ -174,7 +232,7 @@ export class ContextManager {
     this.updateTokenCount(messages)
 
     if (this.isWithinLimits()) {
-      return messages
+      return sanitizeHistory(messages)
     }
 
     switch (this.strategy) {
