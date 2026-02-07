@@ -52,7 +52,49 @@ export function estimateTotalTokens(messages: Message[]): number {
 }
 
 /**
- * Truncate old messages to fit within token limit
+ * Check if message contains tool_use blocks
+ */
+function hasToolUse(message: Message): boolean {
+  if (typeof message.content === 'string') return false
+  return message.content.some(b => b.type === 'tool_use')
+}
+
+/**
+ * Check if message contains tool_result blocks
+ */
+function hasToolResult(message: Message): boolean {
+  if (typeof message.content === 'string') return false
+  return message.content.some(b => b.type === 'tool_result')
+}
+
+/**
+ * Group messages into atomic units that must be kept or removed together.
+ * A tool exchange (assistant with tool_use + user with tool_result) forms one group.
+ * Plain text messages form their own group.
+ */
+function groupMessages(messages: Message[]): Message[][] {
+  const groups: Message[][] = []
+  let i = 0
+
+  while (i < messages.length) {
+    const msg = messages[i]
+
+    // Assistant message with tool_use — group with following tool_result message
+    if (msg.role === 'assistant' && hasToolUse(msg) && i + 1 < messages.length && hasToolResult(messages[i + 1])) {
+      groups.push([msg, messages[i + 1]])
+      i += 2
+    } else {
+      groups.push([msg])
+      i += 1
+    }
+  }
+
+  return groups
+}
+
+/**
+ * Truncate old messages to fit within token limit.
+ * Preserves tool_use/tool_result pairs as atomic units — never breaks them apart.
  */
 export function truncateOldMessages(
   messages: Message[],
@@ -72,19 +114,23 @@ export function truncateOldMessages(
     totalTokens += estimateMessageTokens(messages[i])
   }
 
-  // Add messages from the end until we hit the limit
-  const remaining: Message[] = []
-  for (let i = messages.length - 1; i >= preserveFirst; i--) {
-    const msgTokens = estimateMessageTokens(messages[i])
-    if (totalTokens + msgTokens <= maxTokens) {
-      remaining.unshift(messages[i])
-      totalTokens += msgTokens
+  // Group remaining messages to keep tool_use/tool_result pairs together
+  const remainingMessages = messages.slice(preserveFirst)
+  const groups = groupMessages(remainingMessages)
+
+  // Add groups from the end until we hit the limit
+  const kept: Message[] = []
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const groupTokens = groups[i].reduce((sum, msg) => sum + estimateMessageTokens(msg), 0)
+    if (totalTokens + groupTokens <= maxTokens) {
+      kept.unshift(...groups[i])
+      totalTokens += groupTokens
     } else {
       break
     }
   }
 
-  return [...result, ...remaining]
+  return [...result, ...kept]
 }
 
 /**
