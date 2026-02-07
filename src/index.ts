@@ -94,6 +94,7 @@ export {
   estimateMessageTokens,
   estimateTotalTokens,
   truncateOldMessages,
+  sanitizeHistory,
   ContextManager
 } from './context-manager.js'
 
