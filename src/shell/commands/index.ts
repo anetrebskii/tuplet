@@ -16,6 +16,7 @@ import { headCommand } from './head.js'
 import { tailCommand } from './tail.js'
 import { jqCommand } from './jq.js'
 import { browseCommand } from './browse.js'
+import { envCommand } from './env.js'
 
 export const commands: CommandHandler[] = [
   catCommand,
@@ -29,7 +30,8 @@ export const commands: CommandHandler[] = [
   headCommand,
   tailCommand,
   jqCommand,
-  browseCommand
+  browseCommand,
+  envCommand
 ]
 
 export {
@@ -44,5 +46,6 @@ export {
   headCommand,
   tailCommand,
   jqCommand,
-  browseCommand
+  browseCommand,
+  envCommand
 }

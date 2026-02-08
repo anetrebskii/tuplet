@@ -56,6 +56,7 @@ export type {
   StopReason,
   LogProvider,
   RepositoryProvider,
+  EnvironmentProvider,
   ProgressUpdate,
 
   // Cache types
@@ -92,6 +93,9 @@ export {
 export {
   MemoryRepository
 } from './providers/repository/memory.js'
+
+// Environment Providers
+export { MemoryEnvironmentProvider } from './providers/env/memory.js'
 
 // Utilities
 export {

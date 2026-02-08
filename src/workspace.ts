@@ -26,7 +26,7 @@
  * ```
  */
 
-import type { JSONSchema } from './types.js'
+import type { JSONSchema, EnvironmentProvider } from './types.js'
 import { Shell } from './shell/shell.js'
 import type { ShellConfig } from './shell/types.js'
 import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
@@ -195,6 +195,14 @@ export class Workspace {
    */
   getShell(): Shell {
     return this.shell
+  }
+
+  /**
+   * Set environment provider for secure variable resolution in the shell.
+   * Variables are resolved at execution time — values never appear in conversation history.
+   */
+  setEnvProvider(provider: EnvironmentProvider): void {
+    this.shell.setEnvProvider(provider)
   }
 
   /**

@@ -67,6 +67,8 @@ export interface CommandContext {
   config: ShellConfig
   /** Stdin input (from pipe) */
   stdin?: string
+  /** Environment provider for secure variable resolution */
+  envProvider?: import('../types.js').EnvironmentProvider
 }
 
 export interface ParsedCommand {

@@ -326,6 +326,11 @@ export class Hive {
       await ws.delete(PLAN_PATH);
     }
 
+    // Set environment provider if provided
+    if (options.env) {
+      ws.setEnvProvider(options.env);
+    }
+
     // Configure shell read-only mode based on mode option
     const shell = ws.getShell();
     if (mode === "plan") {

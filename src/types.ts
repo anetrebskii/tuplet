@@ -205,6 +205,13 @@ export interface RepositoryProvider {
   setCached?(key: string, value: unknown, ttlMs?: number): Promise<void>
 }
 
+export interface EnvironmentProvider {
+  /** Get a variable value by name. Returns undefined if not set. */
+  get(name: string): string | undefined
+  /** List available variable names (for shell tool description). Values are NOT exposed. */
+  keys(): string[]
+}
+
 // ============================================================================
 // Agent Configuration
 // ============================================================================
@@ -283,6 +290,13 @@ export interface RunOptions {
    * - `undefined` (default) — Full access, no plan injection. Backward compatible.
    */
   mode?: 'plan' | 'execute'
+
+  /**
+   * Environment provider for secure variable resolution.
+   * Variables are resolved at shell execution time — values never appear in conversation history.
+   * The AI references variables by name (e.g., `$API_KEY`) and the shell resolves them.
+   */
+  env?: EnvironmentProvider
 
   /** @internal Trace builder passed from parent agent */
   _traceBuilder?: import('./trace.js').TraceBuilder

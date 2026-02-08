@@ -17,6 +17,7 @@ import {
   Workspace,
   FileWorkspaceProvider,
   MainAgentBuilder,
+  MemoryEnvironmentProvider,
   type LLMProvider,
   type Message,
   type ProgressUpdate,
@@ -236,6 +237,21 @@ async function main() {
 
   await workspace.init()
 
+  // Secure environment variables — secrets from process.env are passed to the shell
+  // via EnvironmentProvider. The AI uses $JIRA_API_KEY etc. in commands, but values
+  // never appear in conversation history.
+  const envVars: Record<string, string> = {}
+  if (process.env.JIRA_API_KEY) envVars.JIRA_API_KEY = process.env.JIRA_API_KEY
+  if (process.env.JIRA_BASE_URL) envVars.JIRA_BASE_URL = process.env.JIRA_BASE_URL
+  if (process.env.JIRA_EMAIL) envVars.JIRA_EMAIL = process.env.JIRA_EMAIL
+  const envProvider = Object.keys(envVars).length > 0
+    ? new MemoryEnvironmentProvider(envVars)
+    : undefined
+
+  if (envProvider) {
+    console.log(`Environment: ${envProvider.keys().map((k: string) => '$' + k).join(', ')} available`)
+  }
+
   // No custom tools or sub-agents — relies entirely on built-in:
   // shell (__shell__), explore, plan, ask_user, workspace, task tracking
   const agent = new Hive({
@@ -304,7 +320,7 @@ async function main() {
 
     const greeting = await agent.run(
       'Greet the user briefly. You are a coding assistant that creates software projects. Mention you can create projects in any language/framework.',
-      { history, signal: currentController.signal, workspace }
+      { history, signal: currentController.signal, workspace, env: envProvider }
     )
 
     stopEscHandler()
@@ -349,7 +365,8 @@ async function main() {
         const result = await agent.run(trimmed, {
           history,
           signal: currentController.signal,
-          workspace
+          workspace,
+          env: envProvider
         })
 
         stopEscHandler()
@@ -383,7 +400,8 @@ async function main() {
           const continuedResult = await agent.run(combinedAnswer, {
             history: currentResult.history,
             signal: currentController.signal,
-            workspace
+            workspace,
+            env: envProvider
           })
 
           stopEscHandler()

@@ -6,6 +6,7 @@
 
 import type { ShellConfig, ShellResult, CommandHandler, CommandContext, ParsedCommand } from './types.js'
 import type { WorkspaceProvider } from '../providers/workspace/types.js'
+import type { EnvironmentProvider } from '../types.js'
 import { MemoryWorkspaceProvider } from '../providers/workspace/memory.js'
 import { parseCommand } from './parser.js'
 import { commands } from './commands/index.js'
@@ -13,6 +14,8 @@ import { commands } from './commands/index.js'
 export interface ShellOptions extends ShellConfig {
   /** External WorkspaceProvider to use (optional) */
   fs?: WorkspaceProvider
+  /** Environment provider for secure variable resolution */
+  envProvider?: EnvironmentProvider
 }
 
 export class Shell {
@@ -22,12 +25,14 @@ export class Shell {
   private handlers: Map<string, CommandHandler>
   private readOnly: boolean = false
   private writablePaths: string[] = []
+  private envProvider?: EnvironmentProvider
 
   constructor(options: ShellOptions = {}) {
-    const { fs: externalFS, ...config } = options
+    const { fs: externalFS, envProvider, ...config } = options
     this.config = config
     this.fs = externalFS ?? new MemoryWorkspaceProvider(config.initialContext)
     this.env = {}
+    this.envProvider = envProvider
     this.handlers = new Map()
 
     // Register built-in commands
@@ -224,7 +229,8 @@ export class Shell {
       fs: this.fs,
       env: this.env,
       config: this.config,
-      stdin: stdin || cmd.stdinContent
+      stdin: stdin || cmd.stdinContent,
+      envProvider: this.envProvider
     }
 
     // Handle input redirection
@@ -280,6 +286,16 @@ export class Shell {
     this.env[key] = value
   }
 
+  /** Set environment provider for secure variable resolution */
+  setEnvProvider(provider: EnvironmentProvider): void {
+    this.envProvider = provider
+  }
+
+  /** Get the current environment provider */
+  getEnvProvider(): EnvironmentProvider | undefined {
+    return this.envProvider
+  }
+
   /**
    * Expand $VAR and ${VAR} references in a string using shell env.
    * Returns the string with variables replaced (unknown vars become empty string).
@@ -287,7 +303,7 @@ export class Shell {
   private expandVars(text: string): string {
     return text.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, braced, plain) => {
       const name = braced || plain
-      return this.env[name] ?? ''
+      return this.env[name] ?? this.envProvider?.get(name) ?? ''
     })
   }
 

@@ -13,9 +13,7 @@ import { MAX_OUTPUT_CHARS } from '../shell/limits.js'
  * Create the shell tool for context access
  */
 export function createShellTool(shell: Shell): Tool {
-  return {
-    name: '__shell__',
-    description: `Execute bash-like commands to interact with context, make HTTP requests, and browse web pages.
+  let description = `Execute bash-like commands to interact with context, make HTTP requests, and browse web pages.
 
 ## Overview
 
@@ -91,9 +89,19 @@ curl https://api.example.com/users?page=1&limit=10
 
 ## Important rules
 
-- NEVER use placeholders like \`<API_KEY>\`, \`<TOKEN>\`, \`YOUR_KEY_HERE\`. If a value is unknown, ask the user first using __ask_user__.
+- NEVER use placeholders like \`<API_KEY>\`, \`<TOKEN>\`, \`YOUR_KEY_HERE\`. If a value is unknown, check if an environment variable is available (see below), otherwise ask the user using __ask_user__.
 - Prefer free public APIs that don't require authentication. If auth is needed and credentials are not available, ask the user.
-- On failure, read the error message, fix the command, and retry. Try a different approach if the second attempt fails.`,
+- On failure, read the error message, fix the command, and retry. Try a different approach if the second attempt fails.`
+
+  // Append available environment variable names so the AI knows what's available
+  const envKeys = shell.getEnvProvider()?.keys() ?? []
+  if (envKeys.length > 0) {
+    description += `\n\n## Environment variables\n\nThe following variables are available: ${envKeys.map(k => '`$' + k + '`').join(', ')}. Use them in commands (e.g. \`curl -H "Authorization: Bearer $API_KEY" ...\`). Do NOT ask the user for these values — they are already configured.`
+  }
+
+  return {
+    name: '__shell__',
+    description,
 
     parameters: {
       type: 'object',
