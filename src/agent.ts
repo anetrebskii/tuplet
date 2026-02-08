@@ -30,7 +30,7 @@ import { getBuiltInAgents } from "./built-in-agents/index.js";
 /** Path where the plan is stored in workspace */
 export const PLAN_PATH = ".hive/plan.md";
 
-/** Full filesystem path for the plan in VirtualFS */
+/** Full filesystem path for the plan */
 export const PLAN_FS_PATH = `/${PLAN_PATH}`;
 
 /** System prompt prepended in plan mode */
@@ -106,11 +106,18 @@ export class Hive {
       this.tools.push(createAskUserTool());
     }
 
-    // Auto-merge built-in agents (user-defined agents with same name take priority)
-    const builtIn = getBuiltInAgents();
-    const userAgentNames = new Set((this.config.agents || []).map((a) => a.name));
-    const newAgents = builtIn.filter((a) => !userAgentNames.has(a.name));
-    this.config.agents = [...(this.config.agents || []), ...newAgents];
+    // Auto-merge built-in agents only when agents is not explicitly set.
+    // If agents is explicitly provided (even as []), respect that — no auto-injection.
+    // This prevents sub-agents from recursively spawning their own sub-agents.
+    if (!('agents' in config)) {
+      const builtIn = getBuiltInAgents();
+      this.config.agents = [...builtIn];
+    } else if (config.agents && config.agents.length > 0) {
+      const builtIn = getBuiltInAgents();
+      const userAgentNames = new Set(config.agents.map((a) => a.name));
+      const newAgents = builtIn.filter((a) => !userAgentNames.has(a.name));
+      this.config.agents = [...config.agents, ...newAgents];
+    }
 
     // Add __sub_agent__ tool if sub-agents are defined
     if (this.config.agents && this.config.agents.length > 0) {
@@ -308,13 +315,13 @@ export class Hive {
     await ws.init();
 
     // Capture existing plan content before cleanup (for prompt injection)
-    const existingPlan = ws.read<string>(PLAN_PATH);
+    const existingPlan = await ws.read<string>(PLAN_PATH);
     const hasExistingPlan = !!existingPlan && typeof existingPlan === "string";
 
     // Always delete old plan file — each run starts clean.
     // The content is already captured above for prompt injection.
     if (hasExistingPlan) {
-      ws.delete(PLAN_PATH);
+      await ws.delete(PLAN_PATH);
     }
 
     // Configure shell read-only mode based on mode option
@@ -332,9 +339,9 @@ export class Hive {
     // On a normal run (even with conversation history), start with a clean task list.
     const taskManager = new TaskManager();
     if (isResuming) {
-      taskManager.restoreFromWorkspace(ws);
+      await taskManager.restoreFromWorkspace(ws);
     } else {
-      ws.delete(".hive/tasks.json");
+      await ws.delete(".hive/tasks.json");
     }
 
     // Create tool context
@@ -373,7 +380,7 @@ export class Hive {
 
     // Inject workspace state snapshot so the AI knows what data exists
     // without needing to call explore first
-    const workspaceItems = ws.list().filter(
+    const workspaceItems = (await ws.list()).filter(
       (item) => !item.path.startsWith("/.hive/")
     );
     if (workspaceItems.length > 0) {

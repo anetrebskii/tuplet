@@ -1,7 +1,7 @@
 /**
  * Workspace - A virtual filesystem for agent communication
  *
- * Wraps VirtualFS from the shell module. AI agents interact with workspace
+ * Wraps a WorkspaceProvider. AI agents interact with workspace
  * using bash-like commands (cat, echo, ls, grep, etc.) through the shell.
  *
  * Usage:
@@ -22,15 +22,15 @@
  * // grep "theme" /
  *
  * // Read results after run
- * const prefs = workspace.read('/user/preferences.json')
+ * const prefs = await workspace.read('/user/preferences.json')
  * ```
  */
 
 import type { JSONSchema } from './types.js'
-import { VirtualFS } from './shell/fs.js'
 import { Shell } from './shell/shell.js'
 import type { ShellConfig } from './shell/types.js'
 import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
+import { MemoryWorkspaceProvider } from './providers/workspace/memory.js'
 
 export interface WorkspaceEntry {
   value: unknown
@@ -145,21 +145,20 @@ interface ValidatorEntry {
 export interface WorkspaceConfigExt extends WorkspaceConfig {
   /** Shell configuration for HTTP requests */
   shell?: ShellConfig
-  /** Async persistence provider (sits behind VirtualFS) */
+  /** Async persistence provider */
   provider?: WorkspaceProvider
 }
 
 /**
  * Workspace provides a virtual filesystem for agent communication.
- * Wraps VirtualFS and provides Shell access for AI to use bash commands.
+ * Uses WorkspaceProvider directly and provides Shell access for AI to use bash commands.
  */
 export class Workspace {
-  private fs: VirtualFS
+  private provider: WorkspaceProvider
   private shell: Shell
   private validators: Map<string, ValidatorEntry> = new Map()
   private definedPaths: Set<string> = new Set()
   private strict: boolean = false
-  private provider: WorkspaceProvider | undefined
   private initialized: boolean = false
   private unsubscribe: (() => void) | undefined
 
@@ -177,24 +176,11 @@ export class Workspace {
 
   constructor(config?: WorkspaceConfigExt) {
     this.strict = config?.strict ?? false
-    this.fs = new VirtualFS()
+    this.provider = config?.provider ?? new MemoryWorkspaceProvider()
     this.shell = new Shell({
       ...config?.shell,
-      fs: this.fs // Share VirtualFS instance with shell
+      fs: this.provider
     })
-    this.provider = config?.provider
-
-    // Wire onChange to forward writes/deletes to provider (fire-and-forget)
-    if (this.provider) {
-      const provider = this.provider
-      this.fs.setOnChange((type, path, content) => {
-        if (type === 'write') {
-          provider.write(path, content!).catch(() => {})
-        } else if (type === 'delete') {
-          provider.delete(path).catch(() => {})
-        }
-      })
-    }
 
     if (config?.paths) {
       for (const [key, value] of Object.entries(config.paths)) {
@@ -212,42 +198,26 @@ export class Workspace {
   }
 
   /**
-   * Get the underlying VirtualFS
+   * Get the underlying WorkspaceProvider
    */
-  getFS(): VirtualFS {
-    return this.fs
+  getProvider(): WorkspaceProvider {
+    return this.provider
   }
 
   /**
-   * Initialize the workspace provider.
-   * Loads persisted data into VirtualFS and sets up real-time subscriptions.
-   * No-op when no provider is configured (backward compatible).
+   * Initialize the workspace.
+   * Sets up real-time subscriptions if the provider supports them.
+   * No-op when no provider subscription is available.
    */
   async init(): Promise<void> {
-    if (this.initialized || !this.provider) return
+    if (this.initialized) return
     this.initialized = true
-
-    // Load persisted data into VirtualFS (without triggering onChange)
-    const data = await this.provider.load()
-    this.fs.hydrate(data)
 
     // Subscribe to external changes if provider supports it
     if (this.provider.subscribe) {
-      this.unsubscribe = this.provider.subscribe((changes: WorkspaceChange[]) => {
-        // Temporarily disable onChange to prevent feedback loop
-        const prevHandler = this.fs['onChange']
-        this.fs.setOnChange(null)
-        try {
-          for (const change of changes) {
-            if (change.type === 'write' && change.content !== undefined) {
-              this.fs.write(change.path, change.content)
-            } else if (change.type === 'delete') {
-              this.fs.delete(change.path)
-            }
-          }
-        } finally {
-          this.fs.setOnChange(prevHandler)
-        }
+      this.unsubscribe = this.provider.subscribe((_changes: WorkspaceChange[]) => {
+        // External changes go directly to the provider — no action needed
+        // since Shell reads from provider on demand.
       })
     }
   }
@@ -257,8 +227,6 @@ export class Workspace {
    * Unsubscribes, flushes pending writes, and disposes the provider.
    */
   async dispose(): Promise<void> {
-    if (!this.provider) return
-
     this.unsubscribe?.()
     this.unsubscribe = undefined
 
@@ -289,16 +257,6 @@ export class Workspace {
 
   /**
    * Register a path with optional validator and initial value
-   *
-   * @example
-   * // Format validation only (from .json extension)
-   * context.registerPath('data/config.json', null)
-   *
-   * // With JSON Schema
-   * context.registerPath('data/config.json', { type: 'object', properties: {...} })
-   *
-   * // With initial value
-   * context.registerPath('data/user.json', { validator: schema, value: { name: "Guest" } })
    */
   registerPath(
     path: string,
@@ -374,7 +332,7 @@ export class Workspace {
   /**
    * Write a value to the workspace at the given path
    *
-   * @param path - Dot-separated path (e.g., 'meals.today', 'user.preferences')
+   * @param path - Path (e.g., 'meals.today', 'user/preferences')
    * @param value - Any JSON-serializable value
    * @param _writtenBy - Optional identifier of who wrote this (unused, kept for API compatibility)
    * @returns WriteResult with success status and any validation errors
@@ -421,12 +379,13 @@ export class Workspace {
       return { success: false, errors }
     }
 
-    // Normalize path to VirtualFS format
+    // Normalize path
     const fsPath = path.startsWith('/') ? path : `/${path}`
 
-    // Serialize value for VirtualFS storage
+    // Serialize value for storage
     const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
-    this.fs.write(fsPath, content)
+    // Fire-and-forget write to provider
+    this.provider.write(fsPath, content).catch(() => {})
 
     return { success: true }
   }
@@ -563,7 +522,6 @@ export class Workspace {
           received: typeof value
         })
       }
-      // Could add items validation here if needed
     } else if (schema.type === 'object') {
       if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         errors.push({
@@ -600,7 +558,6 @@ export class Workspace {
   private validateFormat(value: unknown, format: FormatExt, path: string): ValidationError[] {
     switch (format) {
       case 'json':
-        // Must be object or array (valid JSON structure)
         if (typeof value !== 'object' || value === null) {
           return [{
             path,
@@ -613,7 +570,6 @@ export class Workspace {
 
       case 'md':
       case 'txt':
-        // Must be string
         if (typeof value !== 'string') {
           return [{
             path,
@@ -625,7 +581,6 @@ export class Workspace {
         return []
 
       case 'num':
-        // Must be number
         if (typeof value !== 'number' || Number.isNaN(value)) {
           return [{
             path,
@@ -637,7 +592,6 @@ export class Workspace {
         return []
 
       case 'bool':
-        // Must be boolean
         if (typeof value !== 'boolean') {
           return [{
             path,
@@ -659,9 +613,9 @@ export class Workspace {
    * @param path - Path to read from (with or without / prefix)
    * @returns The value, or undefined if not found
    */
-  read<T = unknown>(path: string): T | undefined {
+  async read<T = unknown>(path: string): Promise<T | undefined> {
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    const content = this.fs.read(fsPath)
+    const content = await this.provider.read(fsPath)
     if (content === null) return undefined
 
     try {
@@ -674,34 +628,34 @@ export class Workspace {
   /**
    * Check if a path exists in the workspace
    */
-  has(path: string): boolean {
+  async has(path: string): Promise<boolean> {
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    return this.fs.exists(fsPath)
+    return this.provider.exists(fsPath)
   }
 
   /**
    * Delete a path from the workspace
    */
-  delete(path: string): boolean {
+  async delete(path: string): Promise<boolean> {
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    return this.fs.delete(fsPath)
+    return this.provider.delete(fsPath)
   }
 
   /**
    * List all paths, optionally filtered by prefix
    */
-  list(prefix?: string): WorkspaceListItem[] {
+  async list(prefix?: string): Promise<WorkspaceListItem[]> {
     const fsPrefix = prefix
       ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
       : '/'
 
-    const files = this.fs.glob(fsPrefix + '**/*')
+    const files = await this.provider.glob(fsPrefix + '**/*')
     const items: WorkspaceListItem[] = []
 
     for (const path of files) {
-      if (this.fs.isDirectory(path)) continue
+      if (await this.provider.isDirectory(path)) continue
 
-      const content = this.fs.read(path)
+      const content = await this.provider.read(path)
       let value: unknown = content
       try {
         value = content ? JSON.parse(content) : null
@@ -722,45 +676,34 @@ export class Workspace {
   /**
    * Get all paths (just the keys, no metadata)
    */
-  keys(prefix?: string): string[] {
+  async keys(prefix?: string): Promise<string[]> {
     const fsPrefix = prefix
       ? (prefix.startsWith('/') ? prefix : `/${prefix}`)
       : '/'
 
-    return this.fs.glob(fsPrefix + '**/*')
-      .filter(p => !this.fs.isDirectory(p))
-      .sort()
+    const files = await this.provider.glob(fsPrefix + '**/*')
+    const result: string[] = []
+    for (const p of files) {
+      if (!await this.provider.isDirectory(p)) {
+        result.push(p)
+      }
+    }
+    return result.sort()
   }
 
   /**
    * Clear all data from the workspace
    */
-  clear(): void {
-    this.fs.delete('/')
-    this.fs.mkdir('/')
-  }
-
-  /**
-   * Export all data as a plain object
-   */
-  toObject(): Record<string, unknown> {
-    return this.fs.export()
-  }
-
-  /**
-   * Import data from a plain object
-   */
-  fromObject(obj: Record<string, unknown>, _writtenBy?: string): void {
-    for (const [path, value] of Object.entries(obj)) {
-      this.write(path, value)
-    }
+  async clear(): Promise<void> {
+    await this.provider.delete('/')
+    await this.provider.mkdir('/')
   }
 
   /**
    * Get number of entries
    */
-  get size(): number {
-    return this.keys().length
+  async getSize(): Promise<number> {
+    return (await this.keys()).length
   }
 
   private getPreview(value: unknown): string {
@@ -793,10 +736,3 @@ export class Workspace {
     return type
   }
 }
-
-// Note: Workspace tools (context_ls, context_read, context_write) have been removed.
-// AI agents now use shell commands to interact with workspace:
-//   ls /           - list context
-//   cat /file.json - read from context
-//   echo '...' > /file.json - write to context
-//   grep "pattern" / - search context

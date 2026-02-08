@@ -469,10 +469,10 @@ export class TaskManager {
    * Restore tasks from Workspace (if available)
    * Returns true if tasks were restored
    */
-  restoreFromWorkspace(workspace: Workspace | undefined): boolean {
+  async restoreFromWorkspace(workspace: Workspace | undefined): Promise<boolean> {
     if (!workspace) return false;
     try {
-      const state = workspace.read<TaskManagerState>(TASKS_CONTEXT_PATH);
+      const state = await workspace.read<TaskManagerState>(TASKS_CONTEXT_PATH);
       if (state && state.items && Array.isArray(state.items)) {
         this.restore(state);
         return true;

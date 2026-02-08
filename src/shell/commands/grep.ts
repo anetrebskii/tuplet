@@ -101,13 +101,13 @@ export const grepCommand: CommandHandler = {
       // Search in files
       for (const path of paths) {
         const files = path.includes('*') || recursive
-          ? ctx.fs.glob(recursive ? path.replace(/\/?$/, '/**/*') : path)
+          ? await ctx.fs.glob(recursive ? path.replace(/\/?$/, '/**/*') : path)
           : [path]
 
         for (const file of files) {
-          if (ctx.fs.isDirectory(file)) continue
+          if (await ctx.fs.isDirectory(file)) continue
 
-          const content = ctx.fs.read(file)
+          const content = await ctx.fs.read(file)
           if (content === null) continue
 
           const lines = content.split('\n')

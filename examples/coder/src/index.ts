@@ -199,7 +199,7 @@ async function main() {
 
   const llmProvider = new ClaudeProvider({
     apiKey,
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-3-haiku-20240307',
     maxTokens: 4096
   })
 
@@ -419,7 +419,7 @@ async function main() {
         }
 
         // Show workspace entries
-        const workspaceItems = workspace.list()
+        const workspaceItems = await workspace.list()
         if (workspaceItems.length > 0) {
           console.log('\n📦 Workspace:')
           for (const item of workspaceItems) {

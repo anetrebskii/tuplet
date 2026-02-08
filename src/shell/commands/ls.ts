@@ -53,7 +53,7 @@ export const lsCommand: CommandHandler = {
     for (const path of paths) {
       // Handle glob patterns
       if (path.includes('*')) {
-        const matches = ctx.fs.glob(path)
+        const matches = await ctx.fs.glob(path)
         if (matches.length === 0) {
           return { exitCode: 1, stdout: '', stderr: `ls: ${path}: No matches found` }
         }
@@ -62,12 +62,12 @@ export const lsCommand: CommandHandler = {
         }
       } else {
         // Regular directory listing
-        if (!ctx.fs.exists(path)) {
+        if (!await ctx.fs.exists(path)) {
           return { exitCode: 1, stdout: '', stderr: `ls: ${path}: No such file or directory` }
         }
 
-        if (ctx.fs.isDirectory(path)) {
-          const entries = ctx.fs.list(path)
+        if (await ctx.fs.isDirectory(path)) {
+          const entries = await ctx.fs.list(path)
           for (const entry of entries) {
             if (!showAll && entry.startsWith('.')) continue
             outputs.push(formatEntry(entry, longFormat))

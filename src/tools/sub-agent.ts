@@ -279,6 +279,8 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           // Pass parent's trace config for nested sub-agents
           trace: context.config.trace,
           agentName: agentName,
+          // Prevent recursive agent injection — sub-agents don't get their own sub-agents
+          agents: [],
         });
 
         const result = await subHive.run(inputMessage, {

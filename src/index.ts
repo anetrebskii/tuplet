@@ -192,10 +192,9 @@ export {
   FileWorkspaceProvider
 } from './providers/workspace/index.js'
 
-// Shell (Virtual FS for context)
+// Shell
 export {
   Shell,
-  VirtualFS,
   type ShellConfig,
   type ShellResult,
   type CommandHandler,

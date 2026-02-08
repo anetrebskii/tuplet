@@ -6,7 +6,6 @@
  */
 
 export { Shell } from './shell.js'
-export { VirtualFS, type VirtualFSChangeHandler, type VirtualFSChangeType } from './fs.js'
 export type { ShellConfig, ShellResult, CommandHandler, CommandHelp, CommandFlag, CommandExample } from './types.js'
 
 // Command handlers

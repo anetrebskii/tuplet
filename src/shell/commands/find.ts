@@ -55,13 +55,13 @@ export const findCommand: CommandHandler = {
     }
 
     // Get all files recursively
-    const allFiles = ctx.fs.glob(basePath + '/**/*')
+    const allFiles = await ctx.fs.glob(basePath + '/**/*')
     const outputs: string[] = []
 
     for (const file of allFiles) {
       // Apply type filter
-      if (typeFilter === 'f' && ctx.fs.isDirectory(file)) continue
-      if (typeFilter === 'd' && !ctx.fs.isDirectory(file)) continue
+      if (typeFilter === 'f' && await ctx.fs.isDirectory(file)) continue
+      if (typeFilter === 'd' && !await ctx.fs.isDirectory(file)) continue
 
       // Apply name filter
       if (namePattern) {
@@ -73,8 +73,8 @@ export const findCommand: CommandHandler = {
     }
 
     // Also include base path if it matches
-    if (ctx.fs.exists(basePath)) {
-      if (!typeFilter || (typeFilter === 'd' && ctx.fs.isDirectory(basePath))) {
+    if (await ctx.fs.exists(basePath)) {
+      if (!typeFilter || (typeFilter === 'd' && await ctx.fs.isDirectory(basePath))) {
         if (!namePattern || matchPattern(basePath.split('/').pop() || '', namePattern)) {
           outputs.unshift(basePath)
         }

@@ -35,10 +35,10 @@ export const catCommand: CommandHandler = {
 
     for (const path of args) {
       // Handle glob patterns
-      const files = path.includes('*') ? ctx.fs.glob(path) : [path]
+      const files = path.includes('*') ? await ctx.fs.glob(path) : [path]
 
       for (const file of files) {
-        const content = ctx.fs.read(file)
+        const content = await ctx.fs.read(file)
         if (content === null) {
           return { exitCode: 1, stdout: '', stderr: `cat: ${file}: No such file` }
         }

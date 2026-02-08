@@ -49,21 +49,21 @@ export const rmCommand: CommandHandler = {
 
     for (const path of paths) {
       // Handle glob patterns
-      const files = path.includes('*') ? ctx.fs.glob(path) : [path]
+      const files = path.includes('*') ? await ctx.fs.glob(path) : [path]
 
       for (const file of files) {
-        if (!ctx.fs.exists(file)) {
+        if (!await ctx.fs.exists(file)) {
           if (!force) {
             return { exitCode: 1, stdout: '', stderr: `rm: ${file}: No such file or directory` }
           }
           continue
         }
 
-        if (ctx.fs.isDirectory(file) && !recursive) {
+        if (await ctx.fs.isDirectory(file) && !recursive) {
           return { exitCode: 1, stdout: '', stderr: `rm: ${file}: is a directory` }
         }
 
-        ctx.fs.delete(file)
+        await ctx.fs.delete(file)
       }
     }
 

@@ -54,7 +54,7 @@ export const tailCommand: CommandHandler = {
     const outputs: string[] = []
 
     for (const path of paths) {
-      const content = ctx.fs.read(path)
+      const content = await ctx.fs.read(path)
       if (content === null) {
         return { exitCode: 1, stdout: '', stderr: `tail: ${path}: No such file` }
       }

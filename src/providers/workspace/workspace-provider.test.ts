@@ -1,111 +1,104 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { VirtualFS } from '../../shell/fs.js'
 import { MemoryWorkspaceProvider } from './memory.js'
 import { FileWorkspaceProvider } from './file.js'
 import { Workspace } from '../../workspace.js'
 import type { WorkspaceProvider, WorkspaceChange } from './types.js'
-import { mkdtemp, rm, readFile, readdir } from 'node:fs/promises'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-describe('VirtualFS onChange + hydrate', () => {
-  let fs: VirtualFS
+describe('MemoryWorkspaceProvider', () => {
+  let provider: MemoryWorkspaceProvider
 
   beforeEach(() => {
-    fs = new VirtualFS()
+    provider = new MemoryWorkspaceProvider()
   })
 
-  describe('onChange', () => {
-    it('fires on write with path and content', () => {
-      const handler = vi.fn()
-      fs.setOnChange(handler)
-
-      fs.write('/test.json', '{"a":1}')
-      expect(handler).toHaveBeenCalledWith('write', '/test.json', '{"a":1}')
-    })
-
-    it('fires on delete with path', () => {
-      const handler = vi.fn()
-      fs.write('/test.json', '{}')
-      fs.setOnChange(handler)
-
-      fs.delete('/test.json')
-      expect(handler).toHaveBeenCalledWith('delete', '/test.json')
-    })
-
-    it('does not fire when handler is null', () => {
-      const handler = vi.fn()
-      fs.setOnChange(handler)
-      fs.setOnChange(null)
-
-      fs.write('/test', 'data')
-      expect(handler).not.toHaveBeenCalled()
-    })
-
-    it('fires for each child on directory delete', () => {
-      fs.write('/dir/a', '1')
-      fs.write('/dir/b', '2')
-      fs.write('/dir/c', '3')
-
-      const handler = vi.fn()
-      fs.setOnChange(handler)
-
-      fs.delete('/dir')
-      expect(handler).toHaveBeenCalledTimes(3)
-      const paths = handler.mock.calls.map((c: unknown[]) => c[1]).sort()
-      expect(paths).toEqual(['/dir/a', '/dir/b', '/dir/c'])
-    })
-
-    it('does not fire on delete of non-existent path', () => {
-      const handler = vi.fn()
-      fs.setOnChange(handler)
-
-      fs.delete('/nonexistent')
-      expect(handler).not.toHaveBeenCalled()
-    })
+  it('read returns null for non-existent path', async () => {
+    expect(await provider.read('/missing')).toBeNull()
   })
 
-  describe('hydrate', () => {
-    it('loads data without triggering onChange', () => {
-      const handler = vi.fn()
-      fs.setOnChange(handler)
-
-      fs.hydrate({
-        '/a': 'value-a',
-        '/b': 'value-b'
-      })
-
-      expect(handler).not.toHaveBeenCalled()
-      expect(fs.read('/a')).toBe('value-a')
-      expect(fs.read('/b')).toBe('value-b')
-    })
-
-    it('creates parent directories', () => {
-      fs.hydrate({ '/deep/nested/file': 'content' })
-      expect(fs.isDirectory('/deep')).toBe(true)
-      expect(fs.isDirectory('/deep/nested')).toBe(true)
-      expect(fs.read('/deep/nested/file')).toBe('content')
-    })
-
-    it('overwrites existing data', () => {
-      fs.write('/key', 'old')
-      fs.hydrate({ '/key': 'new' })
-      expect(fs.read('/key')).toBe('new')
-    })
-  })
-})
-
-describe('MemoryWorkspaceProvider', () => {
-  it('load returns empty object', async () => {
-    const provider = new MemoryWorkspaceProvider()
-    const data = await provider.load()
-    expect(data).toEqual({})
+  it('write and read round-trip', async () => {
+    await provider.write('/test.json', '{"a":1}')
+    expect(await provider.read('/test.json')).toBe('{"a":1}')
   })
 
-  it('write and delete are no-ops', async () => {
-    const provider = new MemoryWorkspaceProvider()
-    await expect(provider.write('/test', 'data')).resolves.toBeUndefined()
-    await expect(provider.delete('/test')).resolves.toBeUndefined()
+  it('delete returns true for existing file', async () => {
+    await provider.write('/file', 'data')
+    expect(await provider.delete('/file')).toBe(true)
+    expect(await provider.read('/file')).toBeNull()
+  })
+
+  it('delete returns false for non-existent file', async () => {
+    expect(await provider.delete('/missing')).toBe(false)
+  })
+
+  it('exists returns true for files', async () => {
+    await provider.write('/file', 'data')
+    expect(await provider.exists('/file')).toBe(true)
+  })
+
+  it('exists returns false for missing paths', async () => {
+    expect(await provider.exists('/missing')).toBe(false)
+  })
+
+  it('exists returns true for directories', async () => {
+    await provider.mkdir('/dir')
+    expect(await provider.exists('/dir')).toBe(true)
+  })
+
+  it('list returns children of a directory', async () => {
+    await provider.write('/dir/a', '1')
+    await provider.write('/dir/b', '2')
+    const items = await provider.list('/dir')
+    expect(items).toEqual(['a', 'b'])
+  })
+
+  it('list includes subdirectories with trailing slash', async () => {
+    await provider.write('/dir/sub/file', 'data')
+    const items = await provider.list('/dir')
+    expect(items).toContain('sub/')
+  })
+
+  it('glob matches patterns', async () => {
+    await provider.write('/a.json', '{}')
+    await provider.write('/b.json', '{}')
+    await provider.write('/c.txt', 'text')
+    const matches = await provider.glob('/*.json')
+    expect(matches).toEqual(['/a.json', '/b.json'])
+  })
+
+  it('glob with ** matches nested paths', async () => {
+    await provider.write('/dir/a.json', '{}')
+    await provider.write('/dir/sub/b.json', '{}')
+    const matches = await provider.glob('/dir/**/*.json')
+    expect(matches).toContain('/dir/a.json')
+    expect(matches).toContain('/dir/sub/b.json')
+  })
+
+  it('mkdir creates directories', async () => {
+    await provider.mkdir('/new/dir')
+    expect(await provider.isDirectory('/new')).toBe(true)
+    expect(await provider.isDirectory('/new/dir')).toBe(true)
+  })
+
+  it('isDirectory returns false for files', async () => {
+    await provider.write('/file', 'data')
+    expect(await provider.isDirectory('/file')).toBe(false)
+  })
+
+  it('delete directory removes all children', async () => {
+    await provider.write('/dir/a', '1')
+    await provider.write('/dir/b', '2')
+    await provider.delete('/dir')
+    expect(await provider.read('/dir/a')).toBeNull()
+    expect(await provider.read('/dir/b')).toBeNull()
+  })
+
+  it('constructor accepts initial data', async () => {
+    const p = new MemoryWorkspaceProvider({ name: 'Alice', config: { port: 3000 } })
+    expect(await p.read('/name')).toBe('Alice')
+    expect(await p.read('/config')).toBe('{\n  "port": 3000\n}')
   })
 })
 
@@ -122,152 +115,121 @@ describe('FileWorkspaceProvider', () => {
     await rm(tmpDir, { recursive: true, force: true })
   })
 
-  it('load returns empty when directory is empty', async () => {
-    const data = await provider.load()
-    expect(data).toEqual({})
+  it('read returns null when file does not exist', async () => {
+    expect(await provider.read('/missing')).toBeNull()
   })
 
-  it('load returns empty when directory does not exist', async () => {
-    const p = new FileWorkspaceProvider(join(tmpDir, 'nonexistent'))
-    const data = await p.load()
-    expect(data).toEqual({})
-  })
-
-  it('write persists a file and load reads it back', async () => {
+  it('write and read round-trip', async () => {
     await provider.write('/config.json', '{"port":3000}')
-
-    const data = await provider.load()
-    expect(data['/config.json']).toBe('{"port":3000}')
+    expect(await provider.read('/config.json')).toBe('{"port":3000}')
   })
 
   it('write creates nested directories', async () => {
     await provider.write('/deep/nested/file.txt', 'hello')
-
     const content = await readFile(join(tmpDir, 'deep/nested/file.txt'), 'utf-8')
     expect(content).toBe('hello')
   })
 
-  it('delete removes a file', async () => {
+  it('delete removes a file and returns true', async () => {
     await provider.write('/to-delete.txt', 'bye')
-    await provider.delete('/to-delete.txt')
-
-    const data = await provider.load()
-    expect(data['/to-delete.txt']).toBeUndefined()
+    expect(await provider.delete('/to-delete.txt')).toBe(true)
+    expect(await provider.read('/to-delete.txt')).toBeNull()
   })
 
-  it('delete of non-existent file does not throw', async () => {
-    await expect(provider.delete('/nope')).resolves.toBeUndefined()
+  it('delete returns false for non-existent file', async () => {
+    expect(await provider.delete('/nope')).toBe(false)
   })
 
-  it('round-trip: write, reload, verify', async () => {
+  it('exists returns true for existing file', async () => {
+    await provider.write('/file.txt', 'data')
+    expect(await provider.exists('/file.txt')).toBe(true)
+  })
+
+  it('exists returns false for missing file', async () => {
+    expect(await provider.exists('/missing')).toBe(false)
+  })
+
+  it('list returns directory entries', async () => {
+    await provider.write('/dir/a.txt', 'a')
+    await provider.write('/dir/b.txt', 'b')
+    const items = await provider.list('/dir')
+    expect(items).toEqual(['a.txt', 'b.txt'])
+  })
+
+  it('list returns empty for non-existent directory', async () => {
+    expect(await provider.list('/missing')).toEqual([])
+  })
+
+  it('glob matches file patterns', async () => {
+    await provider.write('/a.json', '{}')
+    await provider.write('/b.json', '{}')
+    await provider.write('/c.txt', 'text')
+    const matches = await provider.glob('/*.json')
+    expect(matches).toEqual(['/a.json', '/b.json'])
+  })
+
+  it('mkdir creates directories', async () => {
+    await provider.mkdir('/new/dir')
+    expect(await provider.isDirectory('/new/dir')).toBe(true)
+  })
+
+  it('isDirectory returns true for directories', async () => {
+    await provider.mkdir('/mydir')
+    expect(await provider.isDirectory('/mydir')).toBe(true)
+  })
+
+  it('isDirectory returns false for files', async () => {
+    await provider.write('/file.txt', 'data')
+    expect(await provider.isDirectory('/file.txt')).toBe(false)
+  })
+
+  it('isDirectory returns false for non-existent path', async () => {
+    expect(await provider.isDirectory('/missing')).toBe(false)
+  })
+
+  it('round-trip: write, fresh provider, verify', async () => {
     await provider.write('/user.json', '{"name":"Alice"}')
     await provider.write('/notes.md', '# Notes\nHello')
 
-    // Create a new provider pointing at the same dir
     const provider2 = new FileWorkspaceProvider(tmpDir)
-    const data = await provider2.load()
-
-    expect(data['/user.json']).toBe('{"name":"Alice"}')
-    expect(data['/notes.md']).toBe('# Notes\nHello')
+    expect(await provider2.read('/user.json')).toBe('{"name":"Alice"}')
+    expect(await provider2.read('/notes.md')).toBe('# Notes\nHello')
   })
 })
 
 describe('Workspace + Provider integration', () => {
-  it('init is a no-op when no provider', async () => {
+  it('init is a no-op when no provider subscription', async () => {
     const ws = new Workspace()
     await ws.init() // should not throw
   })
 
-  it('init hydrates VirtualFS from provider', async () => {
-    const provider: WorkspaceProvider = {
-      async load() {
-        return {
-          '/loaded.json': '{"from":"provider"}'
-        }
-      },
-      async write() {},
-      async delete() {}
-    }
-
-    const ws = new Workspace({ provider })
+  it('reads data written via shell', async () => {
+    const ws = new Workspace()
     await ws.init()
 
-    expect(ws.read('loaded.json')).toEqual({ from: 'provider' })
+    const shell = ws.getShell()
+    await shell.execute('echo hello > /greeting.txt')
+
+    expect(await ws.read('greeting.txt')).toBe('hello\n')
   })
 
-  it('writes are forwarded to provider via onChange', async () => {
-    const writeSpy = vi.fn().mockResolvedValue(undefined)
-    const provider: WorkspaceProvider = {
-      async load() { return {} },
-      write: writeSpy,
-      async delete() {}
-    }
-
-    const ws = new Workspace({ provider })
-    await ws.init()
-
+  it('writes are readable via provider', async () => {
+    const ws = new Workspace()
     ws.write('test.json', { hello: 'world' })
-    expect(writeSpy).toHaveBeenCalledWith('/test.json', '{\n  "hello": "world"\n}')
+
+    // Allow fire-and-forget write to complete
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(await ws.read('test.json')).toEqual({ hello: 'world' })
   })
 
-  it('deletes are forwarded to provider via onChange', async () => {
-    const deleteSpy = vi.fn().mockResolvedValue(undefined)
-    const provider: WorkspaceProvider = {
-      async load() { return { '/item': 'data' } },
-      async write() {},
-      delete: deleteSpy
-    }
+  it('deletes work correctly', async () => {
+    const ws = new Workspace()
+    ws.write('item', 'data')
+    await new Promise(resolve => setTimeout(resolve, 10))
 
-    const ws = new Workspace({ provider })
-    await ws.init()
-
-    ws.delete('item')
-    expect(deleteSpy).toHaveBeenCalledWith('/item')
-  })
-
-  it('subscribe pushes external changes into VirtualFS', async () => {
-    let listener: ((changes: WorkspaceChange[]) => void) | null = null
-
-    const provider: WorkspaceProvider = {
-      async load() { return {} },
-      async write() {},
-      async delete() {},
-      subscribe(cb) {
-        listener = cb
-        return () => { listener = null }
-      }
-    }
-
-    const ws = new Workspace({ provider })
-    await ws.init()
-
-    // Simulate external write
-    listener!([{ type: 'write', path: '/external.json', content: '{"source":"remote"}' }])
-
-    expect(ws.read('external.json')).toEqual({ source: 'remote' })
-  })
-
-  it('subscribe changes do not echo back to provider', async () => {
-    const writeSpy = vi.fn().mockResolvedValue(undefined)
-    let listener: ((changes: WorkspaceChange[]) => void) | null = null
-
-    const provider: WorkspaceProvider = {
-      async load() { return {} },
-      write: writeSpy,
-      async delete() {},
-      subscribe(cb) {
-        listener = cb
-        return () => { listener = null }
-      }
-    }
-
-    const ws = new Workspace({ provider })
-    await ws.init()
-    writeSpy.mockClear()
-
-    // Simulate external write — should NOT call provider.write
-    listener!([{ type: 'write', path: '/external', content: 'data' }])
-    expect(writeSpy).not.toHaveBeenCalled()
+    await ws.delete('item')
+    expect(await ws.read('item')).toBeUndefined()
   })
 
   it('dispose calls flush and dispose on provider', async () => {
@@ -275,9 +237,14 @@ describe('Workspace + Provider integration', () => {
     const disposeSpy = vi.fn().mockResolvedValue(undefined)
 
     const provider: WorkspaceProvider = {
-      async load() { return {} },
+      async read() { return null },
       async write() {},
-      async delete() {},
+      async delete() { return false },
+      async exists() { return false },
+      async list() { return [] },
+      async glob() { return [] },
+      async mkdir() {},
+      async isDirectory() { return false },
       flush: flushSpy,
       dispose: disposeSpy
     }
@@ -291,18 +258,24 @@ describe('Workspace + Provider integration', () => {
   })
 
   it('init is idempotent', async () => {
-    const loadSpy = vi.fn().mockResolvedValue({})
+    const subscribeSpy = vi.fn().mockReturnValue(() => {})
     const provider: WorkspaceProvider = {
-      load: loadSpy,
+      async read() { return null },
       async write() {},
-      async delete() {}
+      async delete() { return false },
+      async exists() { return false },
+      async list() { return [] },
+      async glob() { return [] },
+      async mkdir() {},
+      async isDirectory() { return false },
+      subscribe: subscribeSpy
     }
 
     const ws = new Workspace({ provider })
     await ws.init()
     await ws.init()
 
-    expect(loadSpy).toHaveBeenCalledTimes(1)
+    expect(subscribeSpy).toHaveBeenCalledTimes(1)
   })
 
   it('FileWorkspaceProvider round-trip with Workspace', async () => {
@@ -324,8 +297,8 @@ describe('Workspace + Provider integration', () => {
       const ws2 = new Workspace({ provider: provider2 })
       await ws2.init()
 
-      expect(ws2.read('user.json')).toEqual({ name: 'Alice', age: 30 })
-      expect(ws2.read('notes.md')).toBe('# My Notes')
+      expect(await ws2.read('user.json')).toEqual({ name: 'Alice', age: 30 })
+      expect(await ws2.read('notes.md')).toBe('# My Notes')
     } finally {
       await rm(tmpDir, { recursive: true, force: true })
     }

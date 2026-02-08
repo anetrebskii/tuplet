@@ -55,7 +55,7 @@ export const jqCommand: CommandHandler = {
     if (ctx.stdin) {
       input = ctx.stdin
     } else if (paths.length > 0) {
-      input = ctx.fs.read(paths[0])
+      input = await ctx.fs.read(paths[0])
     }
 
     if (!input) {

@@ -36,14 +36,14 @@ export const mkdirCommand: CommandHandler = {
     }
 
     for (const path of paths) {
-      if (ctx.fs.exists(path)) {
+      if (await ctx.fs.exists(path)) {
         if (!parents) {
           return { exitCode: 1, stdout: '', stderr: `mkdir: ${path}: File exists` }
         }
         continue
       }
 
-      ctx.fs.mkdir(path)
+      await ctx.fs.mkdir(path)
     }
 
     return { exitCode: 0, stdout: '', stderr: '' }

@@ -1,22 +1,24 @@
 /**
  * Workspace Provider Interface
  *
- * Async persistence layer that sits behind VirtualFS.
- * Providers handle loading, writing, deleting, and subscribing to workspace changes.
+ * Async filesystem layer that Shell and Workspace use directly.
+ * Providers handle reading, writing, deleting, and subscribing to workspace changes.
  */
 
 export interface WorkspaceProvider {
-  /** Load all workspace data. Called once during init to hydrate VirtualFS. */
-  load(): Promise<Record<string, string>>
-  /** Persist a single write. Called via onChange (fire-and-forget). */
+  // Filesystem operations (all async)
+  read(path: string): Promise<string | null>
   write(path: string, content: string): Promise<void>
-  /** Persist a single delete. Called via onChange (fire-and-forget). */
-  delete(path: string): Promise<void>
-  /** Subscribe to external changes (e.g. Firestore real-time). Returns unsubscribe fn. */
+  delete(path: string): Promise<boolean>
+  exists(path: string): Promise<boolean>
+  list(path: string): Promise<string[]>
+  glob(pattern: string): Promise<string[]>
+  mkdir(path: string): Promise<void>
+  isDirectory(path: string): Promise<boolean>
+
+  // Lifecycle (optional)
   subscribe?(listener: WorkspaceChangeListener): () => void
-  /** Flush any pending writes. */
   flush?(): Promise<void>
-  /** Dispose resources (connections, watchers, etc). */
   dispose?(): Promise<void>
 }
 

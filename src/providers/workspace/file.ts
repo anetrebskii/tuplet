@@ -2,12 +2,29 @@
  * File Workspace Provider
  *
  * Persists workspace entries to a directory on disk.
- * load() reads all files recursively; write/delete sync individual files.
+ * All read/write operations go directly to the filesystem.
  */
 
-import { readdir, readFile, writeFile, unlink, mkdir } from 'node:fs/promises'
+import { readdir, readFile, writeFile, unlink, mkdir, stat, rm } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import type { WorkspaceProvider } from './types.js'
+
+/**
+ * Simple glob pattern matcher
+ */
+function matchGlob(path: string, pattern: string): boolean {
+  const regexPattern = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\/\*\*\//g, '{{GLOBSTARSLASH}}')  // /**/  → match / or /anything/
+    .replace(/\*\*/g, '{{GLOBSTAR}}')            // remaining ** (e.g. at end)
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]')
+    .replace(/{{GLOBSTARSLASH}}/g, '(?:/|/.*/)')  // /**/  → / or /stuff/
+    .replace(/{{GLOBSTAR}}/g, '.*')               // ** alone → match anything
+
+  const regex = new RegExp(`^${regexPattern}$`)
+  return regex.test(path)
+}
 
 export class FileWorkspaceProvider implements WorkspaceProvider {
   private dir: string
@@ -16,20 +33,16 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
     this.dir = dir
   }
 
-  async load(): Promise<Record<string, string>> {
-    const result: Record<string, string> = {}
-
+  async read(path: string): Promise<string | null> {
     try {
-      await this.readDirRecursive(this.dir, result)
+      const filePath = this.toFilePath(path)
+      return await readFile(filePath, 'utf-8')
     } catch (err: unknown) {
-      // Directory doesn't exist yet — return empty
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        return result
+        return null
       }
       throw err
     }
-
-    return result
   }
 
   async write(path: string, content: string): Promise<void> {
@@ -39,42 +52,98 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
     await writeFile(filePath, content, 'utf-8')
   }
 
-  async delete(path: string): Promise<void> {
+  async delete(path: string): Promise<boolean> {
     const filePath = this.toFilePath(path)
     try {
-      await unlink(filePath)
-    } catch (err: unknown) {
-      // Ignore if file doesn't exist
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw err
+      const s = await stat(filePath)
+      if (s.isDirectory()) {
+        await rm(filePath, { recursive: true, force: true })
+      } else {
+        await unlink(filePath)
       }
+      return true
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false
+      }
+      throw err
     }
   }
 
-  /** Convert a VirtualFS path (e.g. /user.json) to a local file path */
+  async exists(path: string): Promise<boolean> {
+    try {
+      await stat(this.toFilePath(path))
+      return true
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false
+      }
+      throw err
+    }
+  }
+
+  async list(path: string): Promise<string[]> {
+    try {
+      const dirPath = this.toFilePath(path)
+      const entries = await readdir(dirPath, { withFileTypes: true })
+      return entries.map(e => e.isDirectory() ? e.name + '/' : e.name).sort()
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return []
+      }
+      throw err
+    }
+  }
+
+  async glob(pattern: string): Promise<string[]> {
+    const results: string[] = []
+    try {
+      await this.walkDir(this.dir, results)
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return []
+      }
+      throw err
+    }
+    return results.filter(p => matchGlob(p, pattern)).sort()
+  }
+
+  async mkdir(path: string): Promise<void> {
+    await mkdir(this.toFilePath(path), { recursive: true })
+  }
+
+  async isDirectory(path: string): Promise<boolean> {
+    try {
+      const s = await stat(this.toFilePath(path))
+      return s.isDirectory()
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false
+      }
+      throw err
+    }
+  }
+
+  /** Convert a workspace path (e.g. /user.json) to a local file path */
   private toFilePath(fsPath: string): string {
-    // Strip leading / for storage
     const stripped = fsPath.replace(/^\//, '')
     return join(this.dir, stripped)
   }
 
-  /** Convert a local file path back to a VirtualFS path */
+  /** Convert a local file path back to a workspace path */
   private toFSPath(filePath: string): string {
     const rel = relative(this.dir, filePath)
     return `/${rel}`
   }
 
-  private async readDirRecursive(dir: string, result: Record<string, string>): Promise<void> {
+  private async walkDir(dir: string, results: string[]): Promise<void> {
     const entries = await readdir(dir, { withFileTypes: true })
-
     for (const entry of entries) {
       const fullPath = join(dir, entry.name)
       if (entry.isDirectory()) {
-        await this.readDirRecursive(fullPath, result)
+        await this.walkDir(fullPath, results)
       } else if (entry.isFile()) {
-        const content = await readFile(fullPath, 'utf-8')
-        const fsPath = this.toFSPath(fullPath)
-        result[fsPath] = content
+        results.push(this.toFSPath(fullPath))
       }
     }
   }

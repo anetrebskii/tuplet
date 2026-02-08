@@ -5,17 +5,18 @@
  */
 
 import type { ShellConfig, ShellResult, CommandHandler, CommandContext, ParsedCommand } from './types.js'
-import { VirtualFS } from './fs.js'
+import type { WorkspaceProvider } from '../providers/workspace/types.js'
+import { MemoryWorkspaceProvider } from '../providers/workspace/memory.js'
 import { parseCommand } from './parser.js'
 import { commands } from './commands/index.js'
 
 export interface ShellOptions extends ShellConfig {
-  /** External VirtualFS instance to use (optional) */
-  fs?: VirtualFS
+  /** External WorkspaceProvider to use (optional) */
+  fs?: WorkspaceProvider
 }
 
 export class Shell {
-  private fs: VirtualFS
+  private fs: WorkspaceProvider
   private env: Record<string, string>
   private config: ShellConfig
   private handlers: Map<string, CommandHandler>
@@ -25,7 +26,7 @@ export class Shell {
   constructor(options: ShellOptions = {}) {
     const { fs: externalFS, ...config } = options
     this.config = config
-    this.fs = externalFS ?? new VirtualFS(config.initialContext)
+    this.fs = externalFS ?? new MemoryWorkspaceProvider(config.initialContext)
     this.env = {}
     this.handlers = new Map()
 
@@ -228,7 +229,7 @@ export class Shell {
 
     // Handle input redirection
     if (cmd.inputFile) {
-      const content = this.fs.read(cmd.inputFile)
+      const content = await this.fs.read(cmd.inputFile)
       if (content === null) {
         return {
           exitCode: 1,
@@ -245,13 +246,13 @@ export class Shell {
     // Handle output redirection
     if (cmd.outputFile) {
       if (cmd.outputFile !== '/dev/null') {
-        this.fs.write(cmd.outputFile, result.stdout)
+        await this.fs.write(cmd.outputFile, result.stdout)
       }
       result = { ...result, stdout: '' }
     } else if (cmd.appendFile) {
       if (cmd.appendFile !== '/dev/null') {
-        const existing = this.fs.read(cmd.appendFile) || ''
-        this.fs.write(cmd.appendFile, existing + result.stdout)
+        const existing = await this.fs.read(cmd.appendFile) || ''
+        await this.fs.write(cmd.appendFile, existing + result.stdout)
       }
       result = { ...result, stdout: '' }
     }
@@ -264,8 +265,8 @@ export class Shell {
     return result
   }
 
-  /** Get the virtual filesystem */
-  getFS(): VirtualFS {
+  /** Get the workspace provider */
+  getFS(): WorkspaceProvider {
     return this.fs
   }
 
@@ -300,10 +301,5 @@ export class Shell {
     if (cmd.appendFile) cmd.appendFile = this.expandVars(cmd.appendFile)
     if (cmd.inputFile) cmd.inputFile = this.expandVars(cmd.inputFile)
     if (cmd.stdinContent) cmd.stdinContent = this.expandVars(cmd.stdinContent)
-  }
-
-  /** Export context data */
-  exportContext(): Record<string, unknown> {
-    return this.fs.export()
   }
 }

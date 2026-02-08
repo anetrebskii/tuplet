@@ -15,13 +15,13 @@ describe('Shell', () => {
       expect(shell.getEnv()).toEqual({})
     })
 
-    it('accepts initial context data', () => {
+    it('accepts initial context data', async () => {
       shell = new Shell({ initialContext: { name: 'Alice' } })
       const fs = shell.getFS()
-      expect(fs.read('/name')).toBe('Alice')
+      expect(await fs.read('/name')).toBe('Alice')
     })
 
-    it('accepts an external VirtualFS instance', async () => {
+    it('accepts an external WorkspaceProvider', async () => {
       const original = new Shell({ initialContext: { key: 'value' } })
       const shared = new Shell({ fs: original.getFS() })
 
@@ -76,7 +76,7 @@ describe('Shell', () => {
 
     describe('cat', () => {
       it('reads file content', async () => {
-        shell.getFS().write('/data', 'file content')
+        await shell.getFS().write('/data', 'file content')
         const result = await shell.execute('cat /data')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('file content')
@@ -89,16 +89,16 @@ describe('Shell', () => {
       })
 
       it('concatenates multiple files', async () => {
-        shell.getFS().write('/a', 'AAA')
-        shell.getFS().write('/b', 'BBB')
+        await shell.getFS().write('/a', 'AAA')
+        await shell.getFS().write('/b', 'BBB')
         const result = await shell.execute('cat /a /b')
         expect(result.stdout).toBe('AAABBB')
       })
     })
 
     describe('grep', () => {
-      beforeEach(() => {
-        shell.getFS().write('/log', 'INFO: started\nERROR: failed\nINFO: done\n')
+      beforeEach(async () => {
+        await shell.getFS().write('/log', 'INFO: started\nERROR: failed\nINFO: done\n')
       })
 
       it('filters lines by pattern', async () => {
@@ -140,7 +140,7 @@ describe('Shell', () => {
 
   describe('pipes', () => {
     it('pipes stdout of one command into stdin of the next', async () => {
-      shell.getFS().write('/data', 'line1\nline2\nline3\n')
+      await shell.getFS().write('/data', 'line1\nline2\nline3\n')
       const result = await shell.execute('cat /data | grep line2')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('line2')
@@ -148,7 +148,7 @@ describe('Shell', () => {
     })
 
     it('chains multiple pipes', async () => {
-      shell.getFS().write('/data', 'apple\nbanana\napricot\nblueberry\n')
+      await shell.getFS().write('/data', 'apple\nbanana\napricot\nblueberry\n')
       const result = await shell.execute('cat /data | grep a | grep p')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('apple')
@@ -168,17 +168,17 @@ describe('Shell', () => {
       const result = await shell.execute('echo hello > /out')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('')
-      expect(shell.getFS().read('/out')).toBe('hello\n')
+      expect(await shell.getFS().read('/out')).toBe('hello\n')
     })
 
     it('supports append redirection with >>', async () => {
-      shell.getFS().write('/out', 'first\n')
+      await shell.getFS().write('/out', 'first\n')
       await shell.execute('echo second >> /out')
-      expect(shell.getFS().read('/out')).toBe('first\nsecond\n')
+      expect(await shell.getFS().read('/out')).toBe('first\nsecond\n')
     })
 
     it('supports input redirection with <', async () => {
-      shell.getFS().write('/input', 'hello from file')
+      await shell.getFS().write('/input', 'hello from file')
       const result = await shell.execute('cat < /input')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('hello from file')
@@ -226,14 +226,14 @@ describe('Shell', () => {
     it('executes multiple lines sequentially', async () => {
       const result = await shell.execute('mkdir /data\necho hello > /data/file.txt')
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/data/file.txt')).toBe('hello\n')
+      expect(await shell.getFS().read('/data/file.txt')).toBe('hello\n')
     })
 
     it('stops on first error', async () => {
       const result = await shell.execute('cat /missing\necho should-not-run > /out')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain('No such file')
-      expect(shell.getFS().exists('/out')).toBe(false)
+      expect(await shell.getFS().exists('/out')).toBe(false)
     })
 
     it('concatenates stdout from multiple commands', async () => {
@@ -254,7 +254,7 @@ describe('Shell', () => {
       const input = `cat << EOF > /data.json\n{"name": "Alice"}\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/data.json')).toBe('{"name": "Alice"}')
+      expect(await shell.getFS().read('/data.json')).toBe('{"name": "Alice"}')
     })
 
     it('supports multi-line heredoc content', async () => {
@@ -268,24 +268,24 @@ describe('Shell', () => {
       ].join('\n')
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      const content = shell.getFS().read('/plan.json')
+      const content = await shell.getFS().read('/plan.json')
       expect(content).toContain('"title": "My Plan"')
       expect(content).toContain('"days": [1, 2, 3]')
     })
 
     it('supports heredoc with append redirection', async () => {
-      shell.getFS().write('/log', 'line1\n')
+      await shell.getFS().write('/log', 'line1\n')
       const input = `cat << EOF >> /log\nline2\nline3\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/log')).toBe('line1\nline2\nline3')
+      expect(await shell.getFS().read('/log')).toBe('line1\nline2\nline3')
     })
 
     it('supports heredoc without quotes around delimiter', async () => {
       const input = `cat <<EOF > /out\nhello heredoc\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/out')).toBe('hello heredoc')
+      expect(await shell.getFS().read('/out')).toBe('hello heredoc')
     })
 
     it('supports commands before heredoc', async () => {
@@ -297,7 +297,7 @@ describe('Shell', () => {
       ].join('\n')
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/meals/day1.json')).toBe('{"day": "Monday", "calories": 1800}')
+      expect(await shell.getFS().read('/meals/day1.json')).toBe('{"day": "Monday", "calories": 1800}')
     })
 
     it('supports comments before heredoc', async () => {
@@ -309,7 +309,7 @@ describe('Shell', () => {
       ].join('\n')
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/plan.json')).toBe('{"plan": true}')
+      expect(await shell.getFS().read('/plan.json')).toBe('{"plan": true}')
     })
 
     it('pipes heredoc content through commands', async () => {
@@ -400,20 +400,6 @@ describe('Shell', () => {
       const result = await shell.execute('cat << EOF\nTitle: $TITLE\nEOF')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('Title: My Plan')
-    })
-  })
-
-  describe('exportContext', () => {
-    it('exports filesystem data', async () => {
-      await shell.execute('echo hello > /greeting')
-      const exported = shell.exportContext()
-      expect(exported['/greeting']).toBe('hello\n')
-    })
-
-    it('parses JSON values on export', async () => {
-      shell.getFS().write('/config', '{"port": 3000}')
-      const exported = shell.exportContext()
-      expect(exported['/config']).toEqual({ port: 3000 })
     })
   })
 
@@ -572,13 +558,13 @@ describe('Shell', () => {
     })
 
     it('blocks rm command in read-only mode', async () => {
-      shell.getFS().write('/file.txt', 'data')
+      await shell.getFS().write('/file.txt', 'data')
       const result = await shell.execute('rm /file.txt')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("'rm' is not allowed")
       // File should still exist
-      expect(shell.getFS().read('/file.txt')).toBe('data')
+      expect(await shell.getFS().read('/file.txt')).toBe('data')
     })
 
     it('blocks mkdir command in read-only mode', async () => {
@@ -593,42 +579,42 @@ describe('Shell', () => {
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("cannot write to")
-      expect(shell.getFS().exists('/file.txt')).toBe(false)
+      expect(await shell.getFS().exists('/file.txt')).toBe(false)
     })
 
     it('blocks append redirection in read-only mode', async () => {
-      shell.getFS().write('/file.txt', 'existing')
+      await shell.getFS().write('/file.txt', 'existing')
       const result = await shell.execute('echo more >> /file.txt')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("cannot write to")
-      expect(shell.getFS().read('/file.txt')).toBe('existing')
+      expect(await shell.getFS().read('/file.txt')).toBe('existing')
     })
 
     it('allows writing to writable paths', async () => {
       shell.setReadOnly(true, ['/.hive/plan.md'])
-      shell.getFS().mkdir('/.hive')
+      await shell.getFS().mkdir('/.hive')
       const result = await shell.execute('echo "# Plan" > /.hive/plan.md')
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/.hive/plan.md')).toBe('# Plan\n')
+      expect(await shell.getFS().read('/.hive/plan.md')).toBe('# Plan\n')
     })
 
     it('allows read commands (ls) in read-only mode', async () => {
-      shell.getFS().write('/data.txt', 'hello')
+      await shell.getFS().write('/data.txt', 'hello')
       const result = await shell.execute('ls /')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('data.txt')
     })
 
     it('allows read commands (cat) in read-only mode', async () => {
-      shell.getFS().write('/data.txt', 'hello')
+      await shell.getFS().write('/data.txt', 'hello')
       const result = await shell.execute('cat /data.txt')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('hello')
     })
 
     it('allows read commands (grep) in read-only mode', async () => {
-      shell.getFS().write('/data.txt', 'hello world\nfoo bar\n')
+      await shell.getFS().write('/data.txt', 'hello world\nfoo bar\n')
       const result = await shell.execute('grep hello /data.txt')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('hello world')
@@ -644,7 +630,7 @@ describe('Shell', () => {
       shell.setReadOnly(false)
       const result = await shell.execute('echo hello > /file.txt')
       expect(result.exitCode).toBe(0)
-      expect(shell.getFS().read('/file.txt')).toBe('hello\n')
+      expect(await shell.getFS().read('/file.txt')).toBe('hello\n')
     })
 
     it('reports read-only status via isReadOnly()', () => {

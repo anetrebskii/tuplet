@@ -549,7 +549,7 @@ async function main() {
         }
 
         // Check if a plan was saved to workspace
-        const plan = workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
+        const plan = await workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
         if (plan) {
           console.log('\n📝 Plan saved to workspace:')
           console.log(`  Title: ${plan.title || 'Meal Plan'}`)
@@ -565,7 +565,7 @@ async function main() {
         }
 
         // Show all workspace entries if any exist
-        const workspaceItems = workspace.list()
+        const workspaceItems = await workspace.list()
         if (workspaceItems.length > 0) {
           console.log('\n📦 Workspace:')
           for (const item of workspaceItems) {

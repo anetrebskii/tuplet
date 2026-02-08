@@ -59,25 +59,14 @@ export interface CommandHandler {
 }
 
 export interface CommandContext {
-  /** Virtual filesystem */
-  fs: VirtualFSInterface
+  /** Workspace filesystem provider */
+  fs: import('../providers/workspace/types.js').WorkspaceProvider
   /** Environment variables */
   env: Record<string, string>
   /** Shell config */
   config: ShellConfig
   /** Stdin input (from pipe) */
   stdin?: string
-}
-
-export interface VirtualFSInterface {
-  read(path: string): string | null
-  write(path: string, content: string): void
-  delete(path: string): boolean
-  exists(path: string): boolean
-  list(pattern: string): string[]
-  glob(pattern: string): string[]
-  mkdir(path: string): void
-  isDirectory(path: string): boolean
 }
 
 export interface ParsedCommand {
