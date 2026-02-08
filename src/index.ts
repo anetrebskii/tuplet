@@ -79,6 +79,11 @@ export {
 } from './providers/llm/openai.js'
 
 export {
+  OpenRouterProvider,
+  type OpenRouterProviderConfig
+} from './providers/llm/openrouter.js'
+
+export {
   ConsoleLogger,
   type ConsoleLoggerConfig,
   type LogLevel

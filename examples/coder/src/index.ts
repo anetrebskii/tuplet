@@ -11,11 +11,13 @@ import * as readline from 'readline'
 import {
   Hive,
   ClaudeProvider,
+  OpenRouterProvider,
   ConsoleLogger,
   ConsoleTraceProvider,
   Workspace,
   FileWorkspaceProvider,
   MainAgentBuilder,
+  type LLMProvider,
   type Message,
   type ProgressUpdate,
   type PendingQuestion,
@@ -190,18 +192,26 @@ const SYSTEM_PROMPT = new MainAgentBuilder()
 // --- Main App ---
 
 async function main() {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable is required')
-    console.error('Create a .env file with: ANTHROPIC_API_KEY=your-key')
+  let llmProvider: LLMProvider
+
+  if (process.env.OPENROUTER_API_KEY) {
+    llmProvider = new OpenRouterProvider({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4',
+      maxTokens: 4096
+    })
+    console.log(`Using OpenRouter (${process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4'})`)
+  } else if (process.env.ANTHROPIC_API_KEY) {
+    llmProvider = new ClaudeProvider({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: 'claude-3-haiku-20240307',
+      maxTokens: 4096
+    })
+  } else {
+    console.error('Error: OPENROUTER_API_KEY or ANTHROPIC_API_KEY environment variable is required')
+    console.error('Create a .env file with: OPENROUTER_API_KEY=your-key  or  ANTHROPIC_API_KEY=your-key')
     process.exit(1)
   }
-
-  const llmProvider = new ClaudeProvider({
-    apiKey,
-    model: 'claude-3-haiku-20240307',
-    maxTokens: 4096
-  })
 
   // Workspace for agent state persistence
   const workspace = new Workspace({
