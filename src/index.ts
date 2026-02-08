@@ -104,6 +104,12 @@ export {
 } from './context-manager.js'
 
 export {
+  summarizeMessages,
+  microCompact,
+  parseSummary
+} from './summarizer.js'
+
+export {
   buildSystemPrompt,
   buildEnvironmentSection,
   buildRemindersSection,

@@ -209,7 +209,7 @@ export interface RepositoryProvider {
 // Agent Configuration
 // ============================================================================
 
-export type ContextStrategy = 'truncate_old' | 'summarize' | 'error'
+export type ContextStrategy = 'summarize' | 'error'
 
 export interface HiveConfig {
   systemPrompt: string
@@ -224,6 +224,8 @@ export interface HiveConfig {
   maxIterations?: number
   maxContextTokens?: number
   contextStrategy?: ContextStrategy
+  /** Tokens reserved as buffer before compaction triggers (default: 10% of maxContextTokens) */
+  compactBuffer?: number
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean

@@ -89,13 +89,15 @@ export class Hive {
     this.config = {
       maxIterations: 50,
       maxContextTokens: 100000,
-      contextStrategy: "truncate_old",
+      contextStrategy: "summarize",
       ...config,
     };
 
     this.contextManager = new ContextManager(
       this.config.maxContextTokens,
-      this.config.contextStrategy
+      this.config.contextStrategy,
+      this.config.llm,
+      this.config.compactBuffer
     );
 
     // Build tools list with internal tools (todo tool added per-run)

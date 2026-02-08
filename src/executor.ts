@@ -314,8 +314,8 @@ export async function executeLoop(
       message: iteration === 0 ? 'Thinking...' : 'Processing...'
     })
 
-    // Manage context (truncate if needed)
-    const managedMessages = contextManager.manageContext(messages)
+    // Manage context (truncate/summarize if needed)
+    const managedMessages = await contextManager.manageContext(messages)
 
     // Call LLM with timing
     const llmStartTime = Date.now()

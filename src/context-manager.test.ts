@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { truncateOldMessages, estimateMessageTokens, ContextManager, sanitizeHistory } from './context-manager.js'
 import type { Message } from './types.js'
 
@@ -172,13 +172,13 @@ describe('truncateOldMessages', () => {
 })
 
 describe('ContextManager', () => {
-  it('returns messages unchanged when within limit', () => {
+  it('returns messages unchanged when within limit', async () => {
     const cm = new ContextManager(100000)
     const messages: Message[] = [userText('hello'), assistantText('hi')]
-    expect(cm.manageContext(messages)).toEqual(messages)
+    expect(await cm.manageContext(messages)).toEqual(messages)
   })
 
-  it('truncates while preserving tool pairs when over limit', () => {
+  it('truncates while preserving tool pairs when over limit', async () => {
     const cm = new ContextManager(500) // small limit
     const messages: Message[] = [
       userText('start'),
@@ -187,7 +187,7 @@ describe('ContextManager', () => {
       assistantText('end'),
     ]
 
-    const result = cm.manageContext(messages)
+    const result = await cm.manageContext(messages)
 
     // Tool pair should be removed as a unit, not split
     for (let i = 0; i < result.length; i++) {
@@ -207,7 +207,7 @@ describe('ContextManager', () => {
     }
   })
 
-  it('should sanitize orphaned tool_use before returning', () => {
+  it('should sanitize orphaned tool_use before returning', async () => {
     const cm = new ContextManager(100000)
     const messages: Message[] = [
       userText('start'),
@@ -216,8 +216,130 @@ describe('ContextManager', () => {
       assistantToolUse('orphan_1', '__ask_user__'),
     ]
 
-    const result = cm.manageContext(messages)
+    const result = await cm.manageContext(messages)
     assertNoOrphanedToolUse(result)
+  })
+})
+
+describe('ContextManager with summarize strategy', () => {
+  function createMockLLM(summaryText: string) {
+    return {
+      chat: vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: `<summary>${summaryText}</summary>` }],
+        stopReason: 'end_turn' as const,
+      }),
+    }
+  }
+
+  it('returns messages unchanged when within limit (no compaction needed)', async () => {
+    const llm = createMockLLM('should not be called')
+    const cm = new ContextManager(100000, 'summarize', llm)
+    const messages: Message[] = [userText('hello'), assistantText('hi')]
+
+    const result = await cm.manageContext(messages)
+    expect(result).toEqual(messages)
+    expect(llm.chat).not.toHaveBeenCalled()
+  })
+
+  it('applies micro-compaction before full compaction', async () => {
+    // Create a scenario where micro-compaction alone is enough.
+    // 2 old tool results with 2000 chars each (~500 tokens each).
+    // After micro-compaction they shrink to ~15 tokens each.
+    // Total before: ~500 + 500 + overhead (~200) = ~1200 tokens
+    // Total after micro-compact: ~15 + 15 + 200 = ~230 tokens
+    // Set maxTokens=1100 with buffer=50 → threshold=1050 → original exceeds, compacted doesn't
+    const llm = createMockLLM('should not be called')
+    const cm = new ContextManager(1100, 'summarize', llm, 50)
+
+    const messages: Message[] = [
+      userText('start'),
+      assistantToolUse('t1'),
+      userToolResult('t1', 'a'.repeat(2000)),  // old, large → truncated by micro-compact
+      assistantToolUse('t2'),
+      userToolResult('t2', 'b'.repeat(100)),   // recent
+      assistantToolUse('t3'),
+      userToolResult('t3', 'c'.repeat(100)),   // recent
+      assistantToolUse('t4'),
+      userToolResult('t4', 'd'.repeat(100)),   // recent
+      assistantText('done'),
+    ]
+
+    const result = await cm.manageContext(messages)
+    // Micro-compaction should have been enough, no LLM call
+    expect(llm.chat).not.toHaveBeenCalled()
+    expect(result.length).toBe(messages.length)
+  })
+
+  it('runs full compaction when micro-compaction is not enough', async () => {
+    const llm = createMockLLM('User asked to fix auth bug. Found issue in login.ts line 42.')
+    // Use a large enough limit that keepBudget (40%) can hold the last message,
+    // but small enough that the total conversation exceeds it.
+    // Total text: ~1200 tokens, maxTokens=500, buffer=10 → threshold=490
+    // keepBudget = 200 tokens (40% of 500), last message ~6 tokens → fits
+    const cm = new ContextManager(500, 'summarize', llm, 10)
+
+    const messages: Message[] = [
+      userText('Fix the auth bug'),               // ~4 tokens
+      assistantText('a'.repeat(800)),              // ~200 tokens
+      userText('Check login.ts'),                  // ~4 tokens
+      assistantText('b'.repeat(800)),              // ~200 tokens
+      userText('More context here' + 'x'.repeat(400)), // ~100+ tokens
+      assistantText('c'.repeat(800)),              // ~200 tokens
+      userText('What did you find?'),              // ~5 tokens
+    ]
+
+    const result = await cm.manageContext(messages)
+
+    // LLM should have been called for summarization
+    expect(llm.chat).toHaveBeenCalledTimes(1)
+
+    // Result should start with summary message (user) + ack (assistant)
+    expect(result[0].role).toBe('user')
+    expect(typeof result[0].content).toBe('string')
+    expect(result[0].content as string).toContain('being continued from a previous conversation')
+    expect(result[0].content as string).toContain('fix auth bug')
+
+    expect(result[1].role).toBe('assistant')
+    expect(typeof result[1].content).toBe('string')
+    expect(result[1].content as string).toContain('continue from where we left off')
+
+    // Recent messages should follow after summary + ack
+    expect(result.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('preserves alternating user/assistant roles in output', async () => {
+    const llm = createMockLLM('Summary of conversation')
+    const cm = new ContextManager(200, 'summarize', llm, 20)
+
+    const messages: Message[] = [
+      userText('first message'),
+      assistantText('a'.repeat(400)),
+      userText('second message'),
+      assistantText('b'.repeat(400)),
+      userText('latest message'),
+    ]
+
+    const result = await cm.manageContext(messages)
+
+    // Verify alternating roles
+    for (let i = 1; i < result.length; i++) {
+      expect(result[i].role).not.toBe(result[i - 1].role)
+    }
+  })
+
+  it('falls back to truncation when no LLM provided', async () => {
+    const cm = new ContextManager(200, 'summarize', undefined, 20)
+
+    const messages: Message[] = [
+      userText('start'),
+      assistantText('a'.repeat(800)),
+      userText('end'),
+    ]
+
+    const result = await cm.manageContext(messages)
+
+    // Should still work via truncation fallback
+    expect(result.length).toBeLessThanOrEqual(messages.length)
   })
 })
 

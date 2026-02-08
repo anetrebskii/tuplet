@@ -4,7 +4,8 @@
  * Token estimation and context management utilities.
  */
 
-import type { Message, ContentBlock, ContextStrategy, ToolUseBlock, ToolResultBlock } from './types.js'
+import type { Message, ContentBlock, ContextStrategy, ToolUseBlock, ToolResultBlock, LLMProvider } from './types.js'
+import { microCompact, summarizeMessages } from './summarizer.js'
 
 /**
  * Estimate token count from text (approximately 4 chars per token)
@@ -191,6 +192,12 @@ export function truncateOldMessages(
   return sanitizeHistory([...result, ...kept])
 }
 
+/** Summary message prefix used to detect existing summaries */
+const SUMMARY_PREFIX = 'This session is being continued from a previous conversation that ran out of context.'
+
+/** Assistant acknowledgment after a summary message */
+const SUMMARY_ACK = "I'll continue from where we left off. I have the full context from the summary above."
+
 /**
  * Context manager for tracking token usage during execution
  */
@@ -198,10 +205,20 @@ export class ContextManager {
   private maxTokens: number
   private strategy: ContextStrategy
   private currentTokens: number = 0
+  private llm?: LLMProvider
+  private compactBuffer: number
 
-  constructor(maxTokens: number = 100000, strategy: ContextStrategy = 'truncate_old') {
+  constructor(
+    maxTokens: number = 100000,
+    strategy: ContextStrategy = 'summarize',
+    llm?: LLMProvider,
+    compactBuffer?: number
+  ) {
     this.maxTokens = maxTokens
     this.strategy = strategy
+    this.llm = llm
+    // Default buffer: 10% of maxTokens
+    this.compactBuffer = compactBuffer ?? Math.floor(maxTokens * 0.1)
   }
 
   /**
@@ -219,16 +236,16 @@ export class ContextManager {
   }
 
   /**
-   * Check if context is within limits
+   * Check if context is within limits (accounting for compact buffer)
    */
   isWithinLimits(): boolean {
-    return this.currentTokens <= this.maxTokens
+    return this.currentTokens <= this.maxTokens - this.compactBuffer
   }
 
   /**
    * Manage context according to strategy
    */
-  manageContext(messages: Message[]): Message[] {
+  async manageContext(messages: Message[]): Promise<Message[]> {
     this.updateTokenCount(messages)
 
     if (this.isWithinLimits()) {
@@ -236,15 +253,73 @@ export class ContextManager {
     }
 
     switch (this.strategy) {
-      case 'truncate_old':
-        return truncateOldMessages(messages, this.maxTokens)
       case 'summarize':
-        // Summarization would require LLM call - for now, fall back to truncation
-        return truncateOldMessages(messages, this.maxTokens)
+        return this.summarizeAndCompact(messages)
       case 'error':
         throw new Error(`Context limit exceeded: ${this.currentTokens} > ${this.maxTokens} tokens`)
       default:
         return messages
     }
+  }
+
+  /**
+   * Summarize strategy: micro-compact first, then full compaction if still over limit.
+   */
+  private async summarizeAndCompact(messages: Message[]): Promise<Message[]> {
+    // Step 1: Apply micro-compaction (truncate old large tool results)
+    let managed = microCompact(messages)
+    const afterMicroTokens = estimateTotalTokens(managed)
+
+    if (afterMicroTokens <= this.maxTokens - this.compactBuffer) {
+      return sanitizeHistory(managed)
+    }
+
+    // Step 2: Full compaction — need LLM
+    if (!this.llm) {
+      // No LLM available, fall back to truncation
+      return truncateOldMessages(managed, this.maxTokens)
+    }
+
+    // Determine how many recent messages to keep.
+    // Keep messages from the end that fit in ~40% of maxTokens.
+    const keepBudget = Math.floor(this.maxTokens * 0.4)
+    const groups = groupMessages(managed)
+    const recentGroups: Message[][] = []
+    let recentTokens = 0
+
+    for (let i = groups.length - 1; i >= 0; i--) {
+      const groupTokens = groups[i].reduce((sum, msg) => sum + estimateMessageTokens(msg), 0)
+      if (recentTokens + groupTokens > keepBudget) break
+      recentGroups.unshift(groups[i])
+      recentTokens += groupTokens
+    }
+
+    const recentMessages = recentGroups.flat()
+    const recentStartIdx = managed.length - recentMessages.length
+    const messagesToSummarize = managed.slice(0, recentStartIdx)
+
+    if (messagesToSummarize.length === 0) {
+      // Nothing to summarize, fall back to truncation
+      return truncateOldMessages(managed, this.maxTokens)
+    }
+
+    // Run full compaction
+    const summary = await summarizeMessages(messagesToSummarize, this.llm)
+
+    // Build result: summary user message + assistant ack + recent messages
+    const summaryMessage: Message = {
+      role: 'user',
+      content: `${SUMMARY_PREFIX} The conversation is summarized below:\n\n<summary>\n${summary}\n</summary>\n\nPlease continue from where we left off.`,
+    }
+
+    const ackMessage: Message = {
+      role: 'assistant',
+      content: SUMMARY_ACK,
+    }
+
+    // Ensure alternating roles are correct
+    const result = [summaryMessage, ackMessage, ...recentMessages]
+
+    return sanitizeHistory(result)
   }
 }
