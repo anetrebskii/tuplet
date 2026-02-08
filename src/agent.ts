@@ -392,6 +392,17 @@ export class Hive {
       systemPrompt += `\n\n## Current Workspace State\n\nThe following data currently exists in workspace:\n\n${stateLines.join("\n")}\n\nUse the shell to read full contents (e.g. \`cat ${workspaceItems[0].path}\`). Do NOT recreate data that already exists — read and present it instead.`;
     }
 
+    // Inject task management guidance into system prompt so all models see it
+    systemPrompt += `\n\n## Task Management
+
+For multi-step requests (3+ steps), use task tools to track progress:
+1. Create all tasks upfront with TaskCreate
+2. Work through them in order — mark in_progress, do the work, mark completed
+3. Do not respond until all tasks are completed
+
+Skip tasks for simple single-step requests.`;
+
+
     // Execute the agent loop
     const result = await executeLoop(
       {

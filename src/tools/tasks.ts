@@ -590,32 +590,6 @@ function notifyTaskUpdate(
   }
 }
 
-// Tool descriptions - shared content
-const TASK_TOOL_USAGE_NOTES = `
-## Workflow: Plan First, Then Execute
-
-1. **Plan** — Create ALL tasks upfront with TaskCreate before doing any work
-2. **Execute** — Work through tasks in order (mark in_progress → do the work → mark completed)
-3. **No mid-execution additions** — Only create new tasks if genuinely unexpected work is discovered
-
-## When to Use Task Management
-
-Use task management tools proactively in these scenarios:
-
-- Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
-- Plan mode - When using plan mode, create a task list to track the work
-- User explicitly requests todo list - When the user directly asks you to use the todo list
-- User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-
-## When NOT to Use Task Management
-
-Skip using task management when:
-- There is only a single, straightforward task
-- The task is trivial and tracking it provides no organizational benefit
-- The task can be completed in less than 3 trivial steps
-- The task is purely conversational or informational
-`;
 
 /**
  * Create the TaskCreate tool
@@ -623,22 +597,15 @@ Skip using task management when:
 export function createTaskCreateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskCreate",
-    description: `Create a task in the task list. **Create ALL tasks upfront before starting any work.** Duplicate tasks are automatically rejected.
-${TASK_TOOL_USAGE_NOTES}
+    description: `Create a task in the task list. Duplicates are automatically rejected.
 
-## Task Fields
+## Fields
 
-- **subject**: A brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
-- **description**: Detailed description of what needs to be done, including context and acceptance criteria
-- **activeForm**: Present continuous form shown in spinner when task is in_progress (e.g., "Fixing authentication bug"). This is displayed to the user while you work on the task.
+- **subject**: Brief, actionable title in imperative form (e.g., "Fix authentication bug")
+- **description**: What needs to be done, including context and acceptance criteria
+- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., "Fixing authentication bug")
 
-**IMPORTANT**: Always provide activeForm when creating tasks. The subject should be imperative ("Run tests") while activeForm should be present continuous ("Running tests"). All tasks are created with status \`pending\`.
-
-## Tips
-
-- Create tasks with clear, specific subjects that describe the outcome
-- Include enough detail in the description for another agent to understand and complete the task
-- After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
+Always provide activeForm. Tasks are created with status \`pending\` (first task auto-starts).
 `,
     parameters: {
       type: "object",
@@ -713,85 +680,20 @@ ${TASK_TOOL_USAGE_NOTES}
 export function createTaskUpdateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskUpdate",
-    description: `Use this tool to update a task in the task list.
+    description: `Update a task's status, details, or dependencies.
 
-## When to Use This Tool
+Status: \`pending\` → \`in_progress\` → \`completed\`. Use \`deleted\` to remove.
 
-**Mark tasks as resolved:**
-- When you have completed the work described in a task
-- When a task is no longer needed or has been superseded
-- IMPORTANT: Always mark your assigned tasks as resolved when you finish them
-- After resolving, call TaskList to find your next task
-
-- ONLY mark a task as completed when you have FULLY accomplished it
-- If you encounter errors, blockers, or cannot finish, keep the task as in_progress
-- When blocked, create a new task describing what needs to be resolved
-- Never mark a task as completed if:
-  - Tests are failing
-  - Implementation is partial
-  - You encountered unresolved errors
-  - You couldn't find necessary files or dependencies
-
-**Delete tasks:**
-- When a task is no longer relevant or was created in error
-- Setting status to \`deleted\` permanently removes the task
-
-**Update task details:**
-- When requirements change or become clearer
-- When establishing dependencies between tasks
-
-## Fields You Can Update
-
-- **status**: The task status (see Status Workflow below)
-- **subject**: Change the task title (imperative form, e.g., "Run tests")
-- **description**: Change the task description
-- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., "Running tests")
-- **owner**: Change the task owner (agent name)
-- **metadata**: Merge metadata keys into the task (set a key to null to delete it)
-- **addBlocks**: Mark tasks that cannot start until this one completes
-- **addBlockedBy**: Mark tasks that must complete before this one can start
-- **comment**: Add a progress note or comment to the task
-
-## Status Workflow
-
-Status progresses: \`pending\` → \`in_progress\` → \`completed\`
-
-Use \`deleted\` to permanently remove a task.
-
-## Staleness
-
-Make sure to read a task's latest state using \`TaskGet\` before updating it.
+Only mark completed when fully done. If blocked, keep as in_progress.
 
 ## Examples
 
-Mark task as in progress when starting work:
-\`\`\`json
-{"taskId": "1", "status": "in_progress"}
-\`\`\`
-
-Mark task as completed after finishing work:
 \`\`\`json
 {"taskId": "1", "status": "completed"}
-\`\`\`
-
-Delete a task:
-\`\`\`json
-{"taskId": "1", "status": "deleted"}
-\`\`\`
-
-Claim a task by setting owner:
-\`\`\`json
-{"taskId": "1", "owner": "my-name"}
-\`\`\`
-
-Set up task dependencies:
-\`\`\`json
+{"taskId": "1", "status": "in_progress"}
 {"taskId": "2", "addBlockedBy": ["1"]}
-\`\`\`
-
-Add a comment:
-\`\`\`json
-{"taskId": "1", "comment": "Started implementing the API endpoint"}
+{"taskId": "1", "owner": "my-name"}
+{"taskId": "1", "comment": "Started implementing"}
 \`\`\`
 `,
     parameters: {
@@ -992,28 +894,7 @@ Add a comment:
 export function createTaskGetTool(manager: TaskManager, _options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskGet",
-    description: `Use this tool to retrieve a task by its ID from the task list.
-
-## When to Use This Tool
-
-- When you need the full description and context before starting work on a task
-- To understand task dependencies (what it blocks, what blocks it)
-- After being assigned a task, to get complete requirements
-
-## Output
-
-Returns full task details:
-- **subject**: Task title
-- **description**: Detailed requirements and context
-- **status**: 'pending', 'in_progress', or 'completed'
-- **owner**: Agent that owns the task (if assigned)
-- **metadata**: Any additional metadata attached to the task
-
-## Tips
-
-- After fetching a task, verify its status before beginning work.
-- Use TaskList to see all tasks in summary form.
-`,
+    description: `Retrieve a task by ID. Returns full details: subject, description, status, dependencies, owner, and metadata.`,
     parameters: {
       type: "object",
       properties: {
@@ -1049,26 +930,7 @@ Returns full task details:
 export function createTaskListTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskList",
-    description: `Use this tool to list all tasks in the task list.
-
-## When to Use This Tool
-
-- To see what tasks are available to work on (status: 'pending', no owner, not blocked)
-- To check overall progress on the project
-- To find tasks that are blocked and need dependencies resolved
-- After completing a task, to check for newly unblocked work or claim the next available task
-- **Prefer working on tasks in ID order** (lowest ID first) when multiple tasks are available, as earlier tasks often set up context for later ones
-
-## Output
-
-Returns a summary of each task:
-- **id**: Task identifier (use with TaskGet, TaskUpdate)
-- **subject**: Brief description of the task
-- **status**: 'pending', 'in_progress', or 'completed'
-- **owner**: Agent ID if assigned, empty if available
-
-Use TaskGet with a specific task ID to view full details including description.
-`,
+    description: `List all tasks with their ID, subject, status, and owner. Use after completing a task to find the next one.`,
     parameters: {
       type: "object",
       properties: {},
