@@ -15,6 +15,7 @@ export interface WorkspaceProvider {
   glob(pattern: string): Promise<string[]>
   mkdir(path: string): Promise<void>
   isDirectory(path: string): Promise<boolean>
+  size?(path: string): Promise<number | null>
 
   // Lifecycle (optional)
   subscribe?(listener: WorkspaceChangeListener): () => void

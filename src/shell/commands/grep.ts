@@ -3,6 +3,7 @@
  */
 
 import type { CommandHandler, CommandContext, ShellResult } from '../types.js'
+import { MAX_LINE_LENGTH, MAX_OUTPUT_CHARS } from '../limits.js'
 
 export const grepCommand: CommandHandler = {
   name: 'grep',
@@ -26,7 +27,9 @@ export const grepCommand: CommandHandler = {
     ],
     notes: [
       'Supports JavaScript regex syntax',
-      'Exit code 1 when no matches found'
+      'Exit code 1 when no matches found',
+      `Lines are truncated to ${MAX_LINE_LENGTH} characters`,
+      `Total output is capped at ${MAX_OUTPUT_CHARS} characters`
     ]
   },
 
@@ -80,6 +83,23 @@ export const grepCommand: CommandHandler = {
 
     const outputs: string[] = []
     const matchingFiles: Set<string> = new Set()
+    let totalChars = 0
+    let outputTruncated = false
+
+    function truncateLine(line: string): string {
+      return line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line
+    }
+
+    function addOutput(line: string): boolean {
+      const truncated = truncateLine(line)
+      if (totalChars + truncated.length + 1 > MAX_OUTPUT_CHARS) {
+        outputTruncated = true
+        return false
+      }
+      outputs.push(truncated)
+      totalChars += truncated.length + 1 // +1 for newline
+      return true
+    }
 
     // Search in stdin if no paths
     if (paths.length === 0 && ctx.stdin) {
@@ -90,21 +110,21 @@ export const grepCommand: CommandHandler = {
         regex.lastIndex = 0 // Reset regex state
 
         if (matches !== invertMatch) {
-          if (showLineNumbers) {
-            outputs.push(`${i + 1}:${line}`)
-          } else {
-            outputs.push(line)
-          }
+          const formatted = showLineNumbers ? `${i + 1}:${line}` : line
+          if (!addOutput(formatted)) break
         }
       }
     } else {
       // Search in files
       for (const path of paths) {
+        if (outputTruncated) break
+
         const files = path.includes('*') || recursive
           ? await ctx.fs.glob(recursive ? path.replace(/\/?$/, '/**/*') : path)
           : [path]
 
         for (const file of files) {
+          if (outputTruncated) break
           if (await ctx.fs.isDirectory(file)) continue
 
           const content = await ctx.fs.read(file)
@@ -122,7 +142,7 @@ export const grepCommand: CommandHandler = {
               } else {
                 const prefix = paths.length > 1 || recursive ? `${file}:` : ''
                 const lineNum = showLineNumbers ? `${i + 1}:` : ''
-                outputs.push(`${prefix}${lineNum}${line}`)
+                if (!addOutput(`${prefix}${lineNum}${line}`)) break
               }
             }
           }
@@ -138,9 +158,14 @@ export const grepCommand: CommandHandler = {
       }
     }
 
+    let stdout = outputs.join('\n') + (outputs.length ? '\n' : '')
+    if (outputTruncated) {
+      stdout += `[Output truncated at ${MAX_OUTPUT_CHARS} characters. Narrow your search pattern or target specific files.]\n`
+    }
+
     return {
       exitCode: outputs.length > 0 ? 0 : 1,
-      stdout: outputs.join('\n') + (outputs.length ? '\n' : ''),
+      stdout,
       stderr: ''
     }
   }

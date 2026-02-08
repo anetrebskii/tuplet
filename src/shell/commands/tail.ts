@@ -3,6 +3,7 @@
  */
 
 import type { CommandHandler, CommandContext, ShellResult } from '../types.js'
+import { MAX_LINE_LENGTH } from '../limits.js'
 
 export const tailCommand: CommandHandler = {
   name: 'tail',
@@ -20,7 +21,8 @@ export const tailCommand: CommandHandler = {
     ],
     notes: [
       'Also accepts -NUM shorthand (e.g. tail -5 file)',
-      'Reads from stdin when no file given and input is piped'
+      'Reads from stdin when no file given and input is piped',
+      `Lines are truncated to ${MAX_LINE_LENGTH} characters`
     ]
   },
 
@@ -43,7 +45,9 @@ export const tailCommand: CommandHandler = {
     // Handle stdin
     if (paths.length === 0 && ctx.stdin) {
       const inputLines = ctx.stdin.split('\n')
-      const output = inputLines.slice(-lines).join('\n')
+      const output = inputLines.slice(-lines)
+        .map(line => line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line)
+        .join('\n')
       return { exitCode: 0, stdout: output + '\n', stderr: '' }
     }
 
@@ -60,7 +64,9 @@ export const tailCommand: CommandHandler = {
       }
 
       const fileLines = content.split('\n')
-      const output = fileLines.slice(-lines).join('\n')
+      const output = fileLines.slice(-lines)
+        .map(line => line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line)
+        .join('\n')
 
       if (paths.length > 1) {
         outputs.push(`==> ${path} <==`)

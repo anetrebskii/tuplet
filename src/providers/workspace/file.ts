@@ -124,6 +124,13 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
     }
   }
 
+  async size(path: string): Promise<number | null> {
+    try {
+      const s = await stat(this.toFilePath(path))
+      return s.size
+    } catch { return null }
+  }
+
   /** Convert a workspace path (e.g. /user.json) to a local file path */
   private toFilePath(fsPath: string): string {
     const stripped = fsPath.replace(/^\//, '')

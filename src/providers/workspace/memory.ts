@@ -151,4 +151,9 @@ export class MemoryWorkspaceProvider implements WorkspaceProvider {
     const normalized = this.normalizePath(path)
     return this.directories.has(normalized)
   }
+
+  async size(path: string): Promise<number | null> {
+    const content = this.data.get(this.normalizePath(path))
+    return content != null ? Buffer.byteLength(content, 'utf-8') : null
+  }
 }

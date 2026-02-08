@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Shell } from './shell.js'
 import { commands } from './commands/index.js'
+import { MAX_FILE_SIZE, MAX_LINE_LENGTH } from './limits.js'
+import { createShellTool } from '../tools/shell.js'
+import type { ToolContext } from '../types.js'
 
 describe('Shell', () => {
   let shell: Shell
@@ -647,6 +650,151 @@ describe('Shell', () => {
         expect(cmd.help!.usage).toBeTruthy()
         expect(cmd.help!.description).toBeTruthy()
       }
+    })
+  })
+
+  describe('large file handling', () => {
+    describe('cat size gate', () => {
+      it('rejects files over 256KB without offset/limit', async () => {
+        await shell.getFS().write('/big.txt', 'x'.repeat(MAX_FILE_SIZE + 1))
+        const result = await shell.execute('cat /big.txt')
+        expect(result.exitCode).toBe(1)
+        expect(result.stderr).toContain('exceeds max size')
+        expect(result.stderr).toContain('head -n 2000')
+      })
+
+      it('allows paginated access to large files with --offset/--limit', async () => {
+        const lines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`)
+        const bigContent = lines.join('\n')
+        // Make it exceed MAX_FILE_SIZE by padding lines
+        const padding = 'x'.repeat(Math.ceil(MAX_FILE_SIZE / 100))
+        const paddedLines = Array.from({ length: 100 }, (_, i) => `line ${i + 1} ${padding}`)
+        await shell.getFS().write('/big.txt', paddedLines.join('\n'))
+
+        const result = await shell.execute('cat --offset 0 --limit 10 /big.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('[Showing lines 1-10 of')
+        expect(result.stdout).toContain('line 1')
+      })
+    })
+
+    describe('cat pagination', () => {
+      it('paginates with --offset and --limit', async () => {
+        const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+        await shell.getFS().write('/data.txt', lines.join('\n'))
+
+        const result = await shell.execute('cat --offset 5 --limit 5 /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('[Showing lines 6-10 of 20]')
+        expect(result.stdout).toContain('line 6')
+        expect(result.stdout).toContain('line 10')
+        expect(result.stdout).not.toContain('line 5\n')
+        expect(result.stdout).not.toContain('line 11')
+      })
+
+      it('defaults to 2000-line limit', async () => {
+        const lines = Array.from({ length: 2500 }, (_, i) => `L${i + 1}`)
+        await shell.getFS().write('/data.txt', lines.join('\n'))
+
+        const result = await shell.execute('cat /data.txt')
+        expect(result.exitCode).toBe(0)
+        // Should contain line 2000 but not line 2001
+        expect(result.stdout).toContain('L2000')
+        expect(result.stdout).not.toContain('L2001')
+      })
+    })
+
+    describe('cat line numbers', () => {
+      it('shows line numbers with -n flag', async () => {
+        await shell.getFS().write('/data.txt', 'alpha\nbeta\ngamma\n')
+        const result = await shell.execute('cat -n /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('1\talpha')
+        expect(result.stdout).toContain('2\tbeta')
+        expect(result.stdout).toContain('3\tgamma')
+      })
+
+      it('shows correct line numbers with offset', async () => {
+        const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+        await shell.getFS().write('/data.txt', lines.join('\n'))
+        const result = await shell.execute('cat -n --offset 10 --limit 3 /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('11\tline 11')
+        expect(result.stdout).toContain('12\tline 12')
+        expect(result.stdout).toContain('13\tline 13')
+      })
+    })
+
+    describe('line truncation', () => {
+      it('cat truncates long lines', async () => {
+        const longLine = 'a'.repeat(MAX_LINE_LENGTH + 500)
+        await shell.getFS().write('/data.txt', longLine)
+        const result = await shell.execute('cat /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.length).toBeLessThan(longLine.length)
+        expect(result.stdout).toContain('...')
+      })
+
+      it('head truncates long lines', async () => {
+        const longLine = 'b'.repeat(MAX_LINE_LENGTH + 500)
+        await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
+        const result = await shell.execute('head -n 3 /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('short')
+        expect(result.stdout).toContain('...')
+        expect(result.stdout).not.toContain('b'.repeat(MAX_LINE_LENGTH + 1))
+      })
+
+      it('tail truncates long lines', async () => {
+        const longLine = 'c'.repeat(MAX_LINE_LENGTH + 500)
+        await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
+        const result = await shell.execute('tail -n 3 /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('...')
+        expect(result.stdout).not.toContain('c'.repeat(MAX_LINE_LENGTH + 1))
+      })
+
+      it('grep truncates long matching lines', async () => {
+        const longLine = 'MATCH' + 'd'.repeat(MAX_LINE_LENGTH + 500)
+        await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
+        const result = await shell.execute('grep MATCH /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('MATCH')
+        expect(result.stdout).toContain('...')
+        expect(result.stdout.length).toBeLessThan(longLine.length)
+      })
+    })
+
+    describe('grep output cap', () => {
+      it('caps output and appends truncation note', async () => {
+        // Create a file with many matching lines
+        const lines = Array.from({ length: 5000 }, (_, i) => `match line ${i + 1} with some extra content to fill space`)
+        await shell.getFS().write('/data.txt', lines.join('\n'))
+        const result = await shell.execute('grep match /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('[Output truncated at')
+        expect(result.stdout).toContain('Narrow your search')
+      })
+    })
+
+    describe('shell tool output truncation', () => {
+      it('spills large output to workspace file', async () => {
+        const tool = createShellTool(shell)
+        const ctx = { remainingTokens: 10000 } as ToolContext
+
+        // Build a big output via cat with --limit high enough
+        const bigLines = Array.from({ length: 500 }, (_, i) => `output line ${i + 1} ${'x'.repeat(100)}`)
+        await shell.getFS().write('/big-output.txt', bigLines.join('\n'))
+
+        const result = await tool.execute({ command: 'cat --limit 500 /big-output.txt' }, ctx)
+        expect(result.error).toContain('exceeds maximum')
+        expect(result.error).toContain('Saved to')
+        const data = result.data as Record<string, unknown>
+        expect(data.spillPath).toBeTruthy()
+        // Verify the file was written
+        const spillContent = await shell.getFS().read(data.spillPath as string)
+        expect(spillContent).toBeTruthy()
+      })
     })
   })
 })

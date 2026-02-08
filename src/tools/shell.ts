@@ -7,6 +7,7 @@
 
 import type { Tool } from '../types.js'
 import type { Shell } from '../shell/shell.js'
+import { MAX_OUTPUT_CHARS } from '../shell/limits.js'
 
 /**
  * Create the shell tool for context access
@@ -27,7 +28,7 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 | Command | Description |
 |---------|-------------|
 | \`browse\` | Fetch a web page and convert HTML to readable text |
-| \`cat\` | Concatenate and print files |
+| \`cat\` | Concatenate and print files (supports --offset/--limit for pagination) |
 | \`curl\` | Transfer data from or to a server |
 | \`echo\` | Display text |
 | \`find\` | Search for files in a directory hierarchy |
@@ -45,10 +46,18 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 1. **Verify paths** — before writing, check the parent directory exists with \`ls\`.
 2. **Quote special characters** — always quote URLs: \`curl 'https://api.com/path?a=1&b=2'\`.
 
+## Large file handling
+
+- Files over 256 KB cannot be read with \`cat\` directly. Use \`cat --offset 0 --limit 2000\` for paginated access, or \`head\`/\`tail\`/\`grep\` for partial reads.
+- Lines longer than 2000 characters are truncated in output.
+- If command output exceeds ${MAX_OUTPUT_CHARS} characters, it is saved to a temp file and you'll be told how to read it in chunks.
+
 ## Usage by category
 
 **Workspace (read/write):**
 - \`cat /data.json\` — read file
+- \`cat -n /data.json\` — read file with line numbers
+- \`cat --offset 0 --limit 100 /big.txt\` — read lines 1-100 of a large file
 - \`echo '{"name":"John"}' > /user.json\` — write file
 - \`head -n 10 /log.txt\` / \`tail -n 5 /log.txt\` — partial reads
 
@@ -119,6 +128,24 @@ curl https://api.example.com/users?page=1&limit=10
             exitCode: result.exitCode,
             stdout: result.stdout,
             stderr: result.stderr
+          }
+        }
+      }
+
+      // Output truncation with spill-to-disk
+      if (result.stdout.length > MAX_OUTPUT_CHARS) {
+        const timestamp = Date.now()
+        const spillPath = `/.hive/tmp/output-${timestamp}.txt`
+        const fs = shell.getFS()
+        await fs.write(spillPath, result.stdout)
+
+        return {
+          success: false,
+          error: `Output (${result.stdout.length} chars) exceeds maximum (${MAX_OUTPUT_CHARS} chars). Saved to ${spillPath}. Use \`head -n 2000 ${spillPath}\`, \`cat --offset 0 --limit 2000 ${spillPath}\`, or \`grep "pattern" ${spillPath}\` to read portions.`,
+          data: {
+            command,
+            exitCode: result.exitCode,
+            spillPath
           }
         }
       }
