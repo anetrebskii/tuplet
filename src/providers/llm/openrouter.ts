@@ -16,6 +16,8 @@ import type {
   StopReason
 } from '../../types.js'
 
+import type { ModelPricing } from '../../trace/types.js'
+
 export interface OpenRouterProviderConfig {
   apiKey?: string
   model?: string
@@ -279,4 +281,60 @@ export class OpenRouterProvider implements LLMProvider {
   getModelId(): string {
     return `openrouter:${this.model}`
   }
+
+  /**
+   * Fetch live model pricing from OpenRouter's public API.
+   * Returns a Record<string, ModelPricing> keyed by "openrouter:{modelId}"
+   * that can be passed to ConsoleTraceProvider({ modelPricing }).
+   *
+   * The endpoint is public and requires no API key.
+   */
+  static async fetchModelPricing(
+    baseURL = 'https://openrouter.ai/api/v1'
+  ): Promise<Record<string, ModelPricing>> {
+    const response = await fetch(`${baseURL}/models`)
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter models API error: ${response.statusText}`)
+    }
+
+    const data = await response.json() as OpenRouterModelsResponse
+    const pricing: Record<string, ModelPricing> = {}
+
+    for (const model of data.data) {
+      const p = model.pricing
+      if (!p?.prompt || !p?.completion) continue
+
+      const inputPer1M = parseFloat(p.prompt) * 1_000_000
+      const outputPer1M = parseFloat(p.completion) * 1_000_000
+      if (inputPer1M === 0 && outputPer1M === 0) continue
+
+      const entry: ModelPricing = { inputPer1M, outputPer1M }
+
+      if (p.input_cache_write) {
+        const val = parseFloat(p.input_cache_write) * 1_000_000
+        if (val > 0) entry.cacheWritePer1M = val
+      }
+      if (p.input_cache_read) {
+        const val = parseFloat(p.input_cache_read) * 1_000_000
+        if (val > 0) entry.cacheReadPer1M = val
+      }
+
+      pricing[`openrouter:${model.id}`] = entry
+    }
+
+    return pricing
+  }
+}
+
+interface OpenRouterModelsResponse {
+  data: Array<{
+    id: string
+    pricing?: {
+      prompt?: string
+      completion?: string
+      input_cache_read?: string
+      input_cache_write?: string
+    }
+  }>
 }

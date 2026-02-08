@@ -195,12 +195,13 @@ async function main() {
   let llmProvider: LLMProvider
 
   if (process.env.OPENROUTER_API_KEY) {
+    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4'
     llmProvider = new OpenRouterProvider({
       apiKey: process.env.OPENROUTER_API_KEY,
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4',
+      model,
       maxTokens: 4096
     })
-    console.log(`Using OpenRouter (${process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4'})`)
+    console.log(`Using OpenRouter (${model})`)
   } else if (process.env.ANTHROPIC_API_KEY) {
     llmProvider = new ClaudeProvider({
       apiKey: process.env.ANTHROPIC_API_KEY,

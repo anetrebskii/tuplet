@@ -161,6 +161,7 @@ export {
   generateSpanId,
   calculateCost,
   DEFAULT_MODEL_PRICING,
+  OPENROUTER_MODEL_PRICING,
   type TraceProvider,
   type TraceId,
   type SpanId,

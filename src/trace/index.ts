@@ -20,6 +20,7 @@ export { generateTraceId, generateSpanId } from './types.js'
 
 // Pricing
 export { DEFAULT_MODEL_PRICING, calculateCost } from './pricing.js'
+export { OPENROUTER_MODEL_PRICING } from './openrouter-pricing.js'
 
 // Builder
 export { TraceBuilder } from './builder.js'

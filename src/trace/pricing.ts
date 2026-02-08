@@ -3,6 +3,7 @@
  */
 
 import type { ModelPricing } from './types.js'
+import { OPENROUTER_MODEL_PRICING } from './openrouter-pricing.js'
 
 /**
  * Default pricing for common models
@@ -18,6 +19,8 @@ export const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'openai:gpt-4o': { inputPer1M: 2.50, outputPer1M: 10.00 },
   'openai:gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.60 },
   'openai:gpt-4-turbo': { inputPer1M: 10.00, outputPer1M: 30.00 },
+  // OpenRouter models (auto-generated, see openrouter-pricing.ts)
+  ...OPENROUTER_MODEL_PRICING,
 }
 
 /**
