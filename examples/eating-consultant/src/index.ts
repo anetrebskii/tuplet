@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { Hive, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -274,16 +274,16 @@ const SYSTEM_PROMPT = new MainAgentBuilder()
   .build()
 
 async function main() {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable is required')
-    console.error('Create a .env file with: ANTHROPIC_API_KEY=your-key')
+    console.error('Error: OPENROUTER_API_KEY environment variable is required')
+    console.error('Create a .env file with: OPENROUTER_API_KEY=your-key')
     process.exit(1)
   }
 
-  const llmProvider = new ClaudeProvider({
+  const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: 'claude-3-haiku-20240307',
+    model: 'moonshotai/kimi-k2',
     maxTokens: 2000
   })
 
