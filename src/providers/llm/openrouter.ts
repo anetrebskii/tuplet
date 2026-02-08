@@ -13,7 +13,8 @@ import type {
   Message,
   ToolSchema,
   ContentBlock,
-  StopReason
+  StopReason,
+  CacheUsage
 } from '../../types.js'
 
 import type { ModelPricing } from '../../trace/types.js'
@@ -27,9 +28,15 @@ export interface OpenRouterProviderConfig {
   title?: string
 }
 
+interface OpenAIContentPart {
+  type: 'text'
+  text: string
+  cache_control?: { type: 'ephemeral' }
+}
+
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string | null
+  content: string | OpenAIContentPart[] | null
   tool_calls?: OpenAIToolCall[]
   tool_call_id?: string
 }
@@ -66,6 +73,10 @@ interface OpenAIResponse {
     prompt_tokens: number
     completion_tokens: number
     total_tokens: number
+    prompt_tokens_details?: {
+      cached_tokens?: number
+      cache_write_tokens?: number
+    }
   }
 }
 
@@ -90,13 +101,18 @@ export class OpenRouterProvider implements LLMProvider {
     }
   }
 
+  private isAnthropicModel(model?: string): boolean {
+    return (model || this.model).startsWith('anthropic/')
+  }
+
   async chat(
     systemPrompt: string,
     messages: Message[],
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const openaiMessages = this.convertMessages(systemPrompt, messages)
+    const useCache = this.isAnthropicModel(options.model)
+    const openaiMessages = this.convertMessages(systemPrompt, messages, useCache)
     const openaiTools = this.convertTools(tools)
 
     const requestBody: Record<string, unknown> = {
@@ -138,25 +154,70 @@ export class OpenRouterProvider implements LLMProvider {
     return this.convertResponse(data)
   }
 
-  private convertMessages(systemPrompt: string, messages: Message[]): OpenAIMessage[] {
-    const result: OpenAIMessage[] = [
-      { role: 'system', content: systemPrompt }
-    ]
+  private convertMessages(systemPrompt: string, messages: Message[], useCache: boolean): OpenAIMessage[] {
+    // System message: use cache_control array format for Anthropic models
+    const systemMessage: OpenAIMessage = useCache
+      ? {
+          role: 'system',
+          content: [{
+            type: 'text' as const,
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' as const }
+          }]
+        }
+      : { role: 'system', content: systemPrompt }
 
-    for (const msg of messages) {
+    const result: OpenAIMessage[] = [systemMessage]
+
+    // Find last user message index for cache breakpoint
+    const lastUserIndex = useCache ? this.findLastUserMessageIndex(messages) : -1
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      const shouldCache = i === lastUserIndex
+
       if (typeof msg.content === 'string') {
-        result.push({
-          role: msg.role === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        })
+        if (shouldCache) {
+          result.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: [{
+              type: 'text' as const,
+              text: msg.content,
+              cache_control: { type: 'ephemeral' as const }
+            }]
+          })
+        } else {
+          result.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.content
+          })
+        }
       } else {
         // Handle content blocks
         const converted = this.convertContentBlocksToOpenAI(msg.content, msg.role)
+        if (shouldCache && converted.length > 0) {
+          const last = converted[converted.length - 1]
+          // Add cache_control to the last message's content
+          if (typeof last.content === 'string' && last.content) {
+            last.content = [{
+              type: 'text' as const,
+              text: last.content,
+              cache_control: { type: 'ephemeral' as const }
+            }]
+          }
+        }
         result.push(...converted)
       }
     }
 
     return result
+  }
+
+  private findLastUserMessageIndex(messages: Message[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return i
+    }
+    return -1
   }
 
   private convertContentBlocksToOpenAI(blocks: ContentBlock[], role: 'user' | 'assistant'): OpenAIMessage[] {
@@ -268,13 +329,24 @@ export class OpenRouterProvider implements LLMProvider {
       stopReason = 'max_tokens'
     }
 
+    // Extract cache usage if present (Anthropic models via OpenRouter)
+    const details = response.usage.prompt_tokens_details
+    let cacheUsage: CacheUsage | undefined
+    if (details && (details.cached_tokens || details.cache_write_tokens)) {
+      cacheUsage = {
+        cacheReadInputTokens: details.cached_tokens || 0,
+        cacheCreationInputTokens: details.cache_write_tokens || 0
+      }
+    }
+
     return {
       content,
       stopReason,
       usage: {
         inputTokens: response.usage.prompt_tokens,
         outputTokens: response.usage.completion_tokens
-      }
+      },
+      cacheUsage
     }
   }
 
