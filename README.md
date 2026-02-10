@@ -86,24 +86,24 @@ console.log(result.response)
 
 ## Examples
 
-- [**Coder**](examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
-- [**Eating Consultant**](examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
+- [**Coder**](https://github.com/anetrebskii/hive-agent/tree/main/examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
+- [**Eating Consultant**](https://github.com/anetrebskii/hive-agent/tree/main/examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
 
 ## Documentation
 
-- [Quick Start Guide](docs/quickstart.md)
-- [Configuration](docs/configuration.md)
-- [Defining Tools](docs/tools.md)
-- [Sub-Agents](docs/sub-agents.md)
-- [Workspace](docs/workspace.md)
-- [Conversation History](docs/history.md)
-- [Interactive Questions](docs/interactive.md)
-- [Interruption & Cancellation](docs/interruption.md)
-- [Execution Tracing](docs/tracing.md)
-- [Prompt Caching](docs/caching.md)
-- [Task Management](docs/task-management.md)
-- [Plan Mode](docs/plan-mode.md)
-- [Providers](docs/providers.md)
+- [Quick Start Guide](https://github.com/anetrebskii/hive-agent/blob/main/docs/quickstart.md)
+- [Configuration](https://github.com/anetrebskii/hive-agent/blob/main/docs/configuration.md)
+- [Defining Tools](https://github.com/anetrebskii/hive-agent/blob/main/docs/tools.md)
+- [Sub-Agents](https://github.com/anetrebskii/hive-agent/blob/main/docs/sub-agents.md)
+- [Workspace](https://github.com/anetrebskii/hive-agent/blob/main/docs/workspace.md)
+- [Conversation History](https://github.com/anetrebskii/hive-agent/blob/main/docs/history.md)
+- [Interactive Questions](https://github.com/anetrebskii/hive-agent/blob/main/docs/interactive.md)
+- [Interruption & Cancellation](https://github.com/anetrebskii/hive-agent/blob/main/docs/interruption.md)
+- [Execution Tracing](https://github.com/anetrebskii/hive-agent/blob/main/docs/tracing.md)
+- [Prompt Caching](https://github.com/anetrebskii/hive-agent/blob/main/docs/caching.md)
+- [Task Management](https://github.com/anetrebskii/hive-agent/blob/main/docs/task-management.md)
+- [Plan Mode](https://github.com/anetrebskii/hive-agent/blob/main/docs/plan-mode.md)
+- [Providers](https://github.com/anetrebskii/hive-agent/blob/main/docs/providers.md)
 
 ## License
 
