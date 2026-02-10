@@ -84,6 +84,11 @@ const result = await agent.run('Hello!')
 console.log(result.response)
 ```
 
+## Examples
+
+- [**Coder**](examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
+- [**Eating Consultant**](examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
+
 ## Documentation
 
 - [Quick Start Guide](docs/quickstart.md)
