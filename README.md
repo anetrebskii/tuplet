@@ -42,6 +42,7 @@ Hive gives you exactly that. A powerful, multi-agent framework you plug into you
 - **Claude** (Anthropic) — First-class support with caching and extended thinking
 - **OpenAI** — GPT-4o and other models
 - **OpenRouter** — Access to 100+ models via [openrouter.ai](https://openrouter.ai), with optimized prompts so non-Claude models use built-in tools effectively
+- **Custom providers** — Implement the `LLMProvider` interface to use any AI model
 
 ### Cost & Performance
 
