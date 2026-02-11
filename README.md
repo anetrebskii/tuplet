@@ -91,7 +91,7 @@ console.log(result.response)
 
 ## Documentation
 
-- [Quick Start Guide](https://github.com/anetrebskii/hive-agent/blob/main/docs/quickstart.md)
+- [Quick Start Guide](https://github.com/anetrebskii/hive-agent/blob/main/docs/README.md)
 - [Configuration](https://github.com/anetrebskii/hive-agent/blob/main/docs/configuration.md)
 - [Defining Tools](https://github.com/anetrebskii/hive-agent/blob/main/docs/tools.md)
 - [Sub-Agents](https://github.com/anetrebskii/hive-agent/blob/main/docs/sub-agents.md)

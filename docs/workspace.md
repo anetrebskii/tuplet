@@ -1,20 +1,26 @@
-# Workspace - Shared Data for Agents
+# Workspace
 
-Workspace is a virtual filesystem that enables tools and sub-agents to share structured data. Instead of relying on text responses (which can be lost or truncated), Workspace provides validated storage that persists across tool calls, sub-agent runs, and (with providers) across sessions.
+Workspace is the agent's working environment — a virtual filesystem for structured data. By default it lives in memory, but you can persist it to disk with `FileWorkspaceProvider`, or implement your own provider for any storage backend (S3, database, etc.).
 
-## How It Works
+The framework automatically injects a **shell tool** (`__shell__`) — an emulated shell environment where agents interact with workspace using familiar bash commands (`cat /data.json`, `echo '...' > /result.json`, `ls /`, etc.).
 
-Workspace is backed by an in-memory VirtualFS. The framework automatically provides a **shell tool** (`__shell__`) so agents can read/write workspace using bash commands (`cat /data.json`, `echo '...' > /result.json`, etc.). You define the paths and validation — the framework handles the rest.
+Large files (>256 KB) and long lines are handled automatically — the agent reads them in chunks using pagination.
 
-## Basic Setup
+## Setup
 
 ```typescript
-import { Hive, ClaudeProvider, Workspace } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, Workspace, FileWorkspaceProvider } from '@alexnetrebskii/hive-agent'
 
-// 1. Create workspace with paths
 const workspace = new Workspace({
+  // Optional: persist to disk (default: in-memory only)
+  provider: new FileWorkspaceProvider('./workspace-data'),
+
+  // Optional: restrict writes to defined paths only (default: false)
+  strict: false,
+
+  // Define paths with validation
   paths: {
-    'user/preferences.json': null,        // format validation only
+    'user/preferences.json': null,        // format validation only (from .json extension)
     'meals/today.json': { value: [] },    // with initial value
     'plan/current.json': {                // with schema validation
       validator: {
@@ -24,130 +30,30 @@ const workspace = new Workspace({
           days: { type: 'array' }
         },
         required: ['title', 'days']
-      }
+      },
+      description: 'Weekly meal plan'     // shown to AI in system prompt
     }
   }
 })
 
-// 2. Create agent
+// Load existing data from provider (required for FileWorkspaceProvider)
+await workspace.init()
+
 const agent = new Hive({
   systemPrompt: SYSTEM_PROMPT,
   tools: [...],
   llm: new ClaudeProvider({ apiKey: '...' })
 })
 
-// 3. Pass workspace to run
 const result = await agent.run('Create a meal plan', { workspace })
 
-// 4. Read data written by agent
-const plan = workspace.read('plan/current.json')
+// Clean up when done
+await workspace.dispose()
 ```
 
-## System Prompt
+## Validation
 
-The framework automatically provides the `__shell__` tool for workspace access. Your system prompt only needs to tell the agent **what paths exist** and **when to save**:
-
-```typescript
-const SYSTEM_PROMPT = `You are a nutrition consultant.
-
-## Workspace Storage
-
-Save important data to workspace so it persists:
-
-- user/preferences.json - User dietary preferences { goal, restrictions }
-- meals/today.json - Today's meals { totalCalories, meals: [] }
-- plan/current.json - Meal plan (required: title, days array)
-- notes/advice.md - Nutritional advice (markdown)
-
-Always save meal plans and user preferences to workspace.`
-```
-
-## Reading Data
-
-After `agent.run()` completes, read what the agent wrote from your application code:
-
-```typescript
-// Read with type hint
-const plan = workspace.read<{ title: string; days: string[] }>('plan/current.json')
-
-// Check if exists
-if (workspace.has('plan/current.json')) {
-  console.log('Plan created!')
-}
-
-// Get metadata
-const entry = workspace.getEntry('meals/today.json')
-console.log(entry?.writtenBy)   // 'nutrition_agent'
-console.log(entry?.updatedAt)   // timestamp
-
-// List all data
-const items = workspace.list()
-// [{ path: 'user/preferences.json', preview: '{goal, restrictions}', updatedAt: ... }]
-
-// List by prefix (matches paths starting with prefix)
-workspace.list('meals/')     // 'meals/today.json', 'meals/history.json'
-workspace.list('meals')      // same as above
-workspace.list('mea')        // also matches 'meals/*'
-workspace.list('user/pref')  // 'user/preferences.json'
-```
-
-## Initialization Options
-
-### Strict Mode
-
-Only allow writes to defined paths:
-
-```typescript
-const workspace = new Workspace({
-  strict: true,  // Reject writes to undefined paths
-  paths: {
-    'user/data.json': null,
-    'output/result.json': null
-  }
-})
-
-// Works
-workspace.write('user/data.json', { name: 'Alex' })
-
-// Fails in strict mode
-workspace.write('random/path.json', { foo: 'bar' })
-// Error: Path "random/path.json" is not defined
-```
-
-### Initial Values
-
-Pre-populate paths with data:
-
-```typescript
-const workspace = new Workspace({
-  paths: {
-    // With initial value (format validation from .json extension)
-    'config/settings.json': {
-      value: { theme: 'dark', language: 'en' }
-    },
-
-    // With initial value AND schema validator
-    'meals/today.json': {
-      validator: {
-        type: 'object',
-        properties: {
-          totalCalories: { type: 'number' },
-          meals: { type: 'array' }
-        }
-      },
-      value: { totalCalories: 0, meals: [] }
-    }
-  }
-})
-
-// Data is available immediately
-const settings = workspace.read('config/settings.json')
-// { theme: 'dark', language: 'en' }
-```
-
-### Format Extensions
-
-File-like extensions provide basic type validation:
+Files are validated by extension automatically:
 
 | Extension | Validates |
 |-----------|-----------|
@@ -157,60 +63,34 @@ File-like extensions provide basic type validation:
 | `.num` | Number |
 | `.bool` | Boolean |
 
-```typescript
-const workspace = new Workspace({
-  paths: {
-    'data/config.json': null,    // Must be object/array
-    'notes/summary.md': null,    // Must be string
-    'stats/count.num': null,     // Must be number
-  }
-})
-```
-
-### JSON Schema Validation
+For stricter validation, pass a `validator` — JSON Schema, Zod schema, or a custom function:
 
 ```typescript
+import { z } from 'zod'
+
 const workspace = new Workspace({
   paths: {
+    // JSON Schema
     'plan/current.json': {
       validator: {
         type: 'object',
         properties: {
           title: { type: 'string' },
-          goal: { type: 'string', enum: ['weight_loss', 'muscle_gain'] },
           days: { type: 'array' }
         },
         required: ['title', 'days']
-      },
-      description: 'Weekly meal plan'  // Shown to AI
-    }
-  }
-})
-```
+      }
+    },
 
-### Zod Validation
+    // Zod
+    'user/profile.json': {
+      validator: z.object({
+        name: z.string().min(1),
+        email: z.string().email()
+      })
+    },
 
-```typescript
-import { z } from 'zod'
-
-const UserSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  age: z.number().positive().optional()
-})
-
-const workspace = new Workspace({
-  paths: {
-    'user/profile.json': { validator: UserSchema }
-  }
-})
-```
-
-### Custom Validators
-
-```typescript
-const workspace = new Workspace({
-  paths: {
+    // Custom function
     'data/items.json': {
       validator: (value: unknown) => {
         if (!Array.isArray(value)) {
@@ -219,185 +99,32 @@ const workspace = new Workspace({
         if (value.length > 100) {
           return [{ path: 'data/items.json', message: 'Max 100 items' }]
         }
-        return null  // Valid
+        return null  // valid
       }
     }
   }
 })
 ```
 
-## Writing Data
+## Reading Data
 
-Pre-populate workspace from your application code before running the agent:
-
-```typescript
-// Simple write
-workspace.write('user/preferences.json', { theme: 'dark' })
-
-// Write with author tracking
-workspace.write('meals/today.json', { meals: [...] }, 'nutrition_agent')
-
-// Check result for validated paths
-const result = workspace.write('plan/current.json', { title: 'Plan' })
-if (!result.success) {
-  console.log('Errors:', result.errors)
-  // [{ path: 'plan/current.json.days', message: 'Missing required property: days' }]
-}
-```
-
-### Runtime Path Registration
+After `agent.run()` completes, read what the agent wrote:
 
 ```typescript
-const workspace = new Workspace({ strict: true, paths: {} })
+// Read with type hint
+const plan = workspace.read<{ title: string; days: string[] }>('plan/current.json')
 
-// Add paths after construction
-workspace.registerPath('dynamic/data.json', {
-  validator: { type: 'object' },
-  value: {}
-})
+// Check if exists
+workspace.has('plan/current.json')
+
+// List all data
+const items = workspace.list()
+// [{ path: 'user/preferences.json', preview: '{goal, ...}', updatedAt: ... }]
 ```
 
-### Other Operations
-
-```typescript
-// Delete
-workspace.delete('temp/scratch')
-
-// Clear all
-workspace.clear()
-
-// Export/Import
-const data = workspace.toObject()
-workspace.fromObject(savedData)
-
-// Count
-console.log(workspace.size)
-```
-
-## Shared Workspace
-
-Workspace is automatically passed to sub-agents:
-
-```typescript
-const workspace = new Workspace({
-  paths: {
-    'research/findings.json': null,
-    'draft/article.md': null,
-    'review/feedback.json': null
-  }
-})
-
-// Parent agent orchestrates sub-agents
-const result = await agent.run('Write an article', { workspace })
-
-// Each sub-agent writes to workspace:
-// - researcher → 'research/findings.json'
-// - writer → 'draft/article.md'
-// - reviewer → 'review/feedback.json'
-
-// Access all artifacts
-const research = workspace.read('research/findings.json')
-const draft = workspace.read('draft/article.md')
-const review = workspace.read('review/feedback.json')
-```
-
-## Workspace Providers
-
-By default, workspace data lives only in memory. Use a **WorkspaceProvider** to persist data to disk, a database, or any other storage backend.
-
-### Architecture
-
-```
-Workspace (validation, JSON ser/de, path registration)
-  ├── VirtualFS (in-memory cache, synchronous — Shell reads/writes here)
-  │     ├── onChange hook → fires on every write/delete
-  │     └── hydrate() → bulk load without triggering onChange
-  └── WorkspaceProvider (async persistence layer, sits behind VirtualFS)
-        ├── load() → hydrates VirtualFS on init
-        ├── write/delete() → called via onChange (fire-and-forget)
-        └── subscribe() → pushes external changes into VirtualFS
-```
-
-Shell commands stay synchronous. The provider is invisible to agents.
-
-### MemoryWorkspaceProvider
-
-No-op provider — the default behavior. Everything lives only in VirtualFS.
-
-```typescript
-import { Workspace, MemoryWorkspaceProvider } from '@alexnetrebskii/hive-agent'
-
-const workspace = new Workspace({
-  provider: new MemoryWorkspaceProvider()
-})
-```
-
-### FileWorkspaceProvider
-
-Persists workspace entries to a directory on disk:
-
-```typescript
-import { Workspace, FileWorkspaceProvider } from '@alexnetrebskii/hive-agent'
-
-const workspace = new Workspace({
-  provider: new FileWorkspaceProvider('./data/workspace')
-})
-
-// Initialize — loads existing files from disk into VirtualFS
-await workspace.init()
-
-const agent = new Hive({ ... })
-const result = await agent.run('Create a meal plan', { workspace })
-
-// Data is automatically persisted to ./data/workspace/ as files are written
-
-// Clean up when done
-await workspace.dispose()
-```
-
-On disk, workspace paths map to files:
-- `user/preferences.json` → `./data/workspace/user/preferences.json`
-- `notes/advice.md` → `./data/workspace/notes/advice.md`
-
-### Custom Provider
+## Custom Provider
 
 Implement the `WorkspaceProvider` interface for any storage backend:
-
-```typescript
-import type { WorkspaceProvider, WorkspaceChangeListener } from '@alexnetrebskii/hive-agent'
-
-class FirestoreWorkspaceProvider implements WorkspaceProvider {
-  constructor(private db: Firestore, private docPath: string) {}
-
-  async load(): Promise<Record<string, string>> {
-    const doc = await this.db.doc(this.docPath).get()
-    return doc.exists ? doc.data()?.entries || {} : {}
-  }
-
-  async write(path: string, content: string): Promise<void> {
-    await this.db.doc(this.docPath).set(
-      { entries: { [path]: content } },
-      { merge: true }
-    )
-  }
-
-  async delete(path: string): Promise<void> {
-    await this.db.doc(this.docPath).update({
-      [`entries.${path}`]: FieldValue.delete()
-    })
-  }
-
-  // Optional: push real-time changes from other clients
-  subscribe(listener: WorkspaceChangeListener): () => void {
-    const unsubscribe = this.db.doc(this.docPath).onSnapshot(snap => {
-      // Convert changes to WorkspaceChange[] and call listener
-    })
-    return unsubscribe
-  }
-}
-```
-
-### Provider Interface
 
 ```typescript
 interface WorkspaceProvider {
@@ -418,54 +145,4 @@ interface WorkspaceChange {
 type WorkspaceChangeListener = (changes: WorkspaceChange[]) => void
 ```
 
-### Key Design Decisions
-
-- **Write-through**: Every VirtualFS write fires `onChange` → `provider.write()` (async, fire-and-forget)
-- **Hydrate without feedback**: `hydrate()` loads data without triggering `onChange`, preventing echo loops
-- **Subscribe for real-time**: `provider.subscribe()` pushes external changes into VirtualFS
-- **Provider errors are silent**: In-memory VirtualFS is source of truth during a run; persistence failures don't block the agent
-- **Backward compatible**: `new Workspace()` without a provider works exactly as before
-
-### Persisting Without a Provider
-
-You can also manually export/import workspace data:
-
-```typescript
-// Save after run
-const result = await agent.run(message, { workspace })
-await db.save(userId, workspace.toObject())
-
-// Restore on next session
-const saved = await db.load(userId)
-if (saved) {
-  workspace.fromObject(saved)
-}
-```
-
-## Type Reference
-
-```typescript
-interface WorkspaceConfig {
-  strict?: boolean  // Only allow defined paths (default: false)
-  paths?: Record<string, PathConfig | JSONSchema | ValidatorFn | ZodLike | null>
-  provider?: WorkspaceProvider  // Persistence layer
-}
-
-interface PathConfig {
-  validator?: JSONSchema | ValidatorFn | ZodLike | null
-  value?: unknown           // Initial value
-  description?: string      // Shown to AI
-}
-
-interface WriteResult {
-  success: boolean
-  errors?: ValidationError[]
-}
-
-interface ValidationError {
-  path: string
-  message: string
-  expected?: string
-  received?: string
-}
-```
+`load()` is called once on `workspace.init()`. `write()` and `delete()` are called on every change (fire-and-forget — they don't block the agent). `subscribe()` is optional and lets you push external changes into the workspace in real-time.
