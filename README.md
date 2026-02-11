@@ -91,19 +91,22 @@ console.log(result.response)
 
 ## Documentation
 
-- [Quick Start Guide](https://github.com/anetrebskii/hive-agent/blob/main/docs/README.md)
-- [Configuration](https://github.com/anetrebskii/hive-agent/blob/main/docs/configuration.md)
-- [Defining Tools](https://github.com/anetrebskii/hive-agent/blob/main/docs/tools.md)
+- [Quick Start](https://github.com/anetrebskii/hive-agent/blob/main/docs/README.md)
+- [Tools](https://github.com/anetrebskii/hive-agent/blob/main/docs/tools.md)
 - [Sub-Agents](https://github.com/anetrebskii/hive-agent/blob/main/docs/sub-agents.md)
 - [Workspace](https://github.com/anetrebskii/hive-agent/blob/main/docs/workspace.md)
-- [Conversation History](https://github.com/anetrebskii/hive-agent/blob/main/docs/history.md)
-- [Interactive Questions](https://github.com/anetrebskii/hive-agent/blob/main/docs/interactive.md)
-- [Interruption & Cancellation](https://github.com/anetrebskii/hive-agent/blob/main/docs/interruption.md)
-- [Execution Tracing](https://github.com/anetrebskii/hive-agent/blob/main/docs/tracing.md)
-- [Prompt Caching](https://github.com/anetrebskii/hive-agent/blob/main/docs/caching.md)
-- [Task Management](https://github.com/anetrebskii/hive-agent/blob/main/docs/task-management.md)
-- [Plan Mode](https://github.com/anetrebskii/hive-agent/blob/main/docs/plan-mode.md)
+- [Secrets](https://github.com/anetrebskii/hive-agent/blob/main/docs/secrets.md)
 - [Providers](https://github.com/anetrebskii/hive-agent/blob/main/docs/providers.md)
+- [Prompt Builder](https://github.com/anetrebskii/hive-agent/blob/main/docs/prompt-builder.md)
+- [History](https://github.com/anetrebskii/hive-agent/blob/main/docs/history.md)
+- [Interactive Questions](https://github.com/anetrebskii/hive-agent/blob/main/docs/interactive.md)
+- [Interruption](https://github.com/anetrebskii/hive-agent/blob/main/docs/interruption.md)
+- [Plan Mode](https://github.com/anetrebskii/hive-agent/blob/main/docs/plan-mode.md)
+- [Task Management](https://github.com/anetrebskii/hive-agent/blob/main/docs/task-management.md)
+- [Progress Status](https://github.com/anetrebskii/hive-agent/blob/main/docs/progress-status.md)
+- [Logger](https://github.com/anetrebskii/hive-agent/blob/main/docs/logger.md)
+- [Tracing](https://github.com/anetrebskii/hive-agent/blob/main/docs/tracing.md)
+- [Run Recording](https://github.com/anetrebskii/hive-agent/blob/main/docs/run-recording.md)
 
 ## License
 
