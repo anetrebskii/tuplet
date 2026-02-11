@@ -66,6 +66,23 @@ Hive gives you exactly that. A powerful, multi-agent framework you plug into you
 - **Pluggable logging & tracing** — Integrate with Datadog, custom dashboards, or any observability platform
 - **Pluggable workspaces** — Virtual file systems, database-backed storage, or real file system
 
+## Hive Agent vs LangChain.js
+
+| | **Hive Agent** | **LangChain.js** |
+|---|---|---|
+| **Runtime dependencies** | 1 | 11+ (core) + per-provider packages |
+| **Setup** | `new Hive({ tools, llm })` — one object, done | Chains, Runnables, LCEL, Memory, Agents — multiple abstractions to learn |
+| **Planning & task tracking** | Built-in, works out of the box | Requires separate `@langchain/langgraph` package |
+| **Clarifying questions** | Built-in | Not included — build your own |
+| **Serverless** | Stateless by design — drop into Lambda/Firebase as-is | Requires external state management and architectural changes |
+| **Multi-provider** | Claude, OpenAI, OpenRouter (100+ models), custom | 50+ providers via separate packages |
+| **Prompt caching** | Built-in for Claude (up to 90% cost savings) | Not built-in |
+| **Best for** | Production apps that need an embedded AI agent | Prototyping, RAG pipelines, complex LLM orchestration |
+
+**When to choose LangChain:** You need a massive ecosystem of integrations (vector stores, retrievers, 50+ providers) or are building complex RAG pipelines with many data sources.
+
+**When to choose Hive:** You want a production-ready agent in your app without the abstraction overhead. One dependency, stateless, works in serverless — and your users get planning, task tracking, and clarifying questions out of the box.
+
 ## Installation
 
 ```bash
