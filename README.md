@@ -4,6 +4,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/hive-agent/ci.yml)](https://github.com/anetrebskii/hive-agent/actions)
 [![license](https://img.shields.io/github/license/anetrebskii/hive-agent)](https://github.com/anetrebskii/hive-agent/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![Discord](https://img.shields.io/discord/1339330498498080808?logo=discord&label=Discord)](https://discord.gg/WrZhA6wfdr)
 
 **Claude Code-like AI agent for your own application. Add a few lines — get a multi-agent system that asks clarifying questions, plans tasks, and works with your data.**
 
