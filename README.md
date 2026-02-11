@@ -1,5 +1,10 @@
 # Hive Agent
 
+[![npm version](https://img.shields.io/npm/v/@alexnetrebskii/hive-agent)](https://www.npmjs.com/package/@alexnetrebskii/hive-agent)
+[![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/hive-agent/ci.yml)](https://github.com/anetrebskii/hive-agent/actions)
+[![license](https://img.shields.io/github/license/anetrebskii/hive-agent)](https://github.com/anetrebskii/hive-agent/blob/main/LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+
 **Claude Code-like AI agent for your own application. Add a few lines — get a multi-agent system that asks clarifying questions, plans tasks, and works with your data.**
 
 Claude Code is impressive: you open a terminal, ask it to code something, and it plans, clarifies, executes. But it's locked to the terminal and local filesystem. What if you need that same intelligence inside your SaaS product, web app, or serverless function — working with your database, your blob storage, your users' data?
