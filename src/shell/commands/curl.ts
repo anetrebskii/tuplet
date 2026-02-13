@@ -42,8 +42,6 @@ export const curlCommand: CommandHandler = {
       { command: 'curl -s https://api.com | jq .data', description: 'Fetch JSON and extract field' }
     ],
     notes: [
-      'Relative URLs resolved against configured baseUrl',
-      'Default headers from config are included automatically',
       'Always quote URLs with special characters'
     ]
   },
@@ -53,7 +51,7 @@ export const curlCommand: CommandHandler = {
     let methodExplicit = false
     let url: string | null = null
     let data: string | null = null
-    const headers: Record<string, string> = { ...ctx.config.defaultHeaders }
+    const headers: Record<string, string> = {}
     let silent = false
     let showHeaders = false
     let failSilently = false
@@ -111,11 +109,6 @@ export const curlCommand: CommandHandler = {
 
     if (!url) {
       return { exitCode: 1, stdout: '', stderr: 'curl: no URL specified' }
-    }
-
-    // Handle relative URLs with baseUrl
-    if (ctx.config.baseUrl && !url.startsWith('http')) {
-      url = ctx.config.baseUrl.replace(/\/$/, '') + '/' + url.replace(/^\//, '')
     }
 
     try {

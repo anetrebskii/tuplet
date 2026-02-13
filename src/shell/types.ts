@@ -3,10 +3,6 @@
  */
 
 export interface ShellConfig {
-  /** Base URL for relative curl requests */
-  baseUrl?: string
-  /** Default headers for curl requests */
-  defaultHeaders?: Record<string, string>
   /** Request timeout in ms */
   timeout?: number
   /** Initial context data */

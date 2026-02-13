@@ -137,17 +137,11 @@ export const browseCommand: CommandHandler = {
       return { exitCode: 1, stdout: '', stderr: 'browse: no URL specified' }
     }
 
-    // Handle relative URLs with baseUrl
-    if (ctx.config.baseUrl && !url.startsWith('http')) {
-      url = ctx.config.baseUrl.replace(/\/$/, '') + '/' + url.replace(/^\//, '')
-    }
-
     try {
       const fetchOptions: RequestInit = {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; ShellBrowser/1.0)',
-          'Accept': 'text/html, application/xhtml+xml, */*',
-          ...ctx.config.defaultHeaders
+          'Accept': 'text/html, application/xhtml+xml, */*'
         }
       }
 
