@@ -331,19 +331,27 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Extract cache usage if present (Anthropic models via OpenRouter)
     const details = response.usage.prompt_tokens_details
+    const cachedRead = details?.cached_tokens || 0
+    const cacheWrite = details?.cache_write_tokens || 0
     let cacheUsage: CacheUsage | undefined
-    if (details && (details.cached_tokens || details.cache_write_tokens)) {
+    if (cachedRead || cacheWrite) {
       cacheUsage = {
-        cacheReadInputTokens: details.cached_tokens || 0,
-        cacheCreationInputTokens: details.cache_write_tokens || 0
+        cacheReadInputTokens: cachedRead,
+        cacheCreationInputTokens: cacheWrite
       }
     }
+
+    // OpenRouter reports prompt_tokens as total (including cached tokens),
+    // but calculateCost expects inputTokens to exclude cache tokens
+    // (matching Anthropic's native API convention where input_tokens
+    // excludes both cache_read and cache_creation tokens).
+    const inputTokens = response.usage.prompt_tokens - cachedRead - cacheWrite
 
     return {
       content,
       stopReason,
       usage: {
-        inputTokens: response.usage.prompt_tokens,
+        inputTokens,
         outputTokens: response.usage.completion_tokens
       },
       cacheUsage
