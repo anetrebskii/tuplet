@@ -14,10 +14,12 @@ export const grepCommand: CommandHandler = {
     flags: [
       { flag: '-i', description: 'Case-insensitive matching' },
       { flag: '-n', description: 'Show line numbers' },
+      { flag: '-o', description: 'Only output the matched parts of a line' },
       { flag: '-v', description: 'Invert match (show non-matching lines)' },
       { flag: '-l', description: 'Only list filenames with matches' },
       { flag: '-r', description: 'Recursive search' },
-      { flag: '-E', description: 'Extended regex (enabled by default)' }
+      { flag: '-E', description: 'Extended regex (enabled by default)' },
+      { flag: '-P', description: 'Perl-compatible regex (treated as extended regex)' }
     ],
     examples: [
       { command: 'grep "error" /log', description: 'Search for pattern in file' },
@@ -40,6 +42,7 @@ export const grepCommand: CommandHandler = {
     let filesOnly = false
     let invertMatch = false
     let extendedRegex = false
+    let onlyMatching = false
     let pattern: string | null = null
     const paths: string[] = []
 
@@ -48,14 +51,27 @@ export const grepCommand: CommandHandler = {
         caseInsensitive = true
       } else if (arg === '-n') {
         showLineNumbers = true
+      } else if (arg === '-o') {
+        onlyMatching = true
       } else if (arg === '-r' || arg === '-R') {
         recursive = true
       } else if (arg === '-l') {
         filesOnly = true
       } else if (arg === '-v') {
         invertMatch = true
-      } else if (arg === '-E') {
+      } else if (arg === '-E' || arg === '-P') {
         extendedRegex = true
+      } else if (arg.startsWith('-') && /^-[a-zA-Z]+$/.test(arg)) {
+        // Handle combined flags like -oE, -oP, -in, etc.
+        for (const ch of arg.slice(1)) {
+          if (ch === 'i') caseInsensitive = true
+          else if (ch === 'n') showLineNumbers = true
+          else if (ch === 'o') onlyMatching = true
+          else if (ch === 'r' || ch === 'R') recursive = true
+          else if (ch === 'l') filesOnly = true
+          else if (ch === 'v') invertMatch = true
+          else if (ch === 'E' || ch === 'P') extendedRegex = true
+        }
       } else if (arg.startsWith('-')) {
         // Ignore unknown flags
       } else if (pattern === null) {
@@ -108,18 +124,41 @@ export const grepCommand: CommandHandler = {
       return true
     }
 
+    /** Process a single line, adding output as appropriate */
+    function processLine(line: string, lineNum: number, filePrefix: string): boolean {
+      if (onlyMatching && !invertMatch) {
+        // -o mode: output each match separately
+        let match: RegExpExecArray | null
+        regex.lastIndex = 0
+        while ((match = regex.exec(line)) !== null) {
+          const prefix = filePrefix ? `${filePrefix}:` : ''
+          const num = showLineNumbers ? `${lineNum}:` : ''
+          if (!addOutput(`${prefix}${num}${match[0]}`)) return false
+          // Prevent infinite loop on zero-length matches
+          if (match[0].length === 0) regex.lastIndex++
+        }
+      } else {
+        const matches = regex.test(line)
+        regex.lastIndex = 0
+
+        if (matches !== invertMatch) {
+          if (filesOnly) {
+            // handled by caller
+            return true
+          }
+          const prefix = filePrefix ? `${filePrefix}:` : ''
+          const num = showLineNumbers ? `${lineNum}:` : ''
+          if (!addOutput(`${prefix}${num}${line}`)) return false
+        }
+      }
+      return true
+    }
+
     // Search in stdin if no paths
     if (paths.length === 0 && ctx.stdin) {
       const lines = ctx.stdin.split('\n')
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        const matches = regex.test(line)
-        regex.lastIndex = 0 // Reset regex state
-
-        if (matches !== invertMatch) {
-          const formatted = showLineNumbers ? `${i + 1}:${line}` : line
-          if (!addOutput(formatted)) break
-        }
+        if (!processLine(lines[i], i + 1, '')) break
       }
     } else {
       // Search in files
@@ -137,20 +176,20 @@ export const grepCommand: CommandHandler = {
           const content = await ctx.fs.read(file)
           if (content === null) continue
 
+          const filePrefix = paths.length > 1 || recursive ? file : ''
           const lines = content.split('\n')
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i]
-            const matches = regex.test(line)
-            regex.lastIndex = 0
 
-            if (matches !== invertMatch) {
-              if (filesOnly) {
+            if (filesOnly) {
+              const matches = regex.test(line)
+              regex.lastIndex = 0
+              if (matches !== invertMatch) {
                 matchingFiles.add(file)
-              } else {
-                const prefix = paths.length > 1 || recursive ? `${file}:` : ''
-                const lineNum = showLineNumbers ? `${i + 1}:` : ''
-                if (!addOutput(`${prefix}${lineNum}${line}`)) break
+                break
               }
+            } else {
+              if (!processLine(line, i + 1, filePrefix)) break
             }
           }
         }

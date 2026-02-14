@@ -75,7 +75,7 @@ export const catCommand: CommandHandler = {
           if (fileSize === null) {
             return { exitCode: 1, stdout: '', stderr: `cat: ${file}: No such file` }
           }
-          if (fileSize > MAX_FILE_SIZE && !hasPagination) {
+          if (fileSize > MAX_FILE_SIZE && !hasPagination && !ctx.piped) {
             return {
               exitCode: 1,
               stdout: '',

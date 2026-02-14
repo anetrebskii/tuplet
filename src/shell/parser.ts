@@ -13,11 +13,12 @@ const HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/
 
 export function parseCommand(input: string): ParsedCommand[] {
   const commands: ParsedCommand[] = []
-  const lines = input.split('\n')
+  // Join lines that are inside open quotes before splitting into commands
+  const logicalLines = joinQuotedLines(input.split('\n'))
 
   let i = 0
-  while (i < lines.length) {
-    const line = lines[i].trim()
+  while (i < logicalLines.length) {
+    const line = logicalLines[i].trim()
 
     // Skip empty lines and comment lines
     if (line === '' || line.startsWith('#')) {
@@ -35,8 +36,8 @@ export function parseCommand(input: string): ParsedCommand[] {
       // Collect heredoc body until matching delimiter
       const heredocLines: string[] = []
       i++
-      while (i < lines.length && lines[i].trim() !== delimiter) {
-        heredocLines.push(lines[i])
+      while (i < logicalLines.length && logicalLines[i].trim() !== delimiter) {
+        heredocLines.push(logicalLines[i])
         i++
       }
       i++ // skip the delimiter line
@@ -60,6 +61,49 @@ export function parseCommand(input: string): ParsedCommand[] {
   }
 
   return commands
+}
+
+/**
+ * Join lines that are continuations of an unclosed quote from a previous line.
+ * e.g. echo 'hello\nworld' sent as two lines gets joined back into one.
+ */
+function joinQuotedLines(lines: string[]): string[] {
+  const result: string[] = []
+  let pending = ''
+  let inSingleQuote = false
+  let inDoubleQuote = false
+
+  for (const line of lines) {
+    if (inSingleQuote || inDoubleQuote) {
+      // We're continuing a quoted string from a previous line
+      pending += '\n' + line
+    } else {
+      // Start a new logical line
+      if (pending) result.push(pending)
+      pending = line
+    }
+
+    // Scan this line to update quote state
+    let escape = false
+    for (const ch of line) {
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\' && !inSingleQuote) {
+        escape = true
+        continue
+      }
+      if (ch === "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote
+      } else if (ch === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote
+      }
+    }
+  }
+
+  if (pending) result.push(pending)
+  return result
 }
 
 /**

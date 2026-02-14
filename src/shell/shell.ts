@@ -230,7 +230,8 @@ export class Shell {
       env: this.env,
       config: this.config,
       stdin: stdin !== undefined ? stdin : cmd.stdinContent,
-      envProvider: this.envProvider
+      envProvider: this.envProvider,
+      piped: !!cmd.pipe
     }
 
     // Handle input redirection

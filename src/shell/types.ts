@@ -65,6 +65,8 @@ export interface CommandContext {
   stdin?: string
   /** Environment provider for secure variable resolution */
   envProvider?: import('../types.js').EnvironmentProvider
+  /** Whether this command's output is being piped to another command */
+  piped?: boolean
 }
 
 export interface ParsedCommand {
