@@ -151,6 +151,9 @@ async function executeTool(
       }
     } else {
       logger?.warn(`[Tool: ${tool.name}] Error: ${result.error}`)
+      if (result.data !== undefined) {
+        logger?.warn(`[Tool: ${tool.name}] Details: ${truncateForLog(result.data, 1000)}`)
+      }
     }
 
     // Progress: tool completed (with result context)
@@ -189,7 +192,7 @@ async function executeTool(
 
     logger?.error(`[Tool: ${tool.name}] Exception after ${durationMs}ms: ${errorMessage}`)
     if (errorStack) {
-      logger?.debug(`[Tool: ${tool.name}] Stack trace: ${errorStack}`)
+      logger?.error(`[Tool: ${tool.name}] Stack trace: ${errorStack}`)
     }
 
     const result: ToolResult = {

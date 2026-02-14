@@ -208,6 +208,11 @@ export class MainAgentBuilder {
     const role = this.config.role || 'an AI assistant'
     sections.push(roleSection(role, this.config.description))
 
+    // Current date
+    const today = new Date().toISOString().split('T')[0]
+    sections.push('')
+    sections.push(`Today's date is ${today}.`)
+
     // Your Role header if we have sub-agents (orchestrator pattern)
     if (allSubAgents.length > 0) {
       sections.push('')

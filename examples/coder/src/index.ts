@@ -136,8 +136,10 @@ function showTaskUpdate(update: TaskUpdateNotification): void {
   console.log('')
 }
 
+const verbose = process.argv.includes('--verbose') || process.argv.includes('-v')
+
 function createProgressLogger() {
-  const base = new ConsoleLogger({ level: 'warn', prefix: '[Coder]' })
+  const base = new ConsoleLogger({ level: verbose ? 'debug' : 'warn', prefix: '[Coder]' })
   return {
     debug: base.debug.bind(base),
     info: base.info.bind(base),
@@ -148,13 +150,19 @@ function createProgressLogger() {
     onToolCall: (toolName: string, params: unknown) => {
       if (toolName === '__shell__') {
         console.log(`\n📥 shell:`, JSON.stringify(params, null, 2).slice(0, 500))
+      } else if (verbose) {
+        console.log(`\n📥 ${toolName}:`, JSON.stringify(params, null, 2).slice(0, 500))
       }
     },
-    onToolResult: (toolName: string, result: { success: boolean; data?: unknown; error?: string }) => {
+    onToolResult: (toolName: string, result: { success: boolean; data?: unknown; error?: string }, durationMs: number) => {
       if (toolName === '__shell__') {
         const status = result.success ? '✓' : '✗'
         const preview = JSON.stringify(result.data || result.error, null, 2).slice(0, 300)
         console.log(`📤 shell ${status}: ${preview}`)
+      } else if (verbose) {
+        const status = result.success ? '✓' : '✗'
+        const preview = JSON.stringify(result.data || result.error, null, 2).slice(0, 500)
+        console.log(`📤 ${toolName} ${status} (${durationMs}ms): ${preview}`)
       }
     }
   }

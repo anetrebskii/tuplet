@@ -271,7 +271,7 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
 
         const subHive = createSubHive({
           role: agentConfig.name,
-          _systemPrompt: agentConfig.systemPrompt,
+          _systemPrompt: `Today's date is ${new Date().toISOString().split('T')[0]}.\n\n${agentConfig.systemPrompt}`,
           tools: subTools,
           llm: subLlm,
           logger: subLogger,
