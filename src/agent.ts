@@ -26,6 +26,8 @@ import {
   createTaskListTool,
 } from "./tools/index.js";
 import { getBuiltInAgents } from "./built-in-agents/index.js";
+import { MainAgentBuilder } from "./prompt/main-agent-builder.js";
+import { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
 
 /** Path where the plan is stored in workspace */
 export const PLAN_PATH = ".hive/plan.md";
@@ -33,18 +35,8 @@ export const PLAN_PATH = ".hive/plan.md";
 /** Full filesystem path for the plan */
 export const PLAN_FS_PATH = `/${PLAN_PATH}`;
 
-/** Task scope instructions appended to all agents (main + sub-agents) */
-export const TASK_SCOPE_INSTRUCTIONS = `Do what has been asked; nothing more, nothing less. Only make changes that are directly requested or clearly necessary. Do not add features, refactor code, or make improvements beyond what was asked. Do not design for hypothetical future requirements.
-
-## Task Management
-For multi-step requests (3+ steps), use task tools to track progress:
-1. Create all tasks upfront from the user's request with TaskCreate
-2. Work through them in order — mark in_progress, do the work, mark completed
-3. Do not respond until all tasks are completed
-
-Tasks must only come from the user's request — never from your own discovery of adjacent work.
-Do NOT create tasks for single-step or trivial requests.
-When all tasks are completed, stop and respond with a summary. Do not look for more work.`
+// Re-export for public API
+export { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
 
 /** System prompt prepended in plan mode */
 const PLAN_MODE_INSTRUCTIONS = `# Plan Mode
@@ -95,6 +87,8 @@ export class Hive {
   readonly config: HiveConfig;
   private contextManager: ContextManager;
   private tools: Tool[];
+  /** Auto-generated system prompt */
+  private systemPrompt: string;
   /** Current trace builder (set during run, used by __sub_agent__ tool) */
   private currentTraceBuilder?: TraceBuilder;
 
@@ -134,6 +128,9 @@ export class Hive {
       this.config.agents = [...config.agents, ...newAgents];
     }
 
+    // Build system prompt from description (after agents are merged)
+    this.systemPrompt = this.buildSystemPrompt();
+
     // Add __sub_agent__ tool if sub-agents are defined
     if (this.config.agents && this.config.agents.length > 0) {
       this.tools.push(
@@ -147,6 +144,29 @@ export class Hive {
         )
       );
     }
+  }
+
+  /**
+   * Build system prompt from config.description using MainAgentBuilder.
+   * If _systemPrompt is set (sub-agent internal), use it directly.
+   */
+  private buildSystemPrompt(): string {
+    if (this.config._systemPrompt) {
+      return this.config._systemPrompt;
+    }
+
+    const builder = new MainAgentBuilder()
+      .role(this.config.role)
+      .skipBuiltInAgents();
+
+    if (this.config.agents?.length) {
+      builder.agents(this.config.agents);
+    }
+    if (this.config.tools?.length) {
+      builder.tools(this.config.tools);
+    }
+
+    return builder.build();
   }
 
   /**
@@ -389,7 +409,7 @@ export class Hive {
     this.setCurrentTraceBuilder(traceBuilder);
 
     // Build system prompt based on mode
-    let systemPrompt = this.config.systemPrompt;
+    let systemPrompt = this.systemPrompt;
     if (mode === "plan") {
       systemPrompt = PLAN_MODE_INSTRUCTIONS + systemPrompt;
     }

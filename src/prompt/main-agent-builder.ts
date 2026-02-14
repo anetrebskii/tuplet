@@ -32,6 +32,16 @@ export class MainAgentBuilder {
     customSections: []
   }
 
+  private _skipBuiltInAgents = false
+
+  /**
+   * Skip auto-injecting built-in agents (used when Hive already merges them)
+   */
+  skipBuiltInAgents(): this {
+    this._skipBuiltInAgents = true
+    return this
+  }
+
   /**
    * Set the agent's role identity
    */
@@ -173,16 +183,26 @@ export class MainAgentBuilder {
   build(): string {
     const sections: string[] = []
 
-    // Auto-inject built-in agent defs (unless user already added same name)
-    const userAgentNames = new Set((this.config.subAgents || []).map(a => a.name))
-    const builtInAgents = getBuiltInAgents()
-    const newBuiltIns = builtInAgents.filter(a => !userAgentNames.has(a.name))
-    const builtInDefs = newBuiltIns.map(a => ({
-      name: a.name,
-      purpose: a.description,
-      whenToUse: a.description,
-    }))
-    const allSubAgents = [...(this.config.subAgents || []), ...builtInDefs]
+    // Auto-inject built-in agent defs (unless skipBuiltInAgents or user already added same name)
+    let builtInDefs: Array<{ name: string; purpose: string; whenToUse: string }> = []
+    if (!this._skipBuiltInAgents) {
+      const userAgentNames = new Set((this.config.subAgents || []).map(a => a.name))
+      const builtInAgents = getBuiltInAgents()
+      const newBuiltIns = builtInAgents.filter(a => !userAgentNames.has(a.name))
+      builtInDefs = newBuiltIns.map(a => ({
+        name: a.name,
+        purpose: a.description,
+        whenToUse: a.description,
+      }))
+    } else {
+      // When called from Hive, built-ins are already merged into subAgents.
+      // Detect which ones are built-in by checking against getBuiltInAgents().
+      const builtInNames = new Set(getBuiltInAgents().map(a => a.name))
+      builtInDefs = (this.config.subAgents || [])
+        .filter(a => builtInNames.has(a.name))
+        .map(a => ({ name: a.name, purpose: a.purpose, whenToUse: a.whenToUse }))
+    }
+    const allSubAgents = [...(this.config.subAgents || []), ...(this._skipBuiltInAgents ? [] : builtInDefs)]
 
     // Role section (required, with default)
     const role = this.config.role || 'an AI assistant'

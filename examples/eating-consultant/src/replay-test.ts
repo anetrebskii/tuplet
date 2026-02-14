@@ -104,7 +104,8 @@ async function main() {
   })
 
   const agent = new Hive({
-    systemPrompt: SYSTEM_PROMPT,
+    role: 'a nutrition consultant',
+    _systemPrompt: SYSTEM_PROMPT,
     tools: mainAgentTools,
     agents: [nutritionCounterAgent],
     llm: llmProvider,

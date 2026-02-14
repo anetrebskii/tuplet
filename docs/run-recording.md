@@ -10,7 +10,7 @@ Add a `RunRecorder` to capture every run:
 import { Hive, ClaudeProvider, RunRecorder } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: 'You are a helpful assistant.',
+  role: 'a helpful assistant',
   llm: new ClaudeProvider({ apiKey: '...' }),
   recorder: new RunRecorder({ outputDir: './runs' })
 })

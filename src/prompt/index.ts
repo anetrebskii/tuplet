@@ -17,7 +17,6 @@ export type {
 } from './types.js'
 
 // Builders
-export { MainAgentBuilder } from './main-agent-builder.js'
 export { SubAgentBuilder } from './sub-agent-builder.js'
 
 // Templates (for advanced customization)

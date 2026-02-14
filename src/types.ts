@@ -219,7 +219,9 @@ export interface EnvironmentProvider {
 export type ContextStrategy = 'summarize' | 'error'
 
 export interface HiveConfig {
-  systemPrompt: string
+  /** What the agent is and does (e.g., 'a nutrition consultant that tracks meals and plans diets') */
+  role: string
+
   tools: Tool[]
 
   agents?: SubAgentConfig[]
@@ -245,6 +247,9 @@ export interface HiveConfig {
 
   /** Run recorder for saving run data to JSON files */
   recorder?: import('./providers/dataset/recorder.js').RunRecorder
+
+  /** @internal Raw system prompt — used by sub-agent tool. Users should use `description`. */
+  _systemPrompt?: string
 }
 
 // ============================================================================

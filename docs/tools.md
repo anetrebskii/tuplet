@@ -43,7 +43,7 @@ const weatherTool: Tool = {
 }
 
 const agent = new Hive({
-  systemPrompt: 'You help users check weather.',
+  role: 'a weather checking assistant',
   tools: [weatherTool],
   llm: provider
 })

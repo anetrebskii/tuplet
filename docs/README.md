@@ -14,7 +14,7 @@ pnpm add @alexnetrebskii/hive-agent
 import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: 'You are a helpful assistant.',
+  role: 'a helpful assistant',
   tools: [],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
 })
@@ -30,7 +30,7 @@ Workspace, sub-agents, secrets, progress tracking, and tracing — all in one se
 ```typescript
 import {
   Hive, ClaudeProvider, OpenAIProvider,
-  MainAgentBuilder, SubAgentBuilder,
+  SubAgentBuilder,
   Workspace, FileWorkspaceProvider, MemoryEnvironmentProvider,
   ConsoleLogger, ConsoleTraceProvider,
   type SubAgentConfig, type Tool
@@ -79,10 +79,7 @@ await workspace.init()
 
 // Agent
 const agent = new Hive({
-  systemPrompt: new MainAgentBuilder()
-    .role('a nutrition consultant')
-    .agents([researcher])
-    .build(),
+  role: 'a nutrition consultant',
   tools: [],
   agents: [researcher],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY }),
@@ -129,7 +126,6 @@ await workspace.dispose()
 - [Workspace](./workspace.md) - Virtual filesystem with validation
 - [Secrets](./secrets.md) - Secure credential management
 - [Providers](./providers.md) - Claude, OpenAI, OpenRouter
-- [Prompt Builder](./prompt-builder.md) - Fluent API for system prompts
 - [History](./history.md) - Conversation persistence and summarization
 - [Interactive](./interactive.md) - Agent asking clarifying questions
 - [Interruption](./interruption.md) - Stopping and continuing execution

@@ -4,7 +4,7 @@ Track what your agent is doing in real-time — thinking, calling tools, spawnin
 
 ```typescript
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   llm: provider,
   logger: {
     onProgress: (update) => {

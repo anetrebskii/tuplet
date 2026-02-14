@@ -16,7 +16,6 @@ import {
   ConsoleTraceProvider,
   Workspace,
   FileWorkspaceProvider,
-  MainAgentBuilder,
   MemoryEnvironmentProvider,
   type LLMProvider,
   type Message,
@@ -163,33 +162,6 @@ function createProgressLogger() {
 
 // --- Main Agent (built-in tools only) ---
 
-const SYSTEM_PROMPT = new MainAgentBuilder()
-  .role('a senior software developer')
-  .description(
-    'You create software projects from scratch using shell commands. ' +
-    'You write code files, create directory structures, and verify your work. ' +
-    'Use the built-in shell tool for all file operations: ' +
-    'mkdir to create directories, echo with > redirection to write files, ' +
-    'cat to read files, ls and find to explore project structure, ' +
-    'grep to search code. Use the explore agent to understand existing projects ' +
-    'and the plan agent to design implementation before coding.'
-  )
-  .addWorkspacePath('project/config.json', 'Current project config: { name, language, framework, description }')
-  .addWorkspacePath('project/plan.md', 'Implementation plan for the current project')
-  .addRules([
-    'Use the plan agent before starting any non-trivial project to design the structure',
-    'Use the explore agent to understand existing code before making changes',
-    'Create directories first with mkdir -p, then write files with echo "..." > path',
-    'After writing files, verify them with cat to ensure correctness',
-    'Use ls to show the final project structure to the user',
-    'Ask the user about language, framework, and project name if not specified',
-    'Save project configuration to workspace after creating a project',
-    'Write clean, idiomatic code with proper error handling',
-    'Always include a README.md with setup and run instructions',
-    'Include a .gitignore appropriate for the project type'
-  ])
-  .build()
-
 // --- Main App ---
 
 async function main() {
@@ -255,7 +227,13 @@ async function main() {
   // No custom tools or sub-agents — relies entirely on built-in:
   // shell (__shell__), explore, plan, ask_user, workspace, task tracking
   const agent = new Hive({
-    systemPrompt: SYSTEM_PROMPT,
+    role: 'a senior software developer that creates software projects from scratch using shell commands. ' +
+      'You write code files, create directory structures, and verify your work. ' +
+      'Use the built-in shell tool for all file operations: ' +
+      'mkdir to create directories, echo with > redirection to write files, ' +
+      'cat to read files, ls and find to explore project structure, ' +
+      'grep to search code. Use the explore agent to understand existing projects ' +
+      'and the plan agent to design implementation before coding.',
     tools: [],
     llm: llmProvider,
     logger: createProgressLogger(),

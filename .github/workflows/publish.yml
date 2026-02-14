@@ -26,7 +26,7 @@ jobs:
         uses: entech-code/auto-version-tagging-action@fd3ec6c9309a0168e8f23782a1792564f3a6680e
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          majorVersion: 1
+          majorVersion: 2
           tagPrefix: 'v'
 
       - name: Install pnpm

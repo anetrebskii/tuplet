@@ -10,7 +10,7 @@ Built-in logger that writes to the console:
 import { ConsoleLogger } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   llm: provider,
   logger: new ConsoleLogger({
     level: 'info',       // 'debug' | 'info' | 'warn' | 'error' (default: 'info')

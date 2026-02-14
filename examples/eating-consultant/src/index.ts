@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { Hive, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -21,7 +21,7 @@ function getOptionDescription(opt: string | QuestionOption): string | undefined 
 }
 
 // Display a single enhanced question
-function displayEnhancedQuestion(q: EnhancedQuestion, index: number): void {
+function displayEnhancedQuestion(q: EnhancedQuestion): void {
   const header = q.header ? `[${q.header}] ` : ''
   console.log(`\n${header}${q.question}`)
 
@@ -70,7 +70,7 @@ async function handleMultiQuestion(
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]
-    displayEnhancedQuestion(q, i)
+    displayEnhancedQuestion(q)
     const answer = await collectAnswer(rl, q)
     const key = q.header || `q${i}`
     answers[key] = answer
@@ -257,21 +257,7 @@ const plannerAgent: SubAgentConfig = {
 // Sub-agents for specialized tasks only
 const subAgents = [plannerAgent]
 
-// Build main agent prompt using MainAgentBuilder
-const SYSTEM_PROMPT = new MainAgentBuilder()
-  .role('a nutrition consultant')
-  .description('You help users track meals, view nutrition progress, and plan their diet. You can search for food products in the OpenFoodFacts database, log meals with nutrition data, view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent.')
-  .agents(subAgents)
-  .addWorkspacePath('plan/current.json', 'Meal plans from meal_planner')
-  .addWorkspacePath('user/preferences.json', 'User preferences { goal, restrictions[] }')
-  .addWorkspacePath('meals/today.json', 'Today\'s nutrition totals and logged meals')
-  .addRules([
-    'Search for foods and log meals directly to track what the user ate',
-    'Delegate meal planning to the meal_planner sub-agent',
-    'Present results in a friendly, encouraging way',
-    'Use Russian if user speaks Russian'
-  ])
-  .build()
+// Main agent description
 
 async function main() {
   const apiKey = process.env.OPENROUTER_API_KEY
@@ -346,7 +332,10 @@ async function main() {
 
   // Create the main agent with sub-agent and run recorder
   const agent = new Hive({
-    systemPrompt: SYSTEM_PROMPT,
+    role: 'a nutrition consultant that helps users track meals, view nutrition progress, and plan their diet. ' +
+      'You can search for food products in the OpenFoodFacts database, log meals with nutrition data, ' +
+      'view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent. ' +
+      'Present results in a friendly, encouraging way. Use Russian if user speaks Russian.',
     tools: nutritionCounterTools,
     agents: subAgents,
     llm: llmProvider,

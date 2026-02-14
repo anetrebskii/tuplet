@@ -120,7 +120,6 @@ export {
   getCurrentEnvironment,
   DEFAULT_SYSTEM_PROMPT,
   // Prompt builders
-  MainAgentBuilder,
   SubAgentBuilder,
   // Template functions (for advanced customization)
   roleSection,
@@ -142,7 +141,6 @@ export {
   type TaskExample,
   type WorkflowStep,
   type OutputFormat,
-  type MainAgentPromptConfig,
   type SubAgentPromptConfig
 } from './prompt.js'
 

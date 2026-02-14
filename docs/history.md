@@ -10,7 +10,7 @@ Pass a `RepositoryProvider` and a `conversationId` — history is loaded and sav
 import { Hive, ClaudeProvider, MemoryRepository } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   llm: new ClaudeProvider({ apiKey: '...' }),
   repository: new MemoryRepository()  // in-memory, for development
 })

@@ -7,7 +7,7 @@
  */
 
 import type { SubAgentConfig } from '../types.js'
-import { TASK_SCOPE_INSTRUCTIONS } from '../agent.js'
+import { TASK_SCOPE_INSTRUCTIONS } from '../constants.js'
 
 export const planAgent: SubAgentConfig = {
   name: 'plan',

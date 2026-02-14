@@ -45,7 +45,7 @@ Main agent and [sub-agents](./sub-agents.md) can use different providers:
 
 ```typescript
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   agents: [{
     name: 'fast_helper',
     description: 'Quick tasks',

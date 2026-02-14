@@ -34,10 +34,10 @@ export class RunReplayer {
 
     // Configuration
     console.log(`\n--- Configuration ---`)
-    const systemPromptPreview = record.config.systemPrompt.length > 200
-      ? record.config.systemPrompt.slice(0, 200) + '...'
-      : record.config.systemPrompt
-    console.log(`System Prompt: ${systemPromptPreview}`)
+    const rolePreview = record.config.role.length > 200
+      ? record.config.role.slice(0, 200) + '...'
+      : record.config.role
+    console.log(`Role: ${rolePreview}`)
     console.log(`Max Iterations: ${record.config.maxIterations ?? 'default'}`)
     console.log(`Max Context Tokens: ${record.config.maxContextTokens ?? 'default'}`)
     console.log(`Context Strategy: ${record.config.contextStrategy ?? 'default'}`)

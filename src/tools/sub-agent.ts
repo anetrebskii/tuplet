@@ -270,7 +270,8 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         }
 
         const subHive = createSubHive({
-          systemPrompt: agentConfig.systemPrompt,
+          role: agentConfig.name,
+          _systemPrompt: agentConfig.systemPrompt,
           tools: subTools,
           llm: subLlm,
           logger: subLogger,

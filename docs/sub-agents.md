@@ -13,7 +13,7 @@ const researchAgent: SubAgentConfig = {
 }
 
 const agent = new Hive({
-  systemPrompt: 'You help users with various tasks.',
+  role: 'a helpful task assistant',
   agents: [researchAgent],
   llm: provider
 })

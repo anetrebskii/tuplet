@@ -316,7 +316,7 @@ export class OpenRouterProvider implements LLMProvider {
           type: 'tool_use',
           id: toolCall.id,
           name: toolCall.function.name,
-          input: JSON.parse(toolCall.function.arguments)
+          input: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {}
         })
       }
     }

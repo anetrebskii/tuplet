@@ -88,7 +88,7 @@ export class RunRecorder {
    */
   private serializeConfig(config: HiveConfig): RunRecordConfig {
     return {
-      systemPrompt: config.systemPrompt,
+      role: config.role,
       maxIterations: config.maxIterations,
       maxContextTokens: config.maxContextTokens,
       contextStrategy: config.contextStrategy,

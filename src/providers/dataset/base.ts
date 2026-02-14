@@ -41,7 +41,7 @@ export interface SerializedSubAgentConfig {
  * Serialized Hive configuration
  */
 export interface RunRecordConfig {
-  systemPrompt: string
+  role: string
   maxIterations?: number
   maxContextTokens?: number
   contextStrategy?: ContextStrategy

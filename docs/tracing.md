@@ -17,7 +17,7 @@ Prints a real-time execution tree to the console as the agent runs — useful du
 import { Hive, ClaudeProvider, ConsoleTraceProvider } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   agents: [...],
   llm: new ClaudeProvider({ apiKey: '...' }),
   trace: new ConsoleTraceProvider({ showCosts: true }),

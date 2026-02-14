@@ -8,7 +8,7 @@ Subscribe to task changes via the logger to display progress in your UI:
 
 ```typescript
 const agent = new Hive({
-  systemPrompt: '...',
+  role: '...',
   tools: [...],
   llm: provider,
   logger: {

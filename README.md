@@ -99,7 +99,7 @@ pnpm add @alexnetrebskii/hive-agent
 import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
-  systemPrompt: 'You are a helpful assistant.',
+  role: 'a helpful assistant',
   tools: [myTool],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
 })
@@ -121,7 +121,6 @@ console.log(result.response)
 - [Workspace](https://github.com/anetrebskii/hive-agent/blob/main/docs/workspace.md)
 - [Secrets](https://github.com/anetrebskii/hive-agent/blob/main/docs/secrets.md)
 - [Providers](https://github.com/anetrebskii/hive-agent/blob/main/docs/providers.md)
-- [Prompt Builder](https://github.com/anetrebskii/hive-agent/blob/main/docs/prompt-builder.md)
 - [History](https://github.com/anetrebskii/hive-agent/blob/main/docs/history.md)
 - [Interactive Questions](https://github.com/anetrebskii/hive-agent/blob/main/docs/interactive.md)
 - [Interruption](https://github.com/anetrebskii/hive-agent/blob/main/docs/interruption.md)

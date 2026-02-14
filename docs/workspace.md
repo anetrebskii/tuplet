@@ -40,7 +40,7 @@ const workspace = new Workspace({
 await workspace.init()
 
 const agent = new Hive({
-  systemPrompt: SYSTEM_PROMPT,
+  role: 'a meal planning assistant',
   tools: [...],
   llm: new ClaudeProvider({ apiKey: '...' })
 })
