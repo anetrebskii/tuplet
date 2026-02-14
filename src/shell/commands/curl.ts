@@ -152,10 +152,11 @@ export const curlCommand: CommandHandler = {
 
       output += body
 
+      // Real curl returns 0 for HTTP errors unless -f is used
       return {
-        exitCode: response.ok ? 0 : 1,
+        exitCode: 0,
         stdout: output,
-        stderr: response.ok ? '' : `curl: (22) HTTP error ${response.status}`
+        stderr: ''
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

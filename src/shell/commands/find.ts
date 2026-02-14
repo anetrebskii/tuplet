@@ -21,7 +21,8 @@ export const findCommand: CommandHandler = {
     flags: [
       { flag: '-name PATTERN', description: 'Match filename against pattern (supports * and ? wildcards)' },
       { flag: '-type f', description: 'Only match regular files' },
-      { flag: '-type d', description: 'Only match directories' }
+      { flag: '-type d', description: 'Only match directories' },
+      { flag: '-maxdepth NUM', description: 'Descend at most NUM levels below the start path' }
     ],
     examples: [
       { command: 'find / -name "*.json"', description: 'Find all JSON files' },
@@ -38,6 +39,7 @@ export const findCommand: CommandHandler = {
     let basePath = '/'
     let namePattern: string | null = null
     let typeFilter: 'f' | 'd' | null = null
+    let maxDepth: number | null = null
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i]
@@ -49,6 +51,8 @@ export const findCommand: CommandHandler = {
         if (t === 'f' || t === 'd') {
           typeFilter = t
         }
+      } else if (arg === '-maxdepth') {
+        maxDepth = parseInt(args[++i], 10)
       } else if (!arg.startsWith('-')) {
         basePath = arg
       }
@@ -58,7 +62,16 @@ export const findCommand: CommandHandler = {
     const allFiles = await ctx.fs.glob(basePath + '/**/*')
     const outputs: string[] = []
 
+    // Calculate base depth for maxdepth filtering
+    const baseDepth = basePath === '/' ? 0 : basePath.replace(/\/$/, '').split('/').length - 1
+
     for (const file of allFiles) {
+      // Apply maxdepth filter
+      if (maxDepth !== null) {
+        const fileDepth = file.split('/').length - 1
+        if (fileDepth - baseDepth > maxDepth) continue
+      }
+
       // Apply type filter
       if (typeFilter === 'f' && await ctx.fs.isDirectory(file)) continue
       if (typeFilter === 'd' && !await ctx.fs.isDirectory(file)) continue
