@@ -7,6 +7,7 @@
  */
 
 import type { SubAgentConfig } from '../types.js'
+import { TASK_SCOPE_INSTRUCTIONS } from '../agent.js'
 
 export const planAgent: SubAgentConfig = {
   name: 'plan',
@@ -70,7 +71,9 @@ List the most important workspace paths and data points for executing this plan:
 - If the task is simple enough to not need a plan, say so
 - Avoid using emojis
 
-REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write or modify any workspace data.`,
+REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write or modify any workspace data.
+
+${TASK_SCOPE_INSTRUCTIONS}`,
   tools: [],
   disableAskUser: true,
   builtInToolNames: ['shell (read-only workspace access)'],

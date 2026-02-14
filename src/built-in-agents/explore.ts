@@ -6,6 +6,7 @@
  */
 
 import type { SubAgentConfig } from '../types.js'
+import { TASK_SCOPE_INSTRUCTIONS } from '../agent.js'
 
 export const exploreAgent: SubAgentConfig = {
   name: 'explore',
@@ -51,7 +52,9 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 - Make efficient use of the tools at your disposal: be smart about how you search
 - Wherever possible, spawn multiple parallel shell calls for searching and reading
 
-Complete the search request efficiently and report your findings clearly.`,
+Complete the search request efficiently and report your findings clearly.
+
+${TASK_SCOPE_INSTRUCTIONS}`,
   tools: [],
   disableAskUser: true,
   builtInToolNames: ['shell (read-only workspace access)'],

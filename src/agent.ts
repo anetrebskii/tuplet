@@ -33,6 +33,19 @@ export const PLAN_PATH = ".hive/plan.md";
 /** Full filesystem path for the plan */
 export const PLAN_FS_PATH = `/${PLAN_PATH}`;
 
+/** Task scope instructions appended to all agents (main + sub-agents) */
+export const TASK_SCOPE_INSTRUCTIONS = `Do what has been asked; nothing more, nothing less. Only make changes that are directly requested or clearly necessary. Do not add features, refactor code, or make improvements beyond what was asked. Do not design for hypothetical future requirements.
+
+## Task Management
+For multi-step requests (3+ steps), use task tools to track progress:
+1. Create all tasks upfront from the user's request with TaskCreate
+2. Work through them in order — mark in_progress, do the work, mark completed
+3. Do not respond until all tasks are completed
+
+Tasks must only come from the user's request — never from your own discovery of adjacent work.
+Do NOT create tasks for single-step or trivial requests.
+When all tasks are completed, stop and respond with a summary. Do not look for more work.`
+
 /** System prompt prepended in plan mode */
 const PLAN_MODE_INSTRUCTIONS = `# Plan Mode
 
@@ -60,18 +73,13 @@ You are in **plan mode**. Your job is to understand the current state, then writ
 
 `;
 
-/** System prompt section appended in execute mode when a plan exists */
-function executeModeSection(planContent: string): string {
-  return `\n\n# Plan Context
-
-The following plan was created during the planning phase. Use it as guidance for your implementation:
+/** User message injected at start of execute mode when a plan exists */
+function planContextMessage(planContent: string): string {
+  return `The following plan was created during the planning phase. Use it as guidance for your implementation. Follow the plan steps and mark tasks as completed as you finish them.
 
 <plan>
 ${planContent}
-</plan>
-
-Follow the plan steps. Mark tasks as completed as you finish them.
-`;
+</plan>`
 }
 
 
@@ -379,27 +387,16 @@ export class Hive {
     let systemPrompt = this.config.systemPrompt;
     if (mode === "plan") {
       systemPrompt = PLAN_MODE_INSTRUCTIONS + systemPrompt;
-    } else if (mode === "execute") {
-      if (hasExistingPlan) {
-        systemPrompt = systemPrompt + executeModeSection(existingPlan as string);
-      }
     }
 
-    // Inject built-in tool guidance into system prompt so all models see it
-    // (non-Claude models often ignore tool descriptions until they decide to use a tool)
-    systemPrompt += `\n\nDo what has been asked; nothing more, nothing less. Only make changes that are directly requested or clearly necessary. Do not add features, refactor code, or make improvements beyond what was asked. Do not design for hypothetical future requirements.
+    // Inject plan content as a user message (not system prompt) to preserve cache
+    if (mode === "execute" && hasExistingPlan) {
+      messages.unshift({ role: "user", content: planContextMessage(existingPlan as string) });
+      messages.splice(1, 0, { role: "assistant", content: "I'll follow this plan." });
+    }
 
-## Built-in Tools
-
-### Task Management
-For multi-step requests (3+ steps), use task tools to track progress:
-1. Create all tasks upfront from the user's request with TaskCreate
-2. Work through them in order — mark in_progress, do the work, mark completed
-3. Do not respond until all tasks are completed
-
-Tasks must only come from the user's request — never from your own discovery of adjacent work.
-Do NOT create tasks for single-step or trivial requests.
-When all tasks are completed, stop and respond with a summary. Do not look for more work.
+    // Inject task scope + built-in tool guidance into system prompt
+    systemPrompt += `\n\n${TASK_SCOPE_INSTRUCTIONS}
 
 ### Asking the User
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
