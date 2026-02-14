@@ -30,7 +30,8 @@ export const curlCommand: CommandHandler = {
       { flag: '-f', description: 'Fail silently on HTTP errors (no body output)' },
       { flag: '-s', description: 'Silent mode (suppress progress)' },
       { flag: '-i', description: 'Include response headers in output' },
-      { flag: '-o FILE', description: 'Write output to file (use shell redirection instead)' },
+      { flag: '-o FILE', description: 'Write output to file (/dev/null to discard)' },
+      { flag: '-w FORMAT', description: 'Write-out format after transfer (e.g. "%{http_code}")' },
       { flag: '--max-time SECS', description: 'Maximum time in seconds for the request' },
       { flag: '--connect-timeout SECS', description: 'Connection timeout in seconds' }
     ],
@@ -56,6 +57,8 @@ export const curlCommand: CommandHandler = {
     let showHeaders = false
     let failSilently = false
     let timeoutMs: number | null = null
+    let outputFile: string | null = null
+    let writeOut: string | null = null
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i]
@@ -92,8 +95,9 @@ export const curlCommand: CommandHandler = {
       } else if (arg === '-L' || arg === '--location') {
         // Follow redirects — fetch does this by default, accept the flag
       } else if (arg === '-o' || arg === '--output') {
-        // Output file handled by shell redirection
-        i++
+        outputFile = args[++i]
+      } else if (arg === '-w' || arg === '--write-out') {
+        writeOut = args[++i]
       } else if (arg === '--max-time') {
         timeoutMs = parseFloat(args[++i]) * 1000
       } else if (arg === '--connect-timeout') {
@@ -150,7 +154,26 @@ export const curlCommand: CommandHandler = {
         output += '\n'
       }
 
-      output += body
+      // Handle -o: write body to file (or discard for /dev/null)
+      if (outputFile) {
+        if (outputFile !== '/dev/null') {
+          await ctx.fs.write(outputFile, body)
+        }
+        // Body does not go to stdout when -o is used
+      } else {
+        output += body
+      }
+
+      // Handle -w: append write-out format string
+      if (writeOut) {
+        const contentType = response.headers.get('content-type') ?? ''
+        output += writeOut
+          .replace(/%\{http_code\}/g, String(response.status))
+          .replace(/%\{content_type\}/g, contentType)
+          .replace(/%\{url_effective\}/g, url!)
+          .replace(/%\{size_download\}/g, String(body.length))
+          .replace(/%\{response_code\}/g, String(response.status))
+      }
 
       // Real curl returns 0 for HTTP errors unless -f is used
       return {

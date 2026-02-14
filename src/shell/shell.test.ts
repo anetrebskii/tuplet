@@ -1010,5 +1010,18 @@ describe('Shell', () => {
         expect(result.stdout).toBe('')
       })
     })
+
+    describe('curl -w write-out and -o /dev/null', () => {
+      it('returns http status code with -w "%{http_code}" and -o /dev/null', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+          new Response('response body', { status: 200, statusText: 'OK' })
+        )
+
+        const result = await shell.execute('curl -s \'https://api.example.com/data\' -o /dev/null -w "%{http_code}"')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('200')
+        expect(result.stdout).not.toContain('response body')
+      })
+    })
   })
 })
