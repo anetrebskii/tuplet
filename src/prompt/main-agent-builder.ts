@@ -215,16 +215,17 @@ export class MainAgentBuilder {
       sections.push('')
       if (builtInDefs.length > 0) {
         sections.push('1. **Explore first** - Use the `explore` sub-agent to check what data exists in workspace before handling a task')
-        sections.push('2. **Formulate requirements** - Before planning or delegating, synthesize your findings into a structured brief:')
+        sections.push('2. **Clarify if needed** - If the request is vague or ambiguous, ask the user using __ask_user__ BEFORE doing work. Examples of things to clarify: what "small" means, where to save results, what format, what criteria to use, what sources to prefer')
+        sections.push('3. **Formulate requirements** - Before planning or delegating, synthesize your findings into a structured brief:')
         sections.push('   - Context: current state and exploration findings')
         sections.push('   - Goal: what the user wants to achieve')
         sections.push('   - Affected areas: workspace paths and components involved')
         sections.push('   - Constraints: limitations and dependencies')
         sections.push('   - Success criteria: how to verify completion')
-        sections.push('3. **Plan if needed** - For complex or multi-step tasks, pass the structured brief to the `plan` sub-agent')
-        sections.push('4. **Delegate focused work** - Use the `worker` sub-agent for contained tasks (file edits, data updates, mechanical changes) to keep your context clean')
-        sections.push('5. **Delegate** - Call __sub_agent__ tool with a clear brief: what to accomplish, relevant context from exploration, and how to verify success')
-        sections.push('6. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+        sections.push('4. **Plan** - For any task that involves multiple steps (searching, processing, saving), pass the structured brief to the `plan` sub-agent. Do NOT skip planning and jump straight into execution')
+        sections.push('5. **Execute** - Use the `worker` sub-agent for contained tasks, or call tools directly for simple operations')
+        sections.push('6. **Verify** - After work is done, verify results (read saved files, check data quality)')
+        sections.push('7. **Present results** - After completion, output a clear summary to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
         sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
@@ -257,7 +258,7 @@ export class MainAgentBuilder {
       sections.push('These agents are always available. You MUST use them:')
       sections.push('')
       sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
-      sections.push('- **plan**: Call this before complex or multi-step tasks. Before calling, formulate a structured requirements brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
+      sections.push('- **plan**: Call this BEFORE executing any multi-step task. If the task involves more than one action (e.g. search + process + save, or fetch + analyze + write), you MUST plan first. Do NOT jump straight into execution. Formulate a structured brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
       sections.push('- **worker**: Delegate contained, well-defined tasks (file edits, data updates, mechanical changes) to keep your context clean. Give it a clear brief with what to do, relevant context, and how to verify success.')
       sections.push('')
       sections.push('The `explore` and `plan` agents are read-only. The `worker` agent has full read-write access.')
@@ -301,9 +302,12 @@ export class MainAgentBuilder {
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
       'ALWAYS call the `explore` sub-agent at the start of each user request to check workspace state before doing anything else',
+      'ALWAYS use the `plan` sub-agent before executing any multi-step task. Never jump straight from exploration to execution',
+      'For vague or ambiguous requests, ask the user to clarify BEFORE starting work. Use __ask_user__ to confirm key details: criteria, format, where to save, what sources to use. Do not guess — ask',
       'NEVER assume credentials, API keys, or secrets exist. Before any authenticated API call, first check what variables and credentials are actually available in the workspace. If they are not there, ask the user using __ask_user__ — do not guess or fabricate values',
       'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
-      'If a tool call fails, analyze the error and try a different approach instead of giving up',
+      'If a tool call fails, read the response carefully and decide how to proceed. Do not blindly retry the same approach',
+      'After completing work, verify results by reading back saved data. Present a summary to the user',
     ]
     const allRules = [...defaultRules, ...(this.config.rules || [])]
     sections.push('')

@@ -52,7 +52,7 @@ export const jqCommand: CommandHandler = {
     // Get input
     let input: string | null = null
 
-    if (ctx.stdin) {
+    if (ctx.stdin !== undefined) {
       input = ctx.stdin
     } else if (paths.length > 0) {
       input = await ctx.fs.read(paths[0])

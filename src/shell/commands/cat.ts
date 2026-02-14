@@ -33,7 +33,7 @@ export const catCommand: CommandHandler = {
 
   async execute(args: string[], ctx: CommandContext): Promise<ShellResult> {
     // If no args and stdin, output stdin
-    if (args.length === 0 && ctx.stdin) {
+    if (args.length === 0 && ctx.stdin !== undefined) {
       return { exitCode: 0, stdout: ctx.stdin, stderr: '' }
     }
 

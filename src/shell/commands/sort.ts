@@ -56,7 +56,7 @@ export const sortCommand: CommandHandler = {
     // Collect input from stdin or files
     let input = ''
 
-    if (paths.length === 0 && ctx.stdin) {
+    if (paths.length === 0 && ctx.stdin !== undefined) {
       input = ctx.stdin
     } else if (paths.length === 0) {
       return { exitCode: 1, stdout: '', stderr: 'sort: missing file operand' }

@@ -43,7 +43,7 @@ export const headCommand: CommandHandler = {
     }
 
     // Handle stdin
-    if (paths.length === 0 && ctx.stdin) {
+    if (paths.length === 0 && ctx.stdin !== undefined) {
       const inputLines = ctx.stdin.split('\n')
       const output = inputLines.slice(0, lines)
         .map(line => line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line)

@@ -155,7 +155,7 @@ export const grepCommand: CommandHandler = {
     }
 
     // Search in stdin if no paths
-    if (paths.length === 0 && ctx.stdin) {
+    if (paths.length === 0 && ctx.stdin !== undefined) {
       const lines = ctx.stdin.split('\n')
       for (let i = 0; i < lines.length; i++) {
         if (!processLine(lines[i], i + 1, '')) break
