@@ -222,8 +222,9 @@ export class MainAgentBuilder {
         sections.push('   - Constraints: limitations and dependencies')
         sections.push('   - Success criteria: how to verify completion')
         sections.push('3. **Plan if needed** - For complex or multi-step tasks, pass the structured brief to the `plan` sub-agent')
-        sections.push('4. **Delegate** - Call __sub_agent__ tool with a clear brief: what to accomplish, relevant context from exploration, and how to verify success')
-        sections.push('5. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+        sections.push('4. **Delegate focused work** - Use the `worker` sub-agent for contained tasks (file edits, data updates, mechanical changes) to keep your context clean')
+        sections.push('5. **Delegate** - Call __sub_agent__ tool with a clear brief: what to accomplish, relevant context from exploration, and how to verify success')
+        sections.push('6. **Present results** - After sub-agent completes, you MUST output a text message to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
         sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
@@ -253,12 +254,13 @@ export class MainAgentBuilder {
       sections.push('')
       sections.push('## Built-in Agents — Mandatory Usage')
       sections.push('')
-      sections.push('These read-only agents are always available. You MUST use them:')
+      sections.push('These agents are always available. You MUST use them:')
       sections.push('')
       sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
       sections.push('- **plan**: Call this before complex or multi-step tasks. Before calling, formulate a structured requirements brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
+      sections.push('- **worker**: Delegate contained, well-defined tasks (file edits, data updates, mechanical changes) to keep your context clean. Give it a clear brief with what to do, relevant context, and how to verify success.')
       sections.push('')
-      sections.push('Both agents are read-only — they cannot modify workspace data.')
+      sections.push('The `explore` and `plan` agents are read-only. The `worker` agent has full read-write access.')
     }
 
     // Question handling (only when explicitly configured)
@@ -299,7 +301,7 @@ export class MainAgentBuilder {
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
       'ALWAYS call the `explore` sub-agent at the start of each user request to check workspace state before doing anything else',
-      'Never use placeholders (e.g. <API_KEY>, YOUR_TOKEN, etc.) in commands or URLs. If a value is unknown, ask the user first using __ask_user__',
+      'NEVER assume credentials, API keys, or secrets exist. Before any authenticated API call, first check what variables and credentials are actually available in the workspace. If they are not there, ask the user using __ask_user__ — do not guess or fabricate values',
       'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',
       'If a tool call fails, analyze the error and try a different approach instead of giving up',
     ]
