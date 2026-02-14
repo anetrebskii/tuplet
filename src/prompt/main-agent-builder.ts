@@ -202,7 +202,7 @@ export class MainAgentBuilder {
         sections.push('   - Constraints: limitations and dependencies')
         sections.push('   - Success criteria: how to verify completion')
         sections.push('3. **Plan if needed** - For complex or multi-step tasks, pass the structured brief to the `plan` sub-agent')
-        sections.push('4. **Delegate** - Call __sub_agent__ tool to spawn domain-specific sub-agents')
+        sections.push('4. **Delegate** - Call __sub_agent__ tool with a clear brief: what to accomplish, relevant context from exploration, and how to verify success')
         sections.push('5. **Present results** - After sub-agent completes, you MUST output a text message to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
