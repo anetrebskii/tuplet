@@ -88,7 +88,9 @@ function parsePipeline(line: string): ParsedCommand | null {
 }
 
 function parseSegment(segment: string): ParsedCommand {
-  const tokens = tokenize(segment)
+  // Strip stderr redirections (2>/dev/null, 2>&1, etc.) — no stderr in virtual shell
+  const cleaned = segment.replace(/\s*2>\s*(?:\/dev\/null|&1)\s*/g, ' ')
+  const tokens = tokenize(cleaned)
 
   const result: ParsedCommand = {
     command: '',
