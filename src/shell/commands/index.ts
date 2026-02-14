@@ -17,6 +17,7 @@ import { tailCommand } from './tail.js'
 import { jqCommand } from './jq.js'
 import { browseCommand } from './browse.js'
 import { envCommand } from './env.js'
+import { sortCommand } from './sort.js'
 
 export const commands: CommandHandler[] = [
   catCommand,
@@ -31,7 +32,8 @@ export const commands: CommandHandler[] = [
   tailCommand,
   jqCommand,
   browseCommand,
-  envCommand
+  envCommand,
+  sortCommand
 ]
 
 export {
@@ -47,5 +49,6 @@ export {
   tailCommand,
   jqCommand,
   browseCommand,
-  envCommand
+  envCommand,
+  sortCommand
 }

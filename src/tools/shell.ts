@@ -37,6 +37,7 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 | \`ls\` | List directory contents |
 | \`mkdir\` | Create directories |
 | \`rm\` | Remove files or directories |
+| \`sort\` | Sort lines of text |
 | \`tail\` | Output the last part of files |
 
 ## Pre-execution steps
@@ -91,7 +92,7 @@ curl https://api.example.com/users?page=1&limit=10
 
 - NEVER use placeholders like \`<API_KEY>\`, \`<TOKEN>\`, \`YOUR_KEY_HERE\`. If a value is unknown, check if an environment variable is available (see below), otherwise ask the user using __ask_user__.
 - Prefer free public APIs that don't require authentication. If auth is needed and credentials are not available, ask the user.
-- On failure, read the error message, fix the command, and retry. Try a different approach if the second attempt fails.`
+- On failure, read the output carefully and decide how to proceed based on what it says.`
 
   // Append available environment variable names so the AI knows what's available
   const envKeys = shell.getEnvProvider()?.keys() ?? []
@@ -127,10 +128,9 @@ curl https://api.example.com/users?page=1&limit=10
       const result = await shell.execute(command)
 
       if (result.exitCode !== 0) {
-        const details = [result.stderr, result.stdout].filter(Boolean).join('\n')
         return {
           success: false,
-          error: `\`${command}\` failed (exit ${result.exitCode}): ${details || 'unknown error'}. Fix the command and try again, or try a different approach.`,
+          error: `\`${command}\` exited with code ${result.exitCode}`,
           data: {
             command,
             exitCode: result.exitCode,
