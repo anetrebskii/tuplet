@@ -84,4 +84,6 @@ export interface ParsedCommand {
   pipe?: ParsedCommand
   /** Heredoc content (<< DELIMITER ... DELIMITER) */
   stdinContent?: string
+  /** Whether the heredoc delimiter was quoted (suppress variable expansion) */
+  heredocQuoted?: boolean
 }

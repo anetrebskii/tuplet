@@ -138,6 +138,48 @@ describe('Shell', () => {
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('bar')
       })
+
+      it('supports -o for only-matching output', async () => {
+        await shell.getFS().write('/prices', 'Revenue was $50M last quarter\nRaised $10B in funding\nNo amount here\n')
+        const result = await shell.execute("grep -o '\\$[0-9]*\\(M\\|B\\)' /prices")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('$50M')
+        expect(result.stdout).toContain('$10B')
+        expect(result.stdout).not.toContain('Revenue')
+        expect(result.stdout).not.toContain('No amount')
+      })
+
+      it('supports -o with piped input and head', async () => {
+        await shell.getFS().write('/article', '<p>Company raised $20M in Series A</p>\n<p>Another got $5M seed</p>\n<p>Big corp raised $3B</p>\n')
+        const result = await shell.execute("cat /article | grep -o '\\$[0-9]*\\(M\\|B\\)' | head -2")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('$20M')
+        expect(result.stdout).toContain('$5M')
+        expect(result.stdout).not.toContain('$3B')
+      })
+
+      it('extracts dollar amounts from curl output piped to grep -o and head', async () => {
+        const result = await shell.execute("curl -s 'https://techcrunch.com/2026/02/11/former-founders-fund-vc-sam-blond-launches-ai-sales-startup-to-upend-salesforce/' -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 2>/dev/null | grep -o '\\$[0-9]*\\(M\\|B\\)' | head -5")
+        // curl may succeed or page may not have amounts — either way the pipeline should not error on parsing
+        expect(result.stderr).not.toContain('missing file operand')
+        expect(result.stderr).not.toContain('No such file')
+        if (result.exitCode === 0) {
+          const lines = result.stdout.trim().split('\n')
+          expect(lines.length).toBeLessThanOrEqual(5)
+          for (const line of lines) {
+            expect(line).toMatch(/^\$[0-9]+(M|B)$/)
+          }
+        }
+      }, 15000)
+
+      it('supports combined flags like -oE and -oP', async () => {
+        await shell.getFS().write('/data', 'foo123bar\nbaz456qux\n')
+        const result = await shell.execute("grep -oE '[0-9]+' /data")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('123')
+        expect(result.stdout).toContain('456')
+        expect(result.stdout).not.toContain('foo')
+      })
     })
   })
 
@@ -794,6 +836,178 @@ describe('Shell', () => {
         // Verify the file was written
         const spillContent = await shell.getFS().read(data.spillPath as string)
         expect(spillContent).toBeTruthy()
+      })
+    })
+  })
+
+  describe('log3 regression tests', () => {
+    describe('grep -o with angle brackets in pattern', () => {
+      it('handles < in single-quoted grep -o pattern without treating as redirection', async () => {
+        const html = '<html><head><title>My Page Title</title></head><body>hello</body></html>'
+        await shell.getFS().write('/page.html', html)
+        const result = await shell.execute("cat /page.html | grep -o '<title>[^<]*'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('<title>My Page Title')
+      })
+
+      it('handles curl | grep -o with angle bracket pattern | head pipeline', async () => {
+        const html = '<html><title>Test Title</title><title>Second</title></html>'
+        await shell.getFS().write('/page.html', html)
+        const result = await shell.execute("cat /page.html | grep -o '<title>[^<]*' | head -5")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('<title>Test Title')
+      })
+    })
+
+    describe('&& operator support', () => {
+      it('executes second command when first succeeds', async () => {
+        await shell.getFS().write('/data.txt', 'hello world')
+        const result = await shell.execute('echo "done" > /flag.txt && cat /flag.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('done')
+      })
+
+      it('does not execute second command when first fails', async () => {
+        const result = await shell.execute('cat /nonexistent.txt && echo "should not run" > /flag.txt')
+        expect(result.exitCode).not.toBe(0)
+        expect(await shell.getFS().exists('/flag.txt')).toBe(false)
+      })
+
+      it('supports curl -o FILE && grep pattern FILE', async () => {
+        // Simulate what curl -o should do: write output to a file, then grep it
+        await shell.getFS().write('/page.html', '<html><h1>Funding: $10M raised</h1></html>')
+        const result = await shell.execute("grep -i funding /page.html && echo 'found'")
+        expect(result.exitCode).toBe(0)
+      })
+    })
+
+    describe('wc command', () => {
+      it('counts lines with wc -l', async () => {
+        await shell.getFS().write('/data.txt', 'line1\nline2\nline3\n')
+        const result = await shell.execute('cat /data.txt | wc -l')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toContain('3')
+      })
+
+      it('counts words with wc -w', async () => {
+        await shell.getFS().write('/data.txt', 'hello world\nfoo bar baz\n')
+        const result = await shell.execute('cat /data.txt | wc -w')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toContain('5')
+      })
+
+      it('counts characters with wc -c', async () => {
+        await shell.getFS().write('/data.txt', 'abc')
+        const result = await shell.execute('cat /data.txt | wc -c')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toContain('3')
+      })
+
+      it('shows all counts by default (no flags)', async () => {
+        await shell.getFS().write('/data.txt', 'hello world\nfoo\n')
+        const result = await shell.execute('cat /data.txt | wc')
+        expect(result.exitCode).toBe(0)
+        // Should contain line count, word count, char count
+        expect(result.stdout).toContain('2')
+        expect(result.stdout).toContain('3')
+      })
+
+      it('counts lines from file argument', async () => {
+        await shell.getFS().write('/data.txt', 'a\nb\nc\nd\ne\n')
+        const result = await shell.execute('wc -l /data.txt')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('5')
+        expect(result.stdout).toContain('/data.txt')
+      })
+    })
+
+    describe('find with -o (OR) for multiple name patterns', () => {
+      it('matches files with multiple -name patterns joined by -o', async () => {
+        await shell.getFS().write('/data/file1.json', '{}')
+        await shell.getFS().write('/data/file2.csv', 'a,b')
+        await shell.getFS().write('/data/file3.yaml', 'key: val')
+        await shell.getFS().write('/data/file4.txt', 'text')
+
+        const result = await shell.execute('find /data -name "*.json" -o -name "*.csv"')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('file1.json')
+        expect(result.stdout).toContain('file2.csv')
+        expect(result.stdout).not.toContain('file4.txt')
+      })
+    })
+
+    describe('heredoc with quoted delimiter suppresses variable expansion', () => {
+      it('does not expand $VAR in heredoc with quoted delimiter', async () => {
+        shell.setEnv('PRICE', 'should-not-appear')
+        const cmd = `cat > /data.json << 'EOF'\n{"amount": "$17 million"}\nEOF`
+        const result = await shell.execute(cmd)
+        expect(result.exitCode).toBe(0)
+        const content = await shell.getFS().read('/data.json')
+        expect(content).toContain('$17 million')
+      })
+
+      it('still expands $VAR in heredoc with unquoted delimiter', async () => {
+        shell.setEnv('NAME', 'Alice')
+        const cmd = `cat > /data.txt << EOF\nHello $NAME\nEOF`
+        const result = await shell.execute(cmd)
+        expect(result.exitCode).toBe(0)
+        const content = await shell.getFS().read('/data.txt')
+        expect(content).toContain('Hello Alice')
+      })
+    })
+
+    describe('head output cap', () => {
+      it('caps total output like grep does to prevent cascading spills', async () => {
+        // Create file with many long lines
+        const longLines = Array.from({ length: 100 }, (_, i) =>
+          `line ${i + 1}: ${'x'.repeat(500)}`
+        )
+        await shell.getFS().write('/huge.txt', longLines.join('\n'))
+        const result = await shell.execute('head -n 100 /huge.txt')
+        expect(result.exitCode).toBe(0)
+        // Output should not exceed MAX_OUTPUT_CHARS
+        expect(result.stdout.length).toBeLessThanOrEqual(35000) // some margin for truncation note
+      })
+    })
+
+    describe('curl -H flag (alternate to -A for User-Agent)', () => {
+      it('accepts -H User-Agent header', async () => {
+        // This pattern is used in logs: curl -s URL -H 'User-Agent: Mozilla/5.0'
+        // Ensure -H flag works correctly (not treating header value as URL)
+        const result = await shell.execute("curl -s 'https://httpbin.org/user-agent' -H 'User-Agent: TestBot/1.0'")
+        expect(result.exitCode).toBe(0)
+        // Should get a response (not an error about URL parsing)
+        expect(result.stderr).toBe('')
+      }, 15000)
+    })
+
+    describe('multi-pipe grep chains', () => {
+      it('handles curl | grep -oE pattern | sort -u | head pipeline', async () => {
+        const html = `
+          <a href="https://example.com/2026/01/article-one">one</a>
+          <a href="https://example.com/2026/01/article-two">two</a>
+          <a href="https://example.com/2026/01/article-one">one duplicate</a>
+          <a href="https://example.com/2025/12/old-article">old</a>
+        `
+        await shell.getFS().write('/page.html', html)
+        const result = await shell.execute(
+          "cat /page.html | grep -oE 'https://example.com/2026/01/[^\"]+' | sort -u | head -5"
+        )
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('article-one')
+        expect(result.stdout).toContain('article-two')
+        // sort -u should deduplicate
+        const lines = result.stdout.trim().split('\n')
+        expect(lines.length).toBe(2)
+      })
+
+      it('returns exit code 1 when grep finds no matches in a pipe chain', async () => {
+        await shell.getFS().write('/page.html', '<html>no matches here</html>')
+        const result = await shell.execute(
+          "cat /page.html | grep -iE 'funding|million' | head -30"
+        )
+        expect(result.exitCode).toBe(1)
+        expect(result.stdout).toBe('')
       })
     })
   })

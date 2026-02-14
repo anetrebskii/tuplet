@@ -354,14 +354,18 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           context.config.logger?.warn(
             `[Sub-Agent: ${agentName}] Was interrupted: ${result.interrupted?.reason}`
           );
+          // Include the agent's last response so the caller can see what was accomplished
+          const agentResponse = result.response || '';
+          const hasResponse = agentResponse.length > 0;
           return {
-            success: false,
-            error: `Sub-agent was interrupted: ${
-              result.interrupted?.reason || "unknown"
-            }`,
+            success: hasResponse,
+            error: hasResponse
+              ? `Sub-agent reached iteration limit but produced output`
+              : `Sub-agent was interrupted: ${result.interrupted?.reason || "unknown"}`,
             data: {
               reason: result.interrupted?.reason,
               iterationsCompleted: result.interrupted?.iterationsCompleted,
+              summary: agentResponse || null,
             },
           };
         }

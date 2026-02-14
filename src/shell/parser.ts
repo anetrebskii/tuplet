@@ -8,8 +8,9 @@ import type { ParsedCommand } from './types.js'
 
 /**
  * Heredoc regex: matches << WORD, <<-WORD, << 'WORD', << "WORD"
+ * Group 1: optional leading quote, Group 2: delimiter word
  */
-const HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/
+const HEREDOC_RE = /<<-?\s*(['"]?)(\w+)\1/
 
 export function parseCommand(input: string): ParsedCommand[] {
   const commands: ParsedCommand[] = []
@@ -29,7 +30,8 @@ export function parseCommand(input: string): ParsedCommand[] {
     // Check for heredoc (e.g. cat << EOF > /file.json)
     const heredocMatch = line.match(HEREDOC_RE)
     if (heredocMatch) {
-      const delimiter = heredocMatch[1]
+      const quoteChar = heredocMatch[1] // '' if unquoted, "'" or '"' if quoted
+      const delimiter = heredocMatch[2]
       // Remove the << DELIMITER portion, keep the rest (command + redirections)
       const cleanedLine = line.replace(HEREDOC_RE, '').trim()
 
@@ -46,16 +48,25 @@ export function parseCommand(input: string): ParsedCommand[] {
         const parsed = parsePipeline(cleanedLine)
         if (parsed) {
           parsed.stdinContent = heredocLines.join('\n')
+          // Quoted delimiter (e.g. << 'EOF') suppresses variable expansion
+          if (quoteChar) {
+            parsed.heredocQuoted = true
+          }
           commands.push(parsed)
         }
       }
       continue
     }
 
-    // Regular command line (may contain pipes)
-    const parsed = parsePipeline(line)
-    if (parsed) {
-      commands.push(parsed)
+    // Split by && (respecting quotes) before pipe parsing
+    const andParts = splitByAnd(line)
+    for (const part of andParts) {
+      const trimmedPart = part.trim()
+      if (!trimmedPart) continue
+      const parsed = parsePipeline(trimmedPart)
+      if (parsed) {
+        commands.push(parsed)
+      }
     }
     i++
   }
@@ -104,6 +115,60 @@ function joinQuotedLines(lines: string[]): string[] {
 
   if (pending) result.push(pending)
   return result
+}
+
+/**
+ * Split a line by && (AND operator), respecting quotes.
+ */
+function splitByAnd(input: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escape = false
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]
+
+    if (escape) {
+      current += char
+      escape = false
+      continue
+    }
+
+    if (char === '\\') {
+      escape = true
+      current += char
+      continue
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote
+      current += char
+      continue
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote
+      current += char
+      continue
+    }
+
+    if (char === '&' && input[i + 1] === '&' && !inSingleQuote && !inDoubleQuote) {
+      parts.push(current)
+      current = ''
+      i++ // skip second &
+      continue
+    }
+
+    current += char
+  }
+
+  if (current) {
+    parts.push(current)
+  }
+
+  return parts
 }
 
 /**
@@ -274,7 +339,7 @@ function tokenize(input: string): string[] {
       continue
     }
 
-    if (current === '>' || current === '<') {
+    if ((current === '>' || current === '<') && !inSingleQuote && !inDoubleQuote) {
       tokens.push(current)
       current = ''
     }

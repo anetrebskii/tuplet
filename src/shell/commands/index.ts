@@ -18,6 +18,7 @@ import { jqCommand } from './jq.js'
 import { browseCommand } from './browse.js'
 import { envCommand } from './env.js'
 import { sortCommand } from './sort.js'
+import { wcCommand } from './wc.js'
 
 export const commands: CommandHandler[] = [
   catCommand,
@@ -33,7 +34,8 @@ export const commands: CommandHandler[] = [
   jqCommand,
   browseCommand,
   envCommand,
-  sortCommand
+  sortCommand,
+  wcCommand
 ]
 
 export {
@@ -50,5 +52,6 @@ export {
   jqCommand,
   browseCommand,
   envCommand,
-  sortCommand
+  sortCommand,
+  wcCommand
 }

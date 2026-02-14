@@ -317,6 +317,6 @@ export class Shell {
     if (cmd.outputFile) cmd.outputFile = this.expandVars(cmd.outputFile)
     if (cmd.appendFile) cmd.appendFile = this.expandVars(cmd.appendFile)
     if (cmd.inputFile) cmd.inputFile = this.expandVars(cmd.inputFile)
-    if (cmd.stdinContent) cmd.stdinContent = this.expandVars(cmd.stdinContent)
+    if (cmd.stdinContent && !cmd.heredocQuoted) cmd.stdinContent = this.expandVars(cmd.stdinContent)
   }
 }

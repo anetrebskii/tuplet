@@ -37,7 +37,7 @@ export const findCommand: CommandHandler = {
 
   async execute(args: string[], ctx: CommandContext): Promise<ShellResult> {
     let basePath = '/'
-    let namePattern: string | null = null
+    const namePatterns: string[] = []
     let typeFilter: 'f' | 'd' | null = null
     let maxDepth: number | null = null
 
@@ -45,7 +45,7 @@ export const findCommand: CommandHandler = {
       const arg = args[i]
 
       if (arg === '-name') {
-        namePattern = args[++i]
+        namePatterns.push(args[++i])
       } else if (arg === '-type') {
         const t = args[++i]
         if (t === 'f' || t === 'd') {
@@ -53,6 +53,8 @@ export const findCommand: CommandHandler = {
         }
       } else if (arg === '-maxdepth') {
         maxDepth = parseInt(args[++i], 10)
+      } else if (arg === '-o' || arg === '-or') {
+        // OR operator — handled implicitly: multiple -name patterns are OR'd
       } else if (!arg.startsWith('-')) {
         basePath = arg
       }
@@ -76,10 +78,10 @@ export const findCommand: CommandHandler = {
       if (typeFilter === 'f' && await ctx.fs.isDirectory(file)) continue
       if (typeFilter === 'd' && !await ctx.fs.isDirectory(file)) continue
 
-      // Apply name filter
-      if (namePattern) {
+      // Apply name filter (multiple patterns are OR'd)
+      if (namePatterns.length > 0) {
         const fileName = file.split('/').pop() || ''
-        if (!matchPattern(fileName, namePattern)) continue
+        if (!namePatterns.some(p => matchPattern(fileName, p))) continue
       }
 
       outputs.push(file)
@@ -88,7 +90,7 @@ export const findCommand: CommandHandler = {
     // Also include base path if it matches
     if (await ctx.fs.exists(basePath)) {
       if (!typeFilter || (typeFilter === 'd' && await ctx.fs.isDirectory(basePath))) {
-        if (!namePattern || matchPattern(basePath.split('/').pop() || '', namePattern)) {
+        if (namePatterns.length === 0 || namePatterns.some(p => matchPattern(basePath.split('/').pop() || '', p))) {
           outputs.unshift(basePath)
         }
       }

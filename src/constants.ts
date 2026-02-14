@@ -14,4 +14,5 @@ For multi-step requests (3+ steps), use task tools to track progress:
 
 Tasks must only come from the user's request — never from your own discovery of adjacent work.
 Do NOT create tasks for single-step or trivial requests.
-When all tasks are completed, stop and respond with a summary. Do not look for more work.`
+
+CRITICAL: When all tasks are completed, IMMEDIATELY respond with a text summary of what was done. Do NOT make any more tool calls. Do NOT look for more work, verify results, or try to improve anything. Just respond.`

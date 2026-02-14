@@ -89,11 +89,14 @@ export const grepCommand: CommandHandler = {
       return { exitCode: 1, stdout: '', stderr: 'grep: missing pattern' }
     }
 
-    // Convert BRE-style alternation (\|) to ERE/JS regex alternation (|)
-    // when -E is not specified. In BRE, \| means OR; in JS regex, \| is literal pipe.
+    // Convert BRE-style syntax to ERE/JS regex when -E is not specified.
+    // BRE uses \|, \(, \), \+, \? for special meaning; ERE/JS uses |, (, ), +, ?
     let effectivePattern = pattern
     if (!extendedRegex) {
-      effectivePattern = pattern.replace(/\\\|/g, '|')
+      effectivePattern = pattern
+        .replace(/\\\|/g, '|')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
     }
 
     const flags = caseInsensitive ? 'gi' : 'g'

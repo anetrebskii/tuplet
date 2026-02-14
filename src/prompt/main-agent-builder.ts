@@ -219,7 +219,7 @@ export class MainAgentBuilder {
       sections.push('## Your Role')
       sections.push('')
       if (builtInDefs.length > 0) {
-        sections.push('1. **Explore first** - Use the `explore` sub-agent to check what data exists in workspace before handling a task')
+        sections.push('1. **Explore first** - Use the `explore` sub-agent to check workspace state. You are a lead — give it a SPECIFIC brief: what paths to check, what data to look for, what keywords to search. Example: "List top-level paths with `ls /`, then check if `/data/` has any funding-related JSON files." Do NOT send vague instructions like "explore everything"')
         sections.push('2. **Clarify if needed** - If the request is vague or ambiguous, ask the user using __ask_user__ BEFORE doing work. Examples of things to clarify: what "small" means, where to save results, what format, what criteria to use, what sources to prefer')
         sections.push('3. **Formulate requirements** - Before planning or delegating, synthesize your findings into a structured brief:')
         sections.push('   - Context: current state and exploration findings')
@@ -262,7 +262,7 @@ export class MainAgentBuilder {
       sections.push('')
       sections.push('These agents are always available. You MUST use them:')
       sections.push('')
-      sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
+      sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. Give it a focused brief — tell it exactly what to look for and where. It should only read files that are relevant to the task, not explore the entire workspace.')
       sections.push('- **plan**: Call this BEFORE executing any multi-step task. If the task involves more than one action (e.g. search + process + save, or fetch + analyze + write), you MUST plan first. Do NOT jump straight into execution. Formulate a structured brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
       sections.push('- **worker**: Delegate contained, well-defined tasks (file edits, data updates, mechanical changes) to keep your context clean. Give it a clear brief with what to do, relevant context, and how to verify success.')
       sections.push('')

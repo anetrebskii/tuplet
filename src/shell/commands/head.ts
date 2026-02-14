@@ -3,7 +3,7 @@
  */
 
 import type { CommandHandler, CommandContext, ShellResult } from '../types.js'
-import { MAX_LINE_LENGTH } from '../limits.js'
+import { MAX_LINE_LENGTH, MAX_OUTPUT_CHARS } from '../limits.js'
 
 export const headCommand: CommandHandler = {
   name: 'head',
@@ -51,12 +51,24 @@ export const headCommand: CommandHandler = {
       return content.slice(0, chars!)
     }
 
-    // Line mode helper
+    // Line mode helper (with output cap)
     function sliceByLines(content: string): string {
       const contentLines = content.split('\n')
-      return contentLines.slice(0, lines)
-        .map(line => line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line)
-        .join('\n')
+      const selected = contentLines.slice(0, lines)
+      const result: string[] = []
+      let totalChars = 0
+
+      for (const line of selected) {
+        const truncated = line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line
+        if (totalChars + truncated.length + 1 > MAX_OUTPUT_CHARS) {
+          result.push(`[Output truncated at ${MAX_OUTPUT_CHARS} characters]`)
+          break
+        }
+        result.push(truncated)
+        totalChars += truncated.length + 1
+      }
+
+      return result.join('\n')
     }
 
     // Handle stdin
