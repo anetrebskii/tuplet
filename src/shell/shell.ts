@@ -229,7 +229,7 @@ export class Shell {
       fs: this.fs,
       env: this.env,
       config: this.config,
-      stdin: stdin || cmd.stdinContent,
+      stdin: stdin !== undefined ? stdin : cmd.stdinContent,
       envProvider: this.envProvider
     }
 
