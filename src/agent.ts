@@ -54,8 +54,13 @@ You are in **plan mode**. Your job is to understand the current state, then writ
 ## Workflow
 
 1. **Explore first** — Use the \`explore\` sub-agent to discover what data and state currently exists. This is mandatory before writing a plan.
-2. **Analyze** — Based on the exploration results and the user's request, determine what needs to happen.
-3. **Write the plan** — Save your plan to \`${PLAN_FS_PATH}\` using the shell.
+2. **Formulate requirements** — Synthesize exploration findings into a structured brief:
+   - Context: current state and exploration findings
+   - Goal: what the user wants to achieve
+   - Affected areas: workspace paths and components involved
+   - Constraints: limitations and dependencies
+   - Success criteria: how to verify completion
+3. **Write the plan** — Using the structured requirements as input, save your plan to \`${PLAN_FS_PATH}\` using the shell.
 
 ## Rules
 

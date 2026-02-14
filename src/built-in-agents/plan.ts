@@ -32,7 +32,7 @@ Use shell commands to read workspace (read-only):
 - \`grep "keyword" /**/*.json\` - search workspace
 - \`find / -name "*.json"\` - find entries by pattern
 
-You will be provided with a set of requirements and optionally a perspective on how to approach the design process.
+You will be provided with structured requirements (context, goal, affected areas, constraints, success criteria) and optionally a perspective on how to approach the design process.
 
 ## Your Process
 
@@ -74,6 +74,16 @@ List the most important workspace paths and data points for executing this plan:
 REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write or modify any workspace data.
 
 ${TASK_SCOPE_INSTRUCTIONS}`,
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      prompt: {
+        type: 'string' as const,
+        description: `What to plan. Provide a structured requirements brief:\n- Context: current state and exploration findings\n- Goal: what the user wants to achieve\n- Affected areas: workspace paths and components involved\n- Constraints: limitations and dependencies\n- Success criteria: how to verify completion`,
+      },
+    },
+    required: ['prompt'],
+  },
   tools: [],
   disableAskUser: true,
   builtInToolNames: ['shell (read-only workspace access)'],

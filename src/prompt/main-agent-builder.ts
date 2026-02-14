@@ -195,9 +195,15 @@ export class MainAgentBuilder {
       sections.push('')
       if (builtInDefs.length > 0) {
         sections.push('1. **Explore first** - Use the `explore` sub-agent to check what data exists in workspace before handling a task')
-        sections.push('2. **Plan if needed** - For complex or multi-step tasks, use the `plan` sub-agent to design an approach')
-        sections.push('3. **Delegate** - Call __sub_agent__ tool to spawn domain-specific sub-agents')
-        sections.push('4. **Present results** - After sub-agent completes, you MUST output a text message to the user')
+        sections.push('2. **Formulate requirements** - Before planning or delegating, synthesize your findings into a structured brief:')
+        sections.push('   - Context: current state and exploration findings')
+        sections.push('   - Goal: what the user wants to achieve')
+        sections.push('   - Affected areas: workspace paths and components involved')
+        sections.push('   - Constraints: limitations and dependencies')
+        sections.push('   - Success criteria: how to verify completion')
+        sections.push('3. **Plan if needed** - For complex or multi-step tasks, pass the structured brief to the `plan` sub-agent')
+        sections.push('4. **Delegate** - Call __sub_agent__ tool to spawn domain-specific sub-agents')
+        sections.push('5. **Present results** - After sub-agent completes, you MUST output a text message to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
         sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
@@ -230,7 +236,7 @@ export class MainAgentBuilder {
       sections.push('These read-only agents are always available. You MUST use them:')
       sections.push('')
       sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. It checks workspace data so you know what exists and what\'s missing. This is a mandatory first step — do not skip it.')
-      sections.push('- **plan**: Call this before complex or multi-step tasks to design an approach before execution.')
+      sections.push('- **plan**: Call this before complex or multi-step tasks. Before calling, formulate a structured requirements brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
       sections.push('')
       sections.push('Both agents are read-only — they cannot modify workspace data.')
     }
