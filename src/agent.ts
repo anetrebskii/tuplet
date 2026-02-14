@@ -385,28 +385,21 @@ export class Hive {
       }
     }
 
-    // Inject workspace state snapshot so the AI knows what data exists
-    // without needing to call explore first
-    const workspaceItems = (await ws.list()).filter(
-      (item) => !item.path.startsWith("/.hive/")
-    );
-    if (workspaceItems.length > 0) {
-      const stateLines = workspaceItems.map(
-        (item) => `- ${item.path}: ${item.preview}`
-      );
-      systemPrompt += `\n\n## Current Workspace State\n\nThe following data currently exists in workspace:\n\n${stateLines.join("\n")}\n\nUse the shell to read full contents (e.g. \`cat ${workspaceItems[0].path}\`). Do NOT recreate data that already exists — read and present it instead.`;
-    }
-
     // Inject built-in tool guidance into system prompt so all models see it
     // (non-Claude models often ignore tool descriptions until they decide to use a tool)
-    systemPrompt += `\n\n## Built-in Tools
+    systemPrompt += `\n\nDo what has been asked; nothing more, nothing less. Only make changes that are directly requested or clearly necessary. Do not add features, refactor code, or make improvements beyond what was asked. Do not design for hypothetical future requirements.
+
+## Built-in Tools
 
 ### Task Management
 For multi-step requests (3+ steps), use task tools to track progress:
-1. Create all tasks upfront with TaskCreate
+1. Create all tasks upfront from the user's request with TaskCreate
 2. Work through them in order — mark in_progress, do the work, mark completed
 3. Do not respond until all tasks are completed
-Skip tasks for simple single-step requests.
+
+Tasks must only come from the user's request — never from your own discovery of adjacent work.
+Do NOT create tasks for single-step or trivial requests.
+When all tasks are completed, stop and respond with a summary. Do not look for more work.
 
 ### Asking the User
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
