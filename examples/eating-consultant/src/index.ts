@@ -398,7 +398,7 @@ async function main() {
   console.log('')
 
   // Get initial greeting
-  try {
+  {
     isProcessing = true
     currentController = new AbortController()
     setupEscHandler()
@@ -413,12 +413,12 @@ async function main() {
     isProcessing = false
     currentController = null
     history = greeting.history
-    console.log('\nAssistant:', greeting.response, '\n')
-  } catch (error) {
-    stopEscHandler()
-    isProcessing = false
-    currentController = null
-    console.error('Error:', error)
+
+    if (greeting.status === 'error') {
+      console.error('\n❌ Error:', greeting.error, '\n')
+    } else {
+      console.log('\nAssistant:', greeting.response, '\n')
+    }
   }
 
   const prompt = () => {
@@ -458,17 +458,22 @@ async function main() {
         isProcessing = false
         currentController = null
 
-        // Handle interrupted status
-        if (result.status === 'interrupted') {
-          console.log(`\n⚠️  Task interrupted after ${result.interrupted?.iterationsCompleted} iterations`)
-          // Keep partial history so user can continue or start fresh
-          history = result.history
-          console.log('(Partial work saved. Send a new message to continue or "clear" to reset)\n')
+        // Always preserve history — even on error or interrupt
+        history = result.history
+
+        if (result.status === 'error') {
+          console.log(`\n❌ Error: ${result.error}`)
+          console.log('(History saved. Send a new message to retry or "clear" to reset)\n')
           prompt()
           return
         }
 
-        history = result.history
+        if (result.status === 'interrupted') {
+          console.log(`\n⚠️  Task interrupted after ${result.interrupted?.iterationsCompleted} iterations`)
+          console.log('(Partial work saved. Send a new message to continue or "clear" to reset)\n')
+          prompt()
+          return
+        }
 
         // Variable to track the final result to display
         let finalResult = result
@@ -504,7 +509,9 @@ async function main() {
         }
 
         // Show final result
-        if (currentResult.status === 'complete') {
+        if (currentResult.status === 'error') {
+          console.log(`\n❌ Error: ${currentResult.error}`)
+        } else if (currentResult.status === 'complete') {
           console.log('\nAssistant:', currentResult.response)
         } else if (currentResult.status === 'interrupted') {
           console.log(`\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`)
