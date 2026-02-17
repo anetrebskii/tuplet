@@ -2,8 +2,8 @@
  * Coder - Demo Terminal App
  *
  * An AI-powered software developer that creates projects from scratch.
- * Uses only built-in framework tools: shell (echo, mkdir, cat, ls, find, etc.),
- * explore/plan agents, workspace, and task tracking.
+ * Uses only built-in framework agents: explore, plan, worker,
+ * plus workspace and task tracking.
  */
 
 import 'dotenv/config'
@@ -233,19 +233,21 @@ async function main() {
   }
 
   // No custom tools or sub-agents — relies entirely on built-in:
-  // shell (__shell__), explore, plan, ask_user, workspace, task tracking
+  // explore, plan, worker, ask_user, workspace, task tracking
   const agent = new Hive({
-    role: 'a senior software developer that creates software projects from scratch using shell commands. ' +
+    role: 'a senior software developer that creates software projects from scratch. ' +
       'You write code files, create directory structures, and verify your work. ' +
-      'Use the built-in shell tool for all file operations: ' +
-      'mkdir to create directories, echo with > redirection to write files, ' +
-      'cat to read files, ls and find to explore project structure, ' +
-      'grep to search code. Use the explore agent to understand existing projects ' +
-      'and the plan agent to design implementation before coding.',
+      'Use the explore agent to understand existing projects, ' +
+      'the plan agent to design implementation before coding, ' +
+      'and the worker agent to execute all actions: ' +
+      'creating directories, writing files, reading files, running commands. ' +
+      'Always delegate execution to the worker with a clear brief.',
     tools: [],
     llm: llmProvider,
     logger: createProgressLogger(),
     maxIterations: 30,
+    maxContextTokens: 100000,
+    
     trace: new ConsoleTraceProvider({ showCosts: true }),
     agentName: 'coder'
   })
@@ -299,7 +301,7 @@ async function main() {
   console.log('')
 
   // Initial greeting
-  try {
+  {
     isProcessing = true
     currentController = new AbortController()
     setupEscHandler()
@@ -313,12 +315,12 @@ async function main() {
     isProcessing = false
     currentController = null
     history = greeting.history
-    console.log('\nAssistant:', greeting.response, '\n')
-  } catch (error) {
-    stopEscHandler()
-    isProcessing = false
-    currentController = null
-    console.error('Error:', error)
+
+    if (greeting.status === 'error') {
+      console.error('\n❌ Error:', greeting.error, '\n')
+    } else {
+      console.log('\nAssistant:', greeting.response, '\n')
+    }
   }
 
   const prompt = () => {
@@ -359,15 +361,22 @@ async function main() {
         isProcessing = false
         currentController = null
 
-        if (result.status === 'interrupted') {
-          console.log(`\n⚠️  Task interrupted after ${result.interrupted?.iterationsCompleted} iterations`)
-          history = result.history
-          console.log('(Partial work saved. Send a new message to continue or "clear" to reset)\n')
+        // Always preserve history — even on error or interrupt
+        history = result.history
+
+        if (result.status === 'error') {
+          console.log(`\n❌ Error: ${result.error}`)
+          console.log('(History saved. Send a new message to retry or "clear" to reset)\n')
           prompt()
           return
         }
 
-        history = result.history
+        if (result.status === 'interrupted') {
+          console.log(`\n⚠️  Task interrupted after ${result.interrupted?.iterationsCompleted} iterations`)
+          console.log('(Partial work saved. Send a new message to continue or "clear" to reset)\n')
+          prompt()
+          return
+        }
 
         let finalResult = result
         let currentResult = result
@@ -400,7 +409,9 @@ async function main() {
         }
 
         // Show final result
-        if (currentResult.status === 'complete') {
+        if (currentResult.status === 'error') {
+          console.log(`\n❌ Error: ${currentResult.error}`)
+        } else if (currentResult.status === 'complete') {
           console.log('\nAssistant:', currentResult.response)
         } else if (currentResult.status === 'interrupted') {
           console.log(`\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`)

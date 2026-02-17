@@ -228,9 +228,10 @@ export class MainAgentBuilder {
         sections.push('   - Constraints: limitations and dependencies')
         sections.push('   - Success criteria: how to verify completion')
         sections.push('4. **Plan** - For any task that involves multiple steps (searching, processing, saving), pass the structured brief to the `plan` sub-agent. Do NOT skip planning and jump straight into execution')
-        sections.push('5. **Execute** — Delegate to the `worker` sub-agent like a team lead assigns work to a developer. Give it: the goal, relevant context, requirements, and constraints. Do NOT micromanage — the worker decides HOW to accomplish the goal. You may include hints when you have useful domain knowledge, but keep instructions high-level')
-        sections.push('6. **Verify** — Use the `explore` sub-agent to verify results (read saved files, check data quality)')
-        sections.push('7. **Present results** - After completion, output a clear summary to the user')
+        sections.push('5. **Create tasks from the plan** - After receiving the plan, create one task per plan step using TaskCreate. Each task should match a plan step: clear goal, relevant context, and expected outcome. This is MANDATORY for multi-step plans — do not skip task creation and jump straight to execution')
+        sections.push('6. **Execute** — Work through tasks in order. For each task: mark it in_progress, delegate to the `worker` sub-agent, then mark it completed. Delegate like a team lead assigns work to a developer — give the goal, relevant context, requirements, and constraints. Do NOT micromanage — the worker decides HOW to accomplish the goal')
+        sections.push('7. **Verify** — Use the `explore` sub-agent to verify results (read saved files, check data quality)')
+        sections.push('8. **Present results** - After ALL tasks are completed, output a clear summary to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
         sections.push('2. **Present results** - After sub-agent completes, you MUST output a text message to the user')
@@ -307,7 +308,7 @@ export class MainAgentBuilder {
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
       'ALWAYS call the `explore` sub-agent at the start of each user request to check workspace state before doing anything else',
-      'ALWAYS use the `plan` sub-agent before executing any multi-step task. Never jump straight from exploration to execution',
+      'ALWAYS use the `plan` sub-agent before executing any multi-step task. After receiving the plan, create one task per plan step using TaskCreate BEFORE starting execution. Never jump straight from planning to execution without creating tasks first',
       'For vague or ambiguous requests, ask the user to clarify BEFORE starting work. Use __ask_user__ to confirm key details: criteria, format, where to save, what sources to use. Do not guess — ask',
       'NEVER assume credentials, API keys, or secrets exist. Before any authenticated API call, first check what variables and credentials are actually available in the workspace. If they are not there, ask the user using __ask_user__ — do not guess or fabricate values',
       'Prefer free public APIs and resources that require no authentication. If auth is needed and credentials are not in workspace, ask the user',

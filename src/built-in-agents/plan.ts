@@ -30,6 +30,8 @@ You do NOT explore or execute. The main agent has already explored using the exp
 
 3. **Output the plan**:
    - Numbered steps, each with: the goal, relevant context, requirements, expected outcome
+   - IMPORTANT: Each step will become a separate task that gets delegated to a worker. Make sure each step is self-contained and has a clear, distinct goal
+   - Do NOT combine unrelated actions into one step (e.g., "find data AND save results" should be two steps if they are logically separate)
    - Include hints only when you have specific knowledge that would save time (e.g., "the API uses pagination with cursor tokens")
    - Flag any missing information that the main agent should clarify with the user before executing
    - Keep it concise — no filler, just actionable requirements

@@ -8,11 +8,11 @@ export const TASK_SCOPE_INSTRUCTIONS = `Do what has been asked; nothing more, no
 
 ## Task Management
 For multi-step requests (3+ steps), use task tools to track progress:
-1. Create all tasks upfront from the user's request with TaskCreate
+1. Create all tasks upfront with TaskCreate — one task per logical step. If you have a plan, create one task per plan step
 2. Work through them in order — mark in_progress, do the work, mark completed
 3. Do not respond until all tasks are completed
 
-Tasks must only come from the user's request — never from your own discovery of adjacent work.
+Tasks must only come from the user's request or the plan — never from your own discovery of adjacent work.
 Do NOT create tasks for single-step or trivial requests.
 
 CRITICAL: When all tasks are completed, IMMEDIATELY respond with a text summary of what was done. Do NOT make any more tool calls. Do NOT look for more work, verify results, or try to improve anything. Just respond.`
