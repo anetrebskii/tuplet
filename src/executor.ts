@@ -322,12 +322,30 @@ export async function executeLoop(
 
     // Call LLM with timing
     const llmStartTime = Date.now()
-    const response = await llm.chat(
-      systemPrompt,
-      managedMessages,
-      toolSchemas,
-      llmOptions
-    )
+    let response
+    try {
+      response = await llm.chat(
+        systemPrompt,
+        managedMessages,
+        toolSchemas,
+        llmOptions
+      )
+    } catch (error) {
+      const llmDurationMs = Date.now() - llmStartTime
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger?.error(`[LLM] Failed after ${llmDurationMs}ms: ${errorMessage}`)
+
+      const tasks = taskManager.getAll()
+      return {
+        response: '',
+        history: messages,
+        toolCalls: toolCallLogs,
+        thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
+        tasks: tasks.length > 0 ? tasks : undefined,
+        status: 'error' as const,
+        error: errorMessage
+      }
+    }
     const llmDurationMs = Date.now() - llmStartTime
 
     // Record usage in trace

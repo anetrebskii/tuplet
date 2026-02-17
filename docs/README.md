@@ -20,7 +20,29 @@ const agent = new Hive({
 })
 
 const result = await agent.run('Hello!')
-console.log(result.response)
+
+if (result.status === 'error') {
+  console.error('Error:', result.error)
+} else {
+  console.log(result.response)
+}
+
+// result.history is always available — even on error or interruption
+// Pass it to the next run to continue the conversation
+```
+
+### Result Status
+
+`agent.run()` never throws. It always returns an `AgentResult` with one of these statuses:
+
+| Status | Meaning | Key fields |
+|--------|---------|------------|
+| `complete` | Agent finished successfully | `response`, `history` |
+| `needs_input` | Agent is asking the user a question | `pendingQuestion`, `history` |
+| `interrupted` | Execution stopped early (abort, timeout, max iterations) | `interrupted`, `history` |
+| `error` | Fatal error (LLM API failure, context overflow) | `error`, `history` |
+
+History is **always preserved** regardless of outcome — pass `result.history` to the next `agent.run()` call to continue.
 ```
 
 ## Extended Example
@@ -128,7 +150,7 @@ await workspace.dispose()
 - [Providers](./providers.md) - Claude, OpenAI, OpenRouter
 - [History](./history.md) - Conversation persistence and summarization
 - [Interactive](./interactive.md) - Agent asking clarifying questions
-- [Interruption](./interruption.md) - Stopping and continuing execution
+- [Interruption & Error Handling](./interruption.md) - Stopping, error recovery, and continuing execution
 - [Plan Mode](./plan-mode.md) - Two-phase plan and execute workflow
 - [Task Management](./task-management.md) - Task tracking with dependencies
 - [Progress Status](./progress-status.md) - Real-time activity tracking

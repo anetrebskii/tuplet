@@ -335,11 +335,26 @@ export interface PendingQuestion {
   questions: EnhancedQuestion[]
 }
 
-export type AgentStatus = 'complete' | 'needs_input' | 'interrupted'
+/**
+ * Agent execution status:
+ * - `complete`    — Agent finished successfully and produced a response.
+ * - `needs_input` — Agent paused and is waiting for user input (see `pendingQuestion`).
+ * - `interrupted` — Execution was stopped early (abort signal, shouldContinue, or max iterations).
+ * - `error`       — A fatal error occurred (e.g. LLM API failure, context overflow).
+ *                   The `error` field contains the message. History is still saved
+ *                   so the conversation can be resumed or inspected.
+ */
+export type AgentStatus = 'complete' | 'needs_input' | 'interrupted' | 'error'
 
 export interface AgentResult {
+  /** Final text response from the agent (empty on error/interrupt/needs_input) */
   response: string
+  /**
+   * Full conversation history including all messages exchanged during this run.
+   * Always populated — even when status is 'error' — so progress is never lost.
+   */
   history: Message[]
+  /** Log of all tool calls made during execution */
   toolCalls: ToolCallLog[]
   thinking?: string[]
   pendingQuestion?: PendingQuestion
@@ -349,8 +364,8 @@ export interface AgentResult {
   status: AgentStatus
 
   /**
-   * Present when status is 'interrupted'
-   * Contains partial work that can be continued or discarded
+   * Present when status is 'interrupted'.
+   * Contains partial work that can be continued or discarded.
    */
   interrupted?: {
     /** Reason for interruption */
@@ -358,6 +373,12 @@ export interface AgentResult {
     /** Number of iterations completed before interruption */
     iterationsCompleted: number
   }
+
+  /**
+   * Present when status is 'error'.
+   * Contains the error message from the failed operation (e.g. LLM API error).
+   */
+  error?: string
 
   /** Execution trace with usage, costs, and timing (when trace provider configured) */
   trace?: import('./trace.js').Trace

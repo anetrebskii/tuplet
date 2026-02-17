@@ -427,35 +427,55 @@ export class Hive {
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
 
 
-    // Execute the agent loop
-    const result = await executeLoop(
-      {
-        systemPrompt,
-        tools: this.getRunTools(taskManager, ws, this.config.agentName, mode),
-        llm: this.config.llm,
-        logger: this.config.logger,
-        maxIterations: this.config.maxIterations!,
-        contextManager: this.contextManager,
-        taskManager,
-        llmOptions: {},
-        signal,
-        shouldContinue,
-        traceBuilder,
-      },
-      messages,
-      toolContext
-    );
-
-    // Save history to repository
-    if (conversationId && this.config.repository) {
-      await this.config.repository.saveHistory(conversationId, result.history);
+    // Execute the agent loop — wrapped in try/finally to guarantee history is saved
+    // on any outcome: complete, interrupted, error, or unexpected crash.
+    let result: AgentResult;
+    try {
+      result = await executeLoop(
+        {
+          systemPrompt,
+          tools: this.getRunTools(taskManager, ws, this.config.agentName, mode),
+          llm: this.config.llm,
+          logger: this.config.logger,
+          maxIterations: this.config.maxIterations!,
+          contextManager: this.contextManager,
+          taskManager,
+          llmOptions: {},
+          signal,
+          shouldContinue,
+          traceBuilder,
+        },
+        messages,
+        toolContext
+      );
+    } catch (error) {
+      // Unexpected crash — build an error result from current messages
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.config.logger?.error("Execution loop crashed", error);
+      result = {
+        response: '',
+        history: messages,
+        toolCalls: [],
+        status: 'error',
+        error: errorMessage,
+      };
+    } finally {
+      // Always save history — complete, interrupted, error, or crash
+      if (conversationId && this.config.repository) {
+        try {
+          const historyToSave = result!?.history ?? messages;
+          await this.config.repository.saveHistory(conversationId, historyToSave);
+        } catch (saveError) {
+          this.config.logger?.warn("Failed to save history", saveError);
+        }
+      }
     }
 
     // End trace and attach to result (only for root agent, not sub-agents)
     if (traceBuilder && !options._traceBuilder) {
       const status =
-        result.status === "complete"
-          ? "complete"
+        result.status === "error"
+          ? "error"
           : result.status === "interrupted"
           ? "interrupted"
           : "complete";
