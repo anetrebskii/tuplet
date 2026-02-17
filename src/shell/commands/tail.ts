@@ -15,9 +15,9 @@ export const tailCommand: CommandHandler = {
       { flag: '-n NUM', description: 'Output last NUM lines (default: 10)' }
     ],
     examples: [
-      { command: 'tail /log.txt', description: 'Show last 10 lines' },
-      { command: 'tail -n 3 /history.json', description: 'Show last 3 lines' },
-      { command: 'cat /data | tail -n 5', description: 'Last 5 lines of piped input' }
+      { command: 'tail log.txt', description: 'Show last 10 lines' },
+      { command: 'tail -n 3 history.json', description: 'Show last 3 lines' },
+      { command: 'cat data | tail -n 5', description: 'Last 5 lines of piped input' }
     ],
     notes: [
       'Also accepts -NUM shorthand (e.g. tail -5 file)',

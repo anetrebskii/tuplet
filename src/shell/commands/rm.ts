@@ -15,9 +15,9 @@ export const rmCommand: CommandHandler = {
       { flag: '-f', description: 'Force removal, ignore nonexistent files' }
     ],
     examples: [
-      { command: 'rm /temp.json', description: 'Remove a file' },
-      { command: 'rm -r /cache/', description: 'Remove directory recursively' },
-      { command: 'rm -rf /old/*', description: 'Force remove with glob pattern' }
+      { command: 'rm temp.json', description: 'Remove a file' },
+      { command: 'rm -r cache/', description: 'Remove directory recursively' },
+      { command: 'rm -rf old/*', description: 'Force remove with glob pattern' }
     ],
     notes: [
       'Supports glob patterns',

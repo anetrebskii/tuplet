@@ -17,7 +17,7 @@ export function createShellTool(shell: Shell): Tool {
 
 ## Overview
 
-Commands run against a virtual filesystem rooted at \`/\`. All context data lives there. Pipes (\`|\`), input redirection (\`<\`), and output redirection (\`>\`, \`>>\`) are supported.
+Commands run against a workspace filesystem. All paths are RELATIVE — never use absolute paths starting with \`/\`. Pipes (\`|\`), input redirection (\`<\`), and output redirection (\`>\`, \`>>\`) are supported.
 
 Run \`help\` to list all commands, or \`help <command>\` for detailed usage, flags, and examples.
 
@@ -40,6 +40,13 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 | \`sort\` | Sort lines of text |
 | \`tail\` | Output the last part of files |
 
+## Path rules
+
+- All paths are RELATIVE — e.g. \`data.json\`, \`reports/output.csv\`
+- NEVER use absolute paths starting with \`/\` — they will be rejected
+- Path traversal (\`..\`) is not allowed
+- Use \`.\` or omit the path to refer to the workspace root
+
 ## Pre-execution steps
 
 1. **Verify paths** — before writing, check the parent directory exists with \`ls\`.
@@ -54,16 +61,16 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
 ## Usage by category
 
 **Workspace (read/write):**
-- \`cat /data.json\` — read file
-- \`cat -n /data.json\` — read file with line numbers
-- \`cat --offset 0 --limit 100 /big.txt\` — read lines 1-100 of a large file
-- \`echo '{"name":"John"}' > /user.json\` — write file
-- \`head -n 10 /log.txt\` / \`tail -n 5 /log.txt\` — partial reads
+- \`cat data.json\` — read file
+- \`cat -n data.json\` — read file with line numbers
+- \`cat --offset 0 --limit 100 big.txt\` — read lines 1-100 of a large file
+- \`echo '{"name":"John"}' > user.json\` — write file
+- \`head -n 10 log.txt\` / \`tail -n 5 log.txt\` — partial reads
 
 **Search & list:**
-- \`ls /\`, \`ls /**/*.json\` — list entries
-- \`find / -name "*.json"\` — find files
-- \`grep "pattern" /**/*.json\` — search content
+- \`ls\`, \`ls **/*.json\` — list entries
+- \`find . -name "*.json"\` — find files
+- \`grep "pattern" **/*.json\` — search content
 
 **HTTP & web:**
 - \`curl https://api.example.com/users\` — API requests (GET, POST, PUT, DELETE)
@@ -73,14 +80,14 @@ Run \`help\` to list all commands, or \`help <command>\` for detailed usage, fla
   - If \`browse\` returns exitCode 1 with a warning, the content is useless — try a different source.
 
 **JSON processing:**
-- \`cat /data.json | jq '.items[]'\` — extract, filter, transform JSON
+- \`cat data.json | jq '.items[]'\` — extract, filter, transform JSON
 
 **File management:**
-- \`mkdir /reports\` — create directory
-- \`rm /temp.json\` / \`rm -r /cache/\` — remove files
+- \`mkdir reports\` — create directory
+- \`rm temp.json\` / \`rm -r cache/\` — remove files
 
 <good-example>
-curl 'https://api.example.com/users?page=1' | jq '.data' > /users.json
+curl 'https://api.example.com/users?page=1' | jq '.data' > users.json
 </good-example>
 
 <bad-example>
@@ -90,6 +97,7 @@ curl https://api.example.com/users?page=1&limit=10
 
 ## Important rules
 
+- All paths must be relative. NEVER use paths starting with \`/\` (e.g. use \`data.json\` not \`/data.json\`).
 - NEVER use placeholders like \`<API_KEY>\`, \`<TOKEN>\`, \`YOUR_KEY_HERE\`. If a value is unknown, check if an environment variable is available (see below), otherwise ask the user using __ask_user__.
 - Prefer free public APIs that don't require authentication. If auth is needed and credentials are not available, ask the user.
 - On failure, read the output carefully and decide how to proceed based on what it says.`
@@ -143,9 +151,10 @@ curl https://api.example.com/users?page=1&limit=10
       // Output truncation with spill-to-disk
       if (result.stdout.length > MAX_OUTPUT_CHARS) {
         const timestamp = Date.now()
-        const spillPath = `/.hive/tmp/output-${timestamp}.txt`
+        const spillPath = `.hive/tmp/output-${timestamp}.txt`
         const fs = shell.getFS()
-        await fs.write(spillPath, result.stdout)
+        // Write directly to raw provider (spill path is internal)
+        await fs.write('/' + spillPath, result.stdout)
 
         return {
           success: false,

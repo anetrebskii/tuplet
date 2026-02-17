@@ -28,7 +28,7 @@ describe('Shell', () => {
       const original = new Shell({ initialContext: { key: 'value' } })
       const shared = new Shell({ fs: original.getFS() })
 
-      const result = await shared.execute('cat /key')
+      const result = await shared.execute('cat key')
       expect(result.stdout).toBe('value')
     })
   })
@@ -80,13 +80,13 @@ describe('Shell', () => {
     describe('cat', () => {
       it('reads file content', async () => {
         await shell.getFS().write('/data', 'file content')
-        const result = await shell.execute('cat /data')
+        const result = await shell.execute('cat data')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('file content')
       })
 
       it('returns error for missing file', async () => {
-        const result = await shell.execute('cat /missing')
+        const result = await shell.execute('cat missing')
         expect(result.exitCode).toBe(1)
         expect(result.stderr).toContain('No such file')
       })
@@ -94,7 +94,7 @@ describe('Shell', () => {
       it('concatenates multiple files', async () => {
         await shell.getFS().write('/a', 'AAA')
         await shell.getFS().write('/b', 'BBB')
-        const result = await shell.execute('cat /a /b')
+        const result = await shell.execute('cat a b')
         expect(result.stdout).toBe('AAABBB')
       })
     })
@@ -105,29 +105,29 @@ describe('Shell', () => {
       })
 
       it('filters lines by pattern', async () => {
-        const result = await shell.execute('grep ERROR /log')
+        const result = await shell.execute('grep ERROR log')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('ERROR: failed')
       })
 
       it('returns exit code 1 when no match', async () => {
-        const result = await shell.execute('grep WARN /log')
+        const result = await shell.execute('grep WARN log')
         expect(result.exitCode).toBe(1)
       })
 
       it('supports -i for case-insensitive search', async () => {
-        const result = await shell.execute('grep -i error /log')
+        const result = await shell.execute('grep -i error log')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('ERROR: failed')
       })
 
       it('supports -n for line numbers', async () => {
-        const result = await shell.execute('grep -n ERROR /log')
+        const result = await shell.execute('grep -n ERROR log')
         expect(result.stdout).toContain('2:ERROR: failed')
       })
 
       it('supports -v for inverted match', async () => {
-        const result = await shell.execute('grep -v ERROR /log')
+        const result = await shell.execute('grep -v ERROR log')
         expect(result.stdout).toContain('INFO: started')
         expect(result.stdout).toContain('INFO: done')
         expect(result.stdout).not.toContain('ERROR')
@@ -141,7 +141,7 @@ describe('Shell', () => {
 
       it('supports -o for only-matching output', async () => {
         await shell.getFS().write('/prices', 'Revenue was $50M last quarter\nRaised $10B in funding\nNo amount here\n')
-        const result = await shell.execute("grep -o '\\$[0-9]*\\(M\\|B\\)' /prices")
+        const result = await shell.execute("grep -o '\\$[0-9]*\\(M\\|B\\)' prices")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('$50M')
         expect(result.stdout).toContain('$10B')
@@ -151,7 +151,7 @@ describe('Shell', () => {
 
       it('supports -o with piped input and head', async () => {
         await shell.getFS().write('/article', '<p>Company raised $20M in Series A</p>\n<p>Another got $5M seed</p>\n<p>Big corp raised $3B</p>\n')
-        const result = await shell.execute("cat /article | grep -o '\\$[0-9]*\\(M\\|B\\)' | head -2")
+        const result = await shell.execute("cat article | grep -o '\\$[0-9]*\\(M\\|B\\)' | head -2")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('$20M')
         expect(result.stdout).toContain('$5M')
@@ -174,7 +174,7 @@ describe('Shell', () => {
 
       it('supports combined flags like -oE and -oP', async () => {
         await shell.getFS().write('/data', 'foo123bar\nbaz456qux\n')
-        const result = await shell.execute("grep -oE '[0-9]+' /data")
+        const result = await shell.execute("grep -oE '[0-9]+' data")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('123')
         expect(result.stdout).toContain('456')
@@ -186,7 +186,7 @@ describe('Shell', () => {
   describe('pipes', () => {
     it('pipes stdout of one command into stdin of the next', async () => {
       await shell.getFS().write('/data', 'line1\nline2\nline3\n')
-      const result = await shell.execute('cat /data | grep line2')
+      const result = await shell.execute('cat data | grep line2')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('line2')
       expect(result.stdout).not.toContain('line1')
@@ -194,7 +194,7 @@ describe('Shell', () => {
 
     it('chains multiple pipes', async () => {
       await shell.getFS().write('/data', 'apple\nbanana\napricot\nblueberry\n')
-      const result = await shell.execute('cat /data | grep a | grep p')
+      const result = await shell.execute('cat data | grep a | grep p')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('apple')
       expect(result.stdout).toContain('apricot')
@@ -202,7 +202,7 @@ describe('Shell', () => {
     })
 
     it('stops pipe chain on non-zero exit code', async () => {
-      const result = await shell.execute('cat /missing | grep foo')
+      const result = await shell.execute('cat missing | grep foo')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain('No such file')
     })
@@ -210,7 +210,7 @@ describe('Shell', () => {
 
   describe('redirections', () => {
     it('supports output redirection with >', async () => {
-      const result = await shell.execute('echo hello > /out')
+      const result = await shell.execute('echo hello > out')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('')
       expect(await shell.getFS().read('/out')).toBe('hello\n')
@@ -218,19 +218,19 @@ describe('Shell', () => {
 
     it('supports append redirection with >>', async () => {
       await shell.getFS().write('/out', 'first\n')
-      await shell.execute('echo second >> /out')
+      await shell.execute('echo second >> out')
       expect(await shell.getFS().read('/out')).toBe('first\nsecond\n')
     })
 
     it('supports input redirection with <', async () => {
       await shell.getFS().write('/input', 'hello from file')
-      const result = await shell.execute('cat < /input')
+      const result = await shell.execute('cat < input')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('hello from file')
     })
 
     it('returns error for input redirection from missing file', async () => {
-      const result = await shell.execute('cat < /missing')
+      const result = await shell.execute('cat < missing')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain('No such file')
     })
@@ -269,13 +269,13 @@ describe('Shell', () => {
 
   describe('sequential commands', () => {
     it('executes multiple lines sequentially', async () => {
-      const result = await shell.execute('mkdir /data\necho hello > /data/file.txt')
+      const result = await shell.execute('mkdir data\necho hello > data/file.txt')
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/data/file.txt')).toBe('hello\n')
     })
 
     it('stops on first error', async () => {
-      const result = await shell.execute('cat /missing\necho should-not-run > /out')
+      const result = await shell.execute('cat missing\necho should-not-run > out')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain('No such file')
       expect(await shell.getFS().exists('/out')).toBe(false)
@@ -296,7 +296,7 @@ describe('Shell', () => {
 
   describe('heredoc', () => {
     it('supports basic heredoc with cat', async () => {
-      const input = `cat << EOF > /data.json\n{"name": "Alice"}\nEOF`
+      const input = `cat << EOF > data.json\n{"name": "Alice"}\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/data.json')).toBe('{"name": "Alice"}')
@@ -304,7 +304,7 @@ describe('Shell', () => {
 
     it('supports multi-line heredoc content', async () => {
       const input = [
-        'cat << EOF > /plan.json',
+        'cat << EOF > plan.json',
         '{',
         '  "title": "My Plan",',
         '  "days": [1, 2, 3]',
@@ -320,14 +320,14 @@ describe('Shell', () => {
 
     it('supports heredoc with append redirection', async () => {
       await shell.getFS().write('/log', 'line1\n')
-      const input = `cat << EOF >> /log\nline2\nline3\nEOF`
+      const input = `cat << EOF >> log\nline2\nline3\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/log')).toBe('line1\nline2\nline3')
     })
 
     it('supports heredoc without quotes around delimiter', async () => {
-      const input = `cat <<EOF > /out\nhello heredoc\nEOF`
+      const input = `cat <<EOF > out\nhello heredoc\nEOF`
       const result = await shell.execute(input)
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/out')).toBe('hello heredoc')
@@ -335,8 +335,8 @@ describe('Shell', () => {
 
     it('supports commands before heredoc', async () => {
       const input = [
-        'mkdir /meals',
-        'cat << EOF > /meals/day1.json',
+        'mkdir meals',
+        'cat << EOF > meals/day1.json',
         '{"day": "Monday", "calories": 1800}',
         'EOF'
       ].join('\n')
@@ -348,7 +348,7 @@ describe('Shell', () => {
     it('supports comments before heredoc', async () => {
       const input = [
         '# Create meal plan',
-        'cat << EOF > /plan.json',
+        'cat << EOF > plan.json',
         '{"plan": true}',
         'EOF'
       ].join('\n')
@@ -420,9 +420,9 @@ describe('Shell', () => {
     })
 
     it('expands variables in redirections', async () => {
-      shell.setEnv('FILE', '/output.txt')
+      shell.setEnv('FILE', 'output.txt')
       await shell.execute('echo data > $FILE')
-      const read = await shell.execute('cat /output.txt')
+      const read = await shell.execute('cat output.txt')
       expect(read.stdout).toBe('data\n')
     })
 
@@ -604,7 +604,7 @@ describe('Shell', () => {
 
     it('blocks rm command in read-only mode', async () => {
       await shell.getFS().write('/file.txt', 'data')
-      const result = await shell.execute('rm /file.txt')
+      const result = await shell.execute('rm file.txt')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("'rm' is not allowed")
@@ -613,14 +613,14 @@ describe('Shell', () => {
     })
 
     it('blocks mkdir command in read-only mode', async () => {
-      const result = await shell.execute('mkdir /newdir')
+      const result = await shell.execute('mkdir newdir')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("'mkdir' is not allowed")
     })
 
     it('blocks output redirection in read-only mode', async () => {
-      const result = await shell.execute('echo hello > /file.txt')
+      const result = await shell.execute('echo hello > file.txt')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("cannot write to")
@@ -629,7 +629,7 @@ describe('Shell', () => {
 
     it('blocks append redirection in read-only mode', async () => {
       await shell.getFS().write('/file.txt', 'existing')
-      const result = await shell.execute('echo more >> /file.txt')
+      const result = await shell.execute('echo more >> file.txt')
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain("read-only mode")
       expect(result.stderr).toContain("cannot write to")
@@ -637,30 +637,30 @@ describe('Shell', () => {
     })
 
     it('allows writing to writable paths', async () => {
-      shell.setReadOnly(true, ['/.hive/plan.md'])
+      shell.setReadOnly(true, ['.hive/plan.md'])
       await shell.getFS().mkdir('/.hive')
-      const result = await shell.execute('echo "# Plan" > /.hive/plan.md')
+      const result = await shell.execute('echo "# Plan" > .hive/plan.md')
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/.hive/plan.md')).toBe('# Plan\n')
     })
 
     it('allows read commands (ls) in read-only mode', async () => {
       await shell.getFS().write('/data.txt', 'hello')
-      const result = await shell.execute('ls /')
+      const result = await shell.execute('ls')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('data.txt')
     })
 
     it('allows read commands (cat) in read-only mode', async () => {
       await shell.getFS().write('/data.txt', 'hello')
-      const result = await shell.execute('cat /data.txt')
+      const result = await shell.execute('cat data.txt')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toBe('hello')
     })
 
     it('allows read commands (grep) in read-only mode', async () => {
       await shell.getFS().write('/data.txt', 'hello world\nfoo bar\n')
-      const result = await shell.execute('grep hello /data.txt')
+      const result = await shell.execute('grep hello data.txt')
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('hello world')
     })
@@ -673,7 +673,7 @@ describe('Shell', () => {
 
     it('can be disabled after enabling', async () => {
       shell.setReadOnly(false)
-      const result = await shell.execute('echo hello > /file.txt')
+      const result = await shell.execute('echo hello > file.txt')
       expect(result.exitCode).toBe(0)
       expect(await shell.getFS().read('/file.txt')).toBe('hello\n')
     })
@@ -699,7 +699,7 @@ describe('Shell', () => {
     describe('cat size gate', () => {
       it('rejects files over 256KB without offset/limit', async () => {
         await shell.getFS().write('/big.txt', 'x'.repeat(MAX_FILE_SIZE + 1))
-        const result = await shell.execute('cat /big.txt')
+        const result = await shell.execute('cat big.txt')
         expect(result.exitCode).toBe(1)
         expect(result.stderr).toContain('exceeds max size')
         expect(result.stderr).toContain('head -n 2000')
@@ -713,7 +713,7 @@ describe('Shell', () => {
         const paddedLines = Array.from({ length: 100 }, (_, i) => `line ${i + 1} ${padding}`)
         await shell.getFS().write('/big.txt', paddedLines.join('\n'))
 
-        const result = await shell.execute('cat --offset 0 --limit 10 /big.txt')
+        const result = await shell.execute('cat --offset 0 --limit 10 big.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('[Showing lines 1-10 of')
         expect(result.stdout).toContain('line 1')
@@ -725,7 +725,7 @@ describe('Shell', () => {
         const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
         await shell.getFS().write('/data.txt', lines.join('\n'))
 
-        const result = await shell.execute('cat --offset 5 --limit 5 /data.txt')
+        const result = await shell.execute('cat --offset 5 --limit 5 data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('[Showing lines 6-10 of 20]')
         expect(result.stdout).toContain('line 6')
@@ -738,7 +738,7 @@ describe('Shell', () => {
         const lines = Array.from({ length: 2500 }, (_, i) => `L${i + 1}`)
         await shell.getFS().write('/data.txt', lines.join('\n'))
 
-        const result = await shell.execute('cat /data.txt')
+        const result = await shell.execute('cat data.txt')
         expect(result.exitCode).toBe(0)
         // Should contain line 2000 but not line 2001
         expect(result.stdout).toContain('L2000')
@@ -749,7 +749,7 @@ describe('Shell', () => {
     describe('cat line numbers', () => {
       it('shows line numbers with -n flag', async () => {
         await shell.getFS().write('/data.txt', 'alpha\nbeta\ngamma\n')
-        const result = await shell.execute('cat -n /data.txt')
+        const result = await shell.execute('cat -n data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('1\talpha')
         expect(result.stdout).toContain('2\tbeta')
@@ -759,7 +759,7 @@ describe('Shell', () => {
       it('shows correct line numbers with offset', async () => {
         const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
         await shell.getFS().write('/data.txt', lines.join('\n'))
-        const result = await shell.execute('cat -n --offset 10 --limit 3 /data.txt')
+        const result = await shell.execute('cat -n --offset 10 --limit 3 data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('11\tline 11')
         expect(result.stdout).toContain('12\tline 12')
@@ -771,7 +771,7 @@ describe('Shell', () => {
       it('cat truncates long lines', async () => {
         const longLine = 'a'.repeat(MAX_LINE_LENGTH + 500)
         await shell.getFS().write('/data.txt', longLine)
-        const result = await shell.execute('cat /data.txt')
+        const result = await shell.execute('cat data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout.length).toBeLessThan(longLine.length)
         expect(result.stdout).toContain('...')
@@ -780,7 +780,7 @@ describe('Shell', () => {
       it('head truncates long lines', async () => {
         const longLine = 'b'.repeat(MAX_LINE_LENGTH + 500)
         await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
-        const result = await shell.execute('head -n 3 /data.txt')
+        const result = await shell.execute('head -n 3 data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('short')
         expect(result.stdout).toContain('...')
@@ -790,7 +790,7 @@ describe('Shell', () => {
       it('tail truncates long lines', async () => {
         const longLine = 'c'.repeat(MAX_LINE_LENGTH + 500)
         await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
-        const result = await shell.execute('tail -n 3 /data.txt')
+        const result = await shell.execute('tail -n 3 data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('...')
         expect(result.stdout).not.toContain('c'.repeat(MAX_LINE_LENGTH + 1))
@@ -799,7 +799,7 @@ describe('Shell', () => {
       it('grep truncates long matching lines', async () => {
         const longLine = 'MATCH' + 'd'.repeat(MAX_LINE_LENGTH + 500)
         await shell.getFS().write('/data.txt', `short\n${longLine}\nshort2`)
-        const result = await shell.execute('grep MATCH /data.txt')
+        const result = await shell.execute('grep MATCH data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('MATCH')
         expect(result.stdout).toContain('...')
@@ -812,7 +812,7 @@ describe('Shell', () => {
         // Create a file with many matching lines
         const lines = Array.from({ length: 5000 }, (_, i) => `match line ${i + 1} with some extra content to fill space`)
         await shell.getFS().write('/data.txt', lines.join('\n'))
-        const result = await shell.execute('grep match /data.txt')
+        const result = await shell.execute('grep match data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('[Output truncated at')
         expect(result.stdout).toContain('Narrow your search')
@@ -828,13 +828,13 @@ describe('Shell', () => {
         const bigLines = Array.from({ length: 500 }, (_, i) => `output line ${i + 1} ${'x'.repeat(100)}`)
         await shell.getFS().write('/big-output.txt', bigLines.join('\n'))
 
-        const result = await tool.execute({ command: 'cat --limit 500 /big-output.txt' }, ctx)
+        const result = await tool.execute({ command: 'cat --limit 500 big-output.txt' }, ctx)
         expect(result.error).toContain('exceeds maximum')
         expect(result.error).toContain('Saved to')
         const data = result.data as Record<string, unknown>
         expect(data.spillPath).toBeTruthy()
-        // Verify the file was written
-        const spillContent = await shell.getFS().read(data.spillPath as string)
+        // Verify the file was written (spillPath is relative, raw provider needs '/' prefix)
+        const spillContent = await shell.getFS().read('/' + (data.spillPath as string))
         expect(spillContent).toBeTruthy()
       })
     })
@@ -845,7 +845,7 @@ describe('Shell', () => {
       it('handles < in single-quoted grep -o pattern without treating as redirection', async () => {
         const html = '<html><head><title>My Page Title</title></head><body>hello</body></html>'
         await shell.getFS().write('/page.html', html)
-        const result = await shell.execute("cat /page.html | grep -o '<title>[^<]*'")
+        const result = await shell.execute("cat page.html | grep -o '<title>[^<]*'")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('<title>My Page Title')
       })
@@ -853,7 +853,7 @@ describe('Shell', () => {
       it('handles curl | grep -o with angle bracket pattern | head pipeline', async () => {
         const html = '<html><title>Test Title</title><title>Second</title></html>'
         await shell.getFS().write('/page.html', html)
-        const result = await shell.execute("cat /page.html | grep -o '<title>[^<]*' | head -5")
+        const result = await shell.execute("cat page.html | grep -o '<title>[^<]*' | head -5")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('<title>Test Title')
       })
@@ -862,13 +862,13 @@ describe('Shell', () => {
     describe('&& operator support', () => {
       it('executes second command when first succeeds', async () => {
         await shell.getFS().write('/data.txt', 'hello world')
-        const result = await shell.execute('echo "done" > /flag.txt && cat /flag.txt')
+        const result = await shell.execute('echo "done" > flag.txt && cat flag.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('done')
       })
 
       it('does not execute second command when first fails', async () => {
-        const result = await shell.execute('cat /nonexistent.txt && echo "should not run" > /flag.txt')
+        const result = await shell.execute('cat nonexistent.txt && echo "should not run" > flag.txt')
         expect(result.exitCode).not.toBe(0)
         expect(await shell.getFS().exists('/flag.txt')).toBe(false)
       })
@@ -876,7 +876,7 @@ describe('Shell', () => {
       it('supports curl -o FILE && grep pattern FILE', async () => {
         // Simulate what curl -o should do: write output to a file, then grep it
         await shell.getFS().write('/page.html', '<html><h1>Funding: $10M raised</h1></html>')
-        const result = await shell.execute("grep -i funding /page.html && echo 'found'")
+        const result = await shell.execute("grep -i funding page.html && echo 'found'")
         expect(result.exitCode).toBe(0)
       })
     })
@@ -884,28 +884,28 @@ describe('Shell', () => {
     describe('wc command', () => {
       it('counts lines with wc -l', async () => {
         await shell.getFS().write('/data.txt', 'line1\nline2\nline3\n')
-        const result = await shell.execute('cat /data.txt | wc -l')
+        const result = await shell.execute('cat data.txt | wc -l')
         expect(result.exitCode).toBe(0)
         expect(result.stdout.trim()).toContain('3')
       })
 
       it('counts words with wc -w', async () => {
         await shell.getFS().write('/data.txt', 'hello world\nfoo bar baz\n')
-        const result = await shell.execute('cat /data.txt | wc -w')
+        const result = await shell.execute('cat data.txt | wc -w')
         expect(result.exitCode).toBe(0)
         expect(result.stdout.trim()).toContain('5')
       })
 
       it('counts characters with wc -c', async () => {
         await shell.getFS().write('/data.txt', 'abc')
-        const result = await shell.execute('cat /data.txt | wc -c')
+        const result = await shell.execute('cat data.txt | wc -c')
         expect(result.exitCode).toBe(0)
         expect(result.stdout.trim()).toContain('3')
       })
 
       it('shows all counts by default (no flags)', async () => {
         await shell.getFS().write('/data.txt', 'hello world\nfoo\n')
-        const result = await shell.execute('cat /data.txt | wc')
+        const result = await shell.execute('cat data.txt | wc')
         expect(result.exitCode).toBe(0)
         // Should contain line count, word count, char count
         expect(result.stdout).toContain('2')
@@ -914,10 +914,10 @@ describe('Shell', () => {
 
       it('counts lines from file argument', async () => {
         await shell.getFS().write('/data.txt', 'a\nb\nc\nd\ne\n')
-        const result = await shell.execute('wc -l /data.txt')
+        const result = await shell.execute('wc -l data.txt')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('5')
-        expect(result.stdout).toContain('/data.txt')
+        expect(result.stdout).toContain('data.txt')
       })
     })
 
@@ -928,7 +928,7 @@ describe('Shell', () => {
         await shell.getFS().write('/data/file3.yaml', 'key: val')
         await shell.getFS().write('/data/file4.txt', 'text')
 
-        const result = await shell.execute('find /data -name "*.json" -o -name "*.csv"')
+        const result = await shell.execute('find data -name "*.json" -o -name "*.csv"')
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('file1.json')
         expect(result.stdout).toContain('file2.csv')
@@ -939,7 +939,7 @@ describe('Shell', () => {
     describe('heredoc with quoted delimiter suppresses variable expansion', () => {
       it('does not expand $VAR in heredoc with quoted delimiter', async () => {
         shell.setEnv('PRICE', 'should-not-appear')
-        const cmd = `cat > /data.json << 'EOF'\n{"amount": "$17 million"}\nEOF`
+        const cmd = `cat > data.json << 'EOF'\n{"amount": "$17 million"}\nEOF`
         const result = await shell.execute(cmd)
         expect(result.exitCode).toBe(0)
         const content = await shell.getFS().read('/data.json')
@@ -948,7 +948,7 @@ describe('Shell', () => {
 
       it('still expands $VAR in heredoc with unquoted delimiter', async () => {
         shell.setEnv('NAME', 'Alice')
-        const cmd = `cat > /data.txt << EOF\nHello $NAME\nEOF`
+        const cmd = `cat > data.txt << EOF\nHello $NAME\nEOF`
         const result = await shell.execute(cmd)
         expect(result.exitCode).toBe(0)
         const content = await shell.getFS().read('/data.txt')
@@ -963,7 +963,7 @@ describe('Shell', () => {
           `line ${i + 1}: ${'x'.repeat(500)}`
         )
         await shell.getFS().write('/huge.txt', longLines.join('\n'))
-        const result = await shell.execute('head -n 100 /huge.txt')
+        const result = await shell.execute('head -n 100 huge.txt')
         expect(result.exitCode).toBe(0)
         // Output should not exceed MAX_OUTPUT_CHARS
         expect(result.stdout.length).toBeLessThanOrEqual(35000) // some margin for truncation note
@@ -991,7 +991,7 @@ describe('Shell', () => {
         `
         await shell.getFS().write('/page.html', html)
         const result = await shell.execute(
-          "cat /page.html | grep -oE 'https://example.com/2026/01/[^\"]+' | sort -u | head -5"
+          "cat page.html | grep -oE 'https://example.com/2026/01/[^\"]+' | sort -u | head -5"
         )
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('article-one')
@@ -1004,7 +1004,7 @@ describe('Shell', () => {
       it('returns exit code 1 when grep finds no matches in a pipe chain', async () => {
         await shell.getFS().write('/page.html', '<html>no matches here</html>')
         const result = await shell.execute(
-          "cat /page.html | grep -iE 'funding|million' | head -30"
+          "cat page.html | grep -iE 'funding|million' | head -30"
         )
         expect(result.exitCode).toBe(1)
         expect(result.stdout).toBe('')
@@ -1084,7 +1084,7 @@ describe('Shell', () => {
       })
 
       it('output can be saved via redirection', async () => {
-        await shell.execute('date +%Y-%m-%d > /today.txt')
+        await shell.execute('date +%Y-%m-%d > today.txt')
         const content = await shell.getFS().read('/today.txt')
         const iso = new Date().toISOString().split('T')[0]
         expect(content!.trim()).toBe(iso)
@@ -1120,7 +1120,7 @@ describe('Shell', () => {
         await shell.getFS().write('/sec_feed.xml', xml)
 
         const result = await shell.execute(
-          "cat /sec_feed.xml | grep '<title>D' | sed 's/<title>//;s/<\\/title>//' | head -30"
+          "cat sec_feed.xml | grep '<title>D' | sed 's/<title>//;s/<\\/title>//' | head -30"
         )
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toContain('Document A: Annual Report')
@@ -1133,35 +1133,35 @@ describe('Shell', () => {
 
       it('substitution on file argument', async () => {
         await shell.getFS().write('/data.txt', 'foo bar baz\nfoo qux\n')
-        const result = await shell.execute("sed 's/foo/FOO/' /data.txt")
+        const result = await shell.execute("sed 's/foo/FOO/' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('FOO bar baz\nFOO qux\n')
       })
 
       it('global substitution on file', async () => {
         await shell.getFS().write('/data.txt', 'a.b.c.d\n')
-        const result = await shell.execute("sed 's/\\./,/g' /data.txt")
+        const result = await shell.execute("sed 's/\\./,/g' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('a,b,c,d\n')
       })
 
       it('delete lines with d command', async () => {
         await shell.getFS().write('/data.txt', 'line1\nline2\nline3\n')
-        const result = await shell.execute("sed '2d' /data.txt")
+        const result = await shell.execute("sed '2d' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('line1\nline3\n')
       })
 
       it('delete lines matching a pattern', async () => {
         await shell.getFS().write('/data.txt', 'keep\nremove this\nkeep too\n')
-        const result = await shell.execute("sed '/remove/d' /data.txt")
+        const result = await shell.execute("sed '/remove/d' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('keep\nkeep too\n')
       })
 
       it('print only matching lines with -n and p', async () => {
         await shell.getFS().write('/data.txt', 'apple\nbanana\napricot\n')
-        const result = await shell.execute("sed -n '/^a/p' /data.txt")
+        const result = await shell.execute("sed -n '/^a/p' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('apple\napricot\n')
       })
@@ -1174,7 +1174,7 @@ describe('Shell', () => {
 
       it('in-place editing with -i', async () => {
         await shell.getFS().write('/data.txt', 'old text\n')
-        const result = await shell.execute("sed -i 's/old/new/' /data.txt")
+        const result = await shell.execute("sed -i 's/old/new/' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('')
         const content = await shell.getFS().read('/data.txt')
@@ -1183,14 +1183,14 @@ describe('Shell', () => {
 
       it('delete a range of lines', async () => {
         await shell.getFS().write('/data.txt', 'line1\nline2\nline3\nline4\nline5\n')
-        const result = await shell.execute("sed '2,4d' /data.txt")
+        const result = await shell.execute("sed '2,4d' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('line1\nline5\n')
       })
 
       it('substitution with address range', async () => {
         await shell.getFS().write('/data.txt', 'aaa\nbbb\nccc\n')
-        const result = await shell.execute("sed '2s/bbb/BBB/' /data.txt")
+        const result = await shell.execute("sed '2s/bbb/BBB/' data.txt")
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe('aaa\nBBB\nccc\n')
       })
@@ -1202,7 +1202,7 @@ describe('Shell', () => {
       })
 
       it('returns error for missing file', async () => {
-        const result = await shell.execute("sed 's/a/b/' /missing.txt")
+        const result = await shell.execute("sed 's/a/b/' missing.txt")
         expect(result.exitCode).toBe(1)
         expect(result.stderr).toContain('No such file')
       })
@@ -1215,7 +1215,7 @@ describe('Shell', () => {
 
       it('output can be redirected to file', async () => {
         await shell.getFS().write('/input.txt', 'hello world\n')
-        await shell.execute("sed 's/world/earth/' /input.txt > /output.txt")
+        await shell.execute("sed 's/world/earth/' input.txt > output.txt")
         const content = await shell.getFS().read('/output.txt')
         expect(content).toBe('hello earth\n')
       })
@@ -1244,6 +1244,43 @@ describe('Shell', () => {
         expect(result.stdout).toBe('200')
         expect(result.stdout).not.toContain('response body')
       })
+    })
+  })
+
+  describe('path validation', () => {
+    it('rejects absolute paths in commands', async () => {
+      await shell.getFS().write('/data.txt', 'hello')
+      const result = await shell.execute('cat /data.txt')
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('Absolute paths are not allowed')
+      expect(result.stderr).toContain('data.txt')
+    })
+
+    it('rejects absolute paths in output redirection', async () => {
+      const result = await shell.execute('echo hello > /out.txt')
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('Absolute paths are not allowed')
+    })
+
+    it('rejects path traversal with ..', async () => {
+      const result = await shell.execute('cat ../secret')
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain("'..'")
+      expect(result.stderr).toContain('not allowed')
+    })
+
+    it('allows relative paths', async () => {
+      await shell.getFS().write('/data.txt', 'hello')
+      const result = await shell.execute('cat data.txt')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('hello')
+    })
+
+    it('allows ./ prefix paths', async () => {
+      await shell.getFS().write('/data.txt', 'hello')
+      const result = await shell.execute('cat ./data.txt')
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('hello')
     })
   })
 })

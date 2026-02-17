@@ -330,9 +330,9 @@ export class SubAgentBuilder {
       sections.push('')
       sections.push('⚠️ ALWAYS check workspace BEFORE asking questions or starting work:')
       sections.push('')
-      sections.push('1. Use `ls /` to see what data exists')
-      sections.push('2. Use `cat /path/file.json` to read relevant paths')
-      sections.push('3. Use `grep "keyword" /**/*.json` to search workspace')
+      sections.push('1. Use `ls` to see what data exists')
+      sections.push('2. Use `cat path/file.json` to read relevant paths')
+      sections.push('3. Use `grep "keyword" **/*.json` to search workspace')
       sections.push('4. Use information from workspace instead of asking the user')
 
       if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {

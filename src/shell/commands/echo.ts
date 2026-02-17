@@ -17,7 +17,7 @@ export const echoCommand: CommandHandler = {
     examples: [
       { command: "echo 'hello world'", description: 'Print text with newline' },
       { command: 'echo -n hello', description: 'Print text without newline' },
-      { command: "echo '{}' > /data.json", description: 'Write to file via redirection' }
+      { command: "echo '{}' > data.json", description: 'Write to file via redirection' }
     ]
   },
 

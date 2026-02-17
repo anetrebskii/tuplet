@@ -4,6 +4,8 @@
  * Wraps a WorkspaceProvider. AI agents interact with workspace
  * using bash-like commands (cat, echo, ls, grep, etc.) through the shell.
  *
+ * All paths are relative — absolute paths (starting with /) are not allowed.
+ *
  * Usage:
  * ```typescript
  * const workspace = new Workspace({
@@ -16,13 +18,13 @@
  * const shell = workspace.getShell()
  *
  * // AI uses bash commands:
- * // cat /user/preferences.json
- * // echo '{"theme": "light"}' > /user/preferences.json
- * // ls /
- * // grep "theme" /
+ * // cat user/preferences.json
+ * // echo '{"theme": "light"}' > user/preferences.json
+ * // ls
+ * // grep "theme" user/preferences.json
  *
  * // Read results after run
- * const prefs = await workspace.read('/user/preferences.json')
+ * const prefs = await workspace.read('user/preferences.json')
  * ```
  */
 
@@ -387,7 +389,7 @@ export class Workspace {
       return { success: false, errors }
     }
 
-    // Normalize path
+    // Normalize path to internal format (always stored with / prefix)
     const fsPath = path.startsWith('/') ? path : `/${path}`
 
     // Serialize value for storage

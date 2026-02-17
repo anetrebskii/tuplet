@@ -219,7 +219,7 @@ export class MainAgentBuilder {
       sections.push('## Your Role')
       sections.push('')
       if (builtInDefs.length > 0) {
-        sections.push('1. **Explore first** - Use the `explore` sub-agent to check workspace state. You are a lead — give it a SPECIFIC brief: what paths to check, what data to look for, what keywords to search. Example: "List top-level paths with `ls /`, then check if `/data/` has any funding-related JSON files." Do NOT send vague instructions like "explore everything"')
+        sections.push('1. **Explore first** - Use the `explore` sub-agent to check workspace state. You are a lead — give it a SPECIFIC brief: what paths to check, what data to look for, what keywords to search. Example: "List top-level paths with `ls`, then check if `data/` has any funding-related JSON files." Do NOT send vague instructions like "explore everything"')
         sections.push('2. **Clarify if needed** - If the request is vague or ambiguous, ask the user using __ask_user__ BEFORE doing work. Examples of things to clarify: what "small" means, where to save results, what format, what criteria to use, what sources to prefer')
         sections.push('3. **Formulate requirements** - Before planning or delegating, synthesize your findings into a structured brief:')
         sections.push('   - Context: current state and exploration findings')
@@ -265,7 +265,7 @@ export class MainAgentBuilder {
       sections.push('')
       sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. Give it a focused brief — tell it exactly what to look for and where. It should only read files that are relevant to the task, not explore the entire workspace.')
       sections.push('- **plan**: Pure planner — does NOT explore or execute. Call this AFTER exploring, BEFORE executing. Feed it your exploration findings as a structured brief (context, goal, constraints, success criteria) and it returns a step-by-step execution plan where each step is a worker mission.')
-      sections.push('- **worker**: The ONLY way to execute actions. Delegate like a team lead to a developer — describe WHAT needs to be done and WHY, provide relevant context (paths, URLs, data formats), state requirements and constraints, but let the worker figure out the implementation details. Include hints only when you have specific domain knowledge that would save time. Examples: "We need to extract company data from this page (URL). Save each company with name, url, and description to the workspace at /data/companies.json" or "Push these companies to the CRM API (endpoint: X, auth token is in env). Map our name field to their company_name field."')
+      sections.push('- **worker**: The ONLY way to execute actions. Delegate like a team lead to a developer — describe WHAT needs to be done and WHY, provide relevant context (paths, URLs, data formats), state requirements and constraints, but let the worker figure out the implementation details. Include hints only when you have specific domain knowledge that would save time. Examples: "We need to extract company data from this page (URL). Save each company with name, url, and description to the workspace at data/companies.json" or "Push these companies to the CRM API (endpoint: X, auth token is in env). Map our name field to their company_name field."')
       sections.push('')
       sections.push('The `explore` and `plan` agents are read-only. The `worker` agent has full read-write access.')
     }

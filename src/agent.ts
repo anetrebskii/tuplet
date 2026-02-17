@@ -29,11 +29,8 @@ import { getBuiltInAgents } from "./built-in-agents/index.js";
 import { MainAgentBuilder } from "./prompt/main-agent-builder.js";
 import { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
 
-/** Path where the plan is stored in workspace */
+/** Path where the plan is stored in workspace (relative) */
 export const PLAN_PATH = ".hive/plan.md";
-
-/** Full filesystem path for the plan */
-export const PLAN_FS_PATH = `/${PLAN_PATH}`;
 
 // Re-export for public API
 export { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
@@ -52,7 +49,7 @@ You are in **plan mode**. Your job is to understand the current state, then writ
    - Affected areas: workspace paths and components involved
    - Constraints: limitations and dependencies
    - Success criteria: how to verify completion
-3. **Write the plan** — Using the structured requirements as input, save your plan to \`${PLAN_FS_PATH}\` using the shell.
+3. **Write the plan** — Using the structured requirements as input, save your plan to \`${PLAN_PATH}\` using the shell.
 
 ## Rules
 
@@ -61,7 +58,7 @@ You are in **plan mode**. Your job is to understand the current state, then writ
 - **Allowed tools**: shell (read-only), \`explore\` and \`plan\` sub-agents, TaskList, TaskGet, __ask_user__.
 - **Write your plan**:
   \`\`\`
-  cat << 'EOF' > ${PLAN_FS_PATH}
+  cat << 'EOF' > ${PLAN_PATH}
   # Plan
   ...your plan here...
   EOF
@@ -368,7 +365,7 @@ export class Hive {
     const shell = ws.getShell();
     if (mode === "plan") {
       // Plan mode: read-only shell, only allow writing to the plan file
-      shell.setReadOnly(true, [PLAN_FS_PATH]);
+      shell.setReadOnly(true, [PLAN_PATH]);
     } else {
       shell.setReadOnly(false);
     }

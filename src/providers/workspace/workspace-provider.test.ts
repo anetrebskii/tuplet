@@ -208,7 +208,7 @@ describe('Workspace + Provider integration', () => {
     await ws.init()
 
     const shell = ws.getShell()
-    await shell.execute('echo hello > /greeting.txt')
+    await shell.execute('echo hello > greeting.txt')
 
     expect(await ws.read('greeting.txt')).toBe('hello\n')
   })

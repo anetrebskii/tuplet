@@ -39,8 +39,8 @@ You do NOT explore or execute. The main agent has already explored using the exp
 ## Guidelines
 
 - Write steps like a team lead writes tasks for developers — describe the goal and requirements, not the implementation
-- Good: "Extract company data (name, funding, URL) from the YC directory page at URL X. Save results to /data/companies.json"
-- Bad: "Use curl to fetch URL X, then pipe through jq to extract .companies[] | {name, funding, url}, then redirect to /data/companies.json"
+- Good: "Extract company data (name, funding, URL) from the YC directory page at URL X. Save results to data/companies.json"
+- Bad: "Use curl to fetch URL X, then pipe through jq to extract .companies[] | {name, funding, url}, then redirect to data/companies.json"
 - Reference actual data from the findings — workspace paths, URLs, field names
 - Each step should be self-contained enough to be a single worker mission
 - If the task is simple enough to not need a plan (1-2 obvious steps), say so

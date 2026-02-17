@@ -299,15 +299,15 @@ export const sedCommand: CommandHandler = {
       { flag: '-i', description: 'Edit files in-place' },
     ],
     examples: [
-      { command: "sed 's/old/new/' /file.txt", description: 'Replace first occurrence per line' },
-      { command: "sed 's/old/new/g' /file.txt", description: 'Replace all occurrences' },
+      { command: "sed 's/old/new/' file.txt", description: 'Replace first occurrence per line' },
+      { command: "sed 's/old/new/g' file.txt", description: 'Replace all occurrences' },
       { command: "sed 's/<tag>//g;s/<\\/tag>//g'", description: 'Chain multiple substitutions with ;' },
-      { command: "sed -e 's/a/b/' -e 's/c/d/' /file.txt", description: 'Multiple -e expressions' },
-      { command: "sed '/pattern/d' /file.txt", description: 'Delete lines matching pattern' },
-      { command: "sed -n '/pattern/p' /file.txt", description: 'Print only matching lines' },
-      { command: "sed '1d' /file.txt", description: 'Delete first line' },
-      { command: "sed '2,5d' /file.txt", description: 'Delete lines 2-5' },
-      { command: "cat /data | sed 's/foo/bar/g'", description: 'Transform piped input' },
+      { command: "sed -e 's/a/b/' -e 's/c/d/' file.txt", description: 'Multiple -e expressions' },
+      { command: "sed '/pattern/d' file.txt", description: 'Delete lines matching pattern' },
+      { command: "sed -n '/pattern/p' file.txt", description: 'Print only matching lines' },
+      { command: "sed '1d' file.txt", description: 'Delete first line' },
+      { command: "sed '2,5d' file.txt", description: 'Delete lines 2-5' },
+      { command: "cat data | sed 's/foo/bar/g'", description: 'Transform piped input' },
     ]
   },
 

@@ -18,12 +18,12 @@ export const sortCommand: CommandHandler = {
       { flag: '-k NUM', description: 'Sort by field NUM (1-based)' }
     ],
     examples: [
-      { command: 'sort /names.txt', description: 'Sort lines alphabetically' },
-      { command: 'sort -r /names.txt', description: 'Sort in reverse order' },
-      { command: 'sort -n /numbers.txt', description: 'Sort numerically' },
-      { command: 'find / -type f | sort', description: 'Sort piped input' },
-      { command: 'sort -u /data.txt', description: 'Sort and remove duplicates' },
-      { command: 'sort -t "," -k 2 /data.csv', description: 'Sort CSV by second column' }
+      { command: 'sort names.txt', description: 'Sort lines alphabetically' },
+      { command: 'sort -r names.txt', description: 'Sort in reverse order' },
+      { command: 'sort -n numbers.txt', description: 'Sort numerically' },
+      { command: 'find . -type f | sort', description: 'Sort piped input' },
+      { command: 'sort -u data.txt', description: 'Sort and remove duplicates' },
+      { command: 'sort -t "," -k 2 data.csv', description: 'Sort CSV by second column' }
     ]
   },
 

@@ -16,9 +16,9 @@ export const wcCommand: CommandHandler = {
       { flag: '-c', description: 'Print character/byte count only' }
     ],
     examples: [
-      { command: 'wc /file.txt', description: 'Show all counts for file' },
-      { command: 'wc -l /file.txt', description: 'Count lines only' },
-      { command: 'cat /file.txt | wc -l', description: 'Count lines from stdin' }
+      { command: 'wc file.txt', description: 'Show all counts for file' },
+      { command: 'wc -l file.txt', description: 'Count lines only' },
+      { command: 'cat file.txt | wc -l', description: 'Count lines from stdin' }
     ]
   },
 

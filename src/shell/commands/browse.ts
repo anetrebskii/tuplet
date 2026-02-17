@@ -109,7 +109,7 @@ export const browseCommand: CommandHandler = {
       { command: 'browse https://example.com', description: 'Fetch and convert page to text' },
       { command: 'browse --raw https://example.com', description: 'Fetch raw HTML' },
       { command: 'browse https://example.com | grep "keyword"', description: 'Fetch and search for keyword' },
-      { command: 'browse https://example.com > /page.md', description: 'Save page content to file' }
+      { command: 'browse https://example.com > page.md', description: 'Save page content to file' }
     ],
     notes: [
       'Strips <script>, <style>, <nav>, <footer> tags',

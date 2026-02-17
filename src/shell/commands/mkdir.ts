@@ -14,8 +14,8 @@ export const mkdirCommand: CommandHandler = {
       { flag: '-p', description: 'Create parent directories as needed, no error if existing' }
     ],
     examples: [
-      { command: 'mkdir /reports', description: 'Create a directory' },
-      { command: 'mkdir -p /a/b/c', description: 'Create nested directories' }
+      { command: 'mkdir reports', description: 'Create a directory' },
+      { command: 'mkdir -p a/b/c', description: 'Create nested directories' }
     ]
   },
 

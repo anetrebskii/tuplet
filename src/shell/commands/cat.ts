@@ -17,14 +17,14 @@ export const catCommand: CommandHandler = {
       { flag: '--limit N', description: `Max lines to show (default: ${DEFAULT_LINE_LIMIT})` }
     ],
     examples: [
-      { command: 'cat /data.json', description: 'Print file contents' },
-      { command: 'cat -n /data.json', description: 'Print with line numbers' },
-      { command: 'cat --offset 0 --limit 100 /big.txt', description: 'Read first 100 lines' },
-      { command: 'cat /a /b', description: 'Concatenate multiple files' },
-      { command: 'cat /*.json', description: 'Print all JSON files' }
+      { command: 'cat data.json', description: 'Print file contents' },
+      { command: 'cat -n data.json', description: 'Print with line numbers' },
+      { command: 'cat --offset 0 --limit 100 big.txt', description: 'Read first 100 lines' },
+      { command: 'cat a b', description: 'Concatenate multiple files' },
+      { command: 'cat *.json', description: 'Print all JSON files' }
     ],
     notes: [
-      'Supports glob patterns (e.g. /*.json)',
+      'Supports glob patterns (e.g. *.json)',
       'Reads from stdin when no files given and input is piped',
       `Files over ${MAX_FILE_SIZE} bytes require --offset/--limit for paginated access`,
       `Lines are truncated to ${MAX_LINE_LENGTH} characters`

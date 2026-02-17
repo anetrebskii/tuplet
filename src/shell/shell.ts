@@ -10,6 +10,7 @@ import type { EnvironmentProvider } from '../types.js'
 import { MemoryWorkspaceProvider } from '../providers/workspace/memory.js'
 import { parseCommand } from './parser.js'
 import { commands } from './commands/index.js'
+import { createValidatedFS, validatePath } from './path-validation.js'
 
 export interface ShellOptions extends ShellConfig {
   /** External WorkspaceProvider to use (optional) */
@@ -20,6 +21,8 @@ export interface ShellOptions extends ShellConfig {
 
 export class Shell {
   private fs: WorkspaceProvider
+  /** Validated FS that rejects absolute paths and '..' — used in command context */
+  private validatedFS: WorkspaceProvider
   private env: Record<string, string>
   private config: ShellConfig
   private handlers: Map<string, CommandHandler>
@@ -31,6 +34,7 @@ export class Shell {
     const { fs: externalFS, envProvider, ...config } = options
     this.config = config
     this.fs = externalFS ?? new MemoryWorkspaceProvider(config.initialContext)
+    this.validatedFS = createValidatedFS(this.fs)
     this.env = {}
     this.envProvider = envProvider
     this.handlers = new Map()
@@ -163,12 +167,13 @@ export class Shell {
    * Check if a path is writable in read-only mode.
    * A path is writable if it matches any of the writable paths
    * (either exact match or starts with a writable directory path).
+   * Paths are compared in relative form (no leading '/').
    */
   private isPathWritable(path: string): boolean {
     if (!this.readOnly) return true
-    const normalized = path.startsWith('/') ? path : `/${path}`
+    const normalized = path.replace(/^\//, '')
     return this.writablePaths.some(wp => {
-      const normalizedWp = wp.startsWith('/') ? wp : `/${wp}`
+      const normalizedWp = wp.replace(/^\//, '')
       return normalized === normalizedWp || normalized.startsWith(normalizedWp + '/')
     })
   }
@@ -195,8 +200,8 @@ export class Shell {
         }
       }
 
-      // Block output redirection to non-writable paths
-      if (cmd.outputFile && !this.isPathWritable(cmd.outputFile)) {
+      // Block output redirection to non-writable paths (except /dev/null)
+      if (cmd.outputFile && cmd.outputFile !== '/dev/null' && !this.isPathWritable(cmd.outputFile)) {
         return {
           exitCode: 1,
           stdout: '',
@@ -204,8 +209,8 @@ export class Shell {
         }
       }
 
-      // Block append redirection to non-writable paths
-      if (cmd.appendFile && !this.isPathWritable(cmd.appendFile)) {
+      // Block append redirection to non-writable paths (except /dev/null)
+      if (cmd.appendFile && cmd.appendFile !== '/dev/null' && !this.isPathWritable(cmd.appendFile)) {
         return {
           exitCode: 1,
           stdout: '',
@@ -226,7 +231,7 @@ export class Shell {
     }
 
     const ctx: CommandContext = {
-      fs: this.fs,
+      fs: this.validatedFS,
       env: this.env,
       config: this.config,
       stdin: stdin !== undefined ? stdin : cmd.stdinContent,
@@ -234,7 +239,24 @@ export class Shell {
       piped: !!cmd.pipe
     }
 
-    // Handle input redirection
+    // Validate and normalize redirection paths
+    if (cmd.inputFile) {
+      const v = validatePath(cmd.inputFile)
+      if (v.error) return { exitCode: 1, stdout: '', stderr: v.error }
+      cmd.inputFile = v.fsPath
+    }
+    if (cmd.outputFile && cmd.outputFile !== '/dev/null') {
+      const v = validatePath(cmd.outputFile)
+      if (v.error) return { exitCode: 1, stdout: '', stderr: v.error }
+      cmd.outputFile = v.fsPath
+    }
+    if (cmd.appendFile && cmd.appendFile !== '/dev/null') {
+      const v = validatePath(cmd.appendFile)
+      if (v.error) return { exitCode: 1, stdout: '', stderr: v.error }
+      cmd.appendFile = v.fsPath
+    }
+
+    // Handle input redirection (path is already normalized to internal format)
     if (cmd.inputFile) {
       const content = await this.fs.read(cmd.inputFile)
       if (content === null) {

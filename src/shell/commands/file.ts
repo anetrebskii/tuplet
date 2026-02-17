@@ -15,10 +15,10 @@ export const fileCommand: CommandHandler = {
       { flag: '-i', description: 'Output MIME type string' }
     ],
     examples: [
-      { command: 'file /data.json', description: 'Identify file type' },
-      { command: 'file -i /script.ts', description: 'Show MIME type' },
-      { command: 'file -b /readme.md', description: 'Show type without filename' },
-      { command: 'file /src', description: 'Identify directory' }
+      { command: 'file data.json', description: 'Identify file type' },
+      { command: 'file -i script.ts', description: 'Show MIME type' },
+      { command: 'file -b readme.md', description: 'Show type without filename' },
+      { command: 'file src', description: 'Identify directory' }
     ]
   },
 

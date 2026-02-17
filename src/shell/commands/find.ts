@@ -25,18 +25,19 @@ export const findCommand: CommandHandler = {
       { flag: '-maxdepth NUM', description: 'Descend at most NUM levels below the start path' }
     ],
     examples: [
-      { command: 'find / -name "*.json"', description: 'Find all JSON files' },
-      { command: 'find / -type d', description: 'Find all directories' },
-      { command: 'find /reports -name "*.csv" -type f', description: 'Find CSV files in reports' }
+      { command: 'find . -name "*.json"', description: 'Find all JSON files' },
+      { command: 'find . -type d', description: 'Find all directories' },
+      { command: 'find reports -name "*.csv" -type f', description: 'Find CSV files in reports' }
     ],
     notes: [
-      'Defaults to / if no path given',
-      'Searches recursively'
+      'Defaults to workspace root if no path given',
+      'Searches recursively',
+      'All paths are relative — absolute paths (starting with /) are not allowed'
     ]
   },
 
   async execute(args: string[], ctx: CommandContext): Promise<ShellResult> {
-    let basePath = '/'
+    let basePath = '.'
     const namePatterns: string[] = []
     let typeFilter: 'f' | 'd' | null = null
     let maxDepth: number | null = null
@@ -60,17 +61,18 @@ export const findCommand: CommandHandler = {
       }
     }
 
-    // Get all files recursively
-    const allFiles = await ctx.fs.glob(basePath + '/**/*')
+    // Get all files recursively (construct glob pattern for relative paths)
+    const globPattern = (basePath === '.' || basePath === '') ? '**/*' : basePath + '/**/*'
+    const allFiles = await ctx.fs.glob(globPattern)
     const outputs: string[] = []
 
-    // Calculate base depth for maxdepth filtering
-    const baseDepth = basePath === '/' ? 0 : basePath.replace(/\/$/, '').split('/').length - 1
+    // Calculate base depth for maxdepth filtering (relative paths)
+    const baseDepth = (basePath === '.' || basePath === '') ? 0 : basePath.replace(/\/$/, '').split('/').length
 
     for (const file of allFiles) {
-      // Apply maxdepth filter
+      // Apply maxdepth filter (relative path depth = number of segments)
       if (maxDepth !== null) {
-        const fileDepth = file.split('/').length - 1
+        const fileDepth = file.split('/').length
         if (fileDepth - baseDepth > maxDepth) continue
       }
 
