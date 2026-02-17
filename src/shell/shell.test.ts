@@ -1011,6 +1011,228 @@ describe('Shell', () => {
       })
     })
 
+    describe('date command', () => {
+      it('outputs current date with default format', async () => {
+        const result = await shell.execute('date')
+        expect(result.exitCode).toBe(0)
+        // Default format: "Tue Feb 17 14:30:00 PST 2026"
+        const year = new Date().getFullYear().toString()
+        expect(result.stdout).toContain(year)
+        expect(result.stdout.trim().length).toBeGreaterThan(10)
+      })
+
+      it('supports +%Y%m%d format', async () => {
+        const result = await shell.execute('date +%Y%m%d')
+        expect(result.exitCode).toBe(0)
+        const now = new Date()
+        const expected = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+        expect(result.stdout.trim()).toBe(expected)
+      })
+
+      it('supports +%Y-%m-%d format', async () => {
+        const result = await shell.execute('date +%Y-%m-%d')
+        expect(result.exitCode).toBe(0)
+        const iso = new Date().toISOString().split('T')[0]
+        expect(result.stdout.trim()).toBe(iso)
+      })
+
+      it('supports +%s for Unix timestamp', async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const result = await shell.execute('date +%s')
+        const after = Math.floor(Date.now() / 1000)
+        expect(result.exitCode).toBe(0)
+        const ts = parseInt(result.stdout.trim(), 10)
+        expect(ts).toBeGreaterThanOrEqual(before)
+        expect(ts).toBeLessThanOrEqual(after)
+      })
+
+      it('supports -u for UTC', async () => {
+        const result = await shell.execute('date -u +%Z')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toBe('UTC')
+      })
+
+      it('supports -d for custom date', async () => {
+        const result = await shell.execute("date -d '2024-07-04' +%Y-%m-%d")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toBe('2024-07-04')
+      })
+
+      it('returns error for invalid date', async () => {
+        const result = await shell.execute("date -d 'not-a-date'")
+        expect(result.exitCode).toBe(1)
+        expect(result.stderr).toContain('invalid date')
+      })
+
+      it('supports -I for ISO 8601 format', async () => {
+        const result = await shell.execute('date -I')
+        expect(result.exitCode).toBe(0)
+        // Should match pattern like 2026-02-17T14:30:00+0300
+        expect(result.stdout.trim()).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4}$/)
+      })
+
+      it('supports compound specifiers %F and %T', async () => {
+        const result = await shell.execute("date -d '2024-12-25T10:30:45' +%F_%T")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toBe('2024-12-25_10:30:45')
+      })
+
+      it('pipes output to other commands', async () => {
+        const result = await shell.execute('date +%Y | grep -o "^[0-9]\\{4\\}"')
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.trim()).toBe(new Date().getFullYear().toString())
+      })
+
+      it('output can be saved via redirection', async () => {
+        await shell.execute('date +%Y-%m-%d > /today.txt')
+        const content = await shell.getFS().read('/today.txt')
+        const iso = new Date().toISOString().split('T')[0]
+        expect(content!.trim()).toBe(iso)
+      })
+    })
+
+    describe('sed command', () => {
+      it('basic substitution on piped input', async () => {
+        const result = await shell.execute("echo 'hello world' | sed 's/world/earth/'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('hello earth\n')
+      })
+
+      it('global substitution with g flag', async () => {
+        const result = await shell.execute("echo 'aaa bbb aaa' | sed 's/aaa/xxx/g'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('xxx bbb xxx\n')
+      })
+
+      it('multiple substitutions separated by semicolons', async () => {
+        const result = await shell.execute("echo '<title>Hello</title>' | sed 's/<title>//;s/<\\/title>//'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('Hello\n')
+      })
+
+      it('handles the SEC feed use case: grep + sed + head pipeline', async () => {
+        const xml = [
+          '<title>Document A: Annual Report</title>',
+          '<title>Document B: Quarterly Filing</title>',
+          '<title>Other: Not matching</title>',
+          '<title>Document C: Proxy Statement</title>',
+        ].join('\n')
+        await shell.getFS().write('/sec_feed.xml', xml)
+
+        const result = await shell.execute(
+          "cat /sec_feed.xml | grep '<title>D' | sed 's/<title>//;s/<\\/title>//' | head -30"
+        )
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain('Document A: Annual Report')
+        expect(result.stdout).toContain('Document B: Quarterly Filing')
+        expect(result.stdout).toContain('Document C: Proxy Statement')
+        expect(result.stdout).not.toContain('Other')
+        expect(result.stdout).not.toContain('<title>')
+        expect(result.stdout).not.toContain('</title>')
+      })
+
+      it('substitution on file argument', async () => {
+        await shell.getFS().write('/data.txt', 'foo bar baz\nfoo qux\n')
+        const result = await shell.execute("sed 's/foo/FOO/' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('FOO bar baz\nFOO qux\n')
+      })
+
+      it('global substitution on file', async () => {
+        await shell.getFS().write('/data.txt', 'a.b.c.d\n')
+        const result = await shell.execute("sed 's/\\./,/g' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('a,b,c,d\n')
+      })
+
+      it('delete lines with d command', async () => {
+        await shell.getFS().write('/data.txt', 'line1\nline2\nline3\n')
+        const result = await shell.execute("sed '2d' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('line1\nline3\n')
+      })
+
+      it('delete lines matching a pattern', async () => {
+        await shell.getFS().write('/data.txt', 'keep\nremove this\nkeep too\n')
+        const result = await shell.execute("sed '/remove/d' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('keep\nkeep too\n')
+      })
+
+      it('print only matching lines with -n and p', async () => {
+        await shell.getFS().write('/data.txt', 'apple\nbanana\napricot\n')
+        const result = await shell.execute("sed -n '/^a/p' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('apple\napricot\n')
+      })
+
+      it('multiple -e expressions', async () => {
+        const result = await shell.execute("echo 'hello world' | sed -e 's/hello/hi/' -e 's/world/earth/'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('hi earth\n')
+      })
+
+      it('in-place editing with -i', async () => {
+        await shell.getFS().write('/data.txt', 'old text\n')
+        const result = await shell.execute("sed -i 's/old/new/' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('')
+        const content = await shell.getFS().read('/data.txt')
+        expect(content).toBe('new text\n')
+      })
+
+      it('delete a range of lines', async () => {
+        await shell.getFS().write('/data.txt', 'line1\nline2\nline3\nline4\nline5\n')
+        const result = await shell.execute("sed '2,4d' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('line1\nline5\n')
+      })
+
+      it('substitution with address range', async () => {
+        await shell.getFS().write('/data.txt', 'aaa\nbbb\nccc\n')
+        const result = await shell.execute("sed '2s/bbb/BBB/' /data.txt")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('aaa\nBBB\nccc\n')
+      })
+
+      it('alternative delimiter in substitution', async () => {
+        const result = await shell.execute("echo '/usr/local/bin' | sed 's|/usr/local|/opt|'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('/opt/bin\n')
+      })
+
+      it('returns error for missing file', async () => {
+        const result = await shell.execute("sed 's/a/b/' /missing.txt")
+        expect(result.exitCode).toBe(1)
+        expect(result.stderr).toContain('No such file')
+      })
+
+      it('returns error for no script', async () => {
+        const result = await shell.execute('sed')
+        expect(result.exitCode).toBe(1)
+        expect(result.stderr).toContain('no script')
+      })
+
+      it('output can be redirected to file', async () => {
+        await shell.getFS().write('/input.txt', 'hello world\n')
+        await shell.execute("sed 's/world/earth/' /input.txt > /output.txt")
+        const content = await shell.getFS().read('/output.txt')
+        expect(content).toBe('hello earth\n')
+      })
+
+      it('replaces only first occurrence without g flag', async () => {
+        const result = await shell.execute("echo 'aaa' | sed 's/a/b/'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('baa\n')
+      })
+
+      it('handles empty replacement (deletion)', async () => {
+        const result = await shell.execute("echo 'prefix_value' | sed 's/prefix_//'")
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toBe('value\n')
+      })
+    })
+
     describe('curl -w write-out and -o /dev/null', () => {
       it('returns http status code with -w "%{http_code}" and -o /dev/null', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(

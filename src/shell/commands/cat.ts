@@ -93,7 +93,8 @@ export const catCommand: CommandHandler = {
         const totalLines = allLines.length
         const effectiveOffset = offset ?? 0
         const sliced = allLines.slice(effectiveOffset, effectiveOffset + effectiveLimit)
-        const truncated = sliced.map(line =>
+        // Only truncate long lines for display — skip when piped to preserve data integrity
+        const truncated = ctx.piped ? sliced : sliced.map(line =>
           line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '...' : line
         )
 

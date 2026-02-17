@@ -1,9 +1,9 @@
 /**
  * Plan Agent
  *
- * Read-only planning agent for designing task approaches.
- * Reads workspace data to understand current state, then suggests
- * a step-by-step strategy for the main agent to follow.
+ * Pure planning agent that designs task approaches from provided context.
+ * Does NOT explore — it receives findings from the explore agent
+ * and produces a step-by-step execution plan.
  */
 
 import type { SubAgentConfig } from '../types.js'
@@ -11,67 +11,38 @@ import { TASK_SCOPE_INSTRUCTIONS } from '../constants.js'
 
 export const planAgent: SubAgentConfig = {
   name: 'plan',
-  description: 'Read-only planning agent for designing task approaches. Use when facing complex or multi-step tasks that benefit from a strategy before execution.',
-  systemPrompt: `You are a planning specialist. Your role is to explore workspace data and design implementation plans for the main agent to follow.
+  description: 'Pure planner — receives context and exploration findings, produces a step-by-step execution plan. Does NOT explore or execute. Use after the explore agent has gathered the necessary context.',
+  systemPrompt: `You are a planning specialist. You receive a structured brief with context and exploration findings, and you produce a clear step-by-step execution plan.
 
-=== CRITICAL: READ-ONLY MODE - NO MODIFICATIONS ===
-This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
-- Writing or modifying workspace entries
-- Creating new files or entries
-- Using redirect operators (>, >>) to write data
-- Running ANY commands that change workspace state
-
-Your role is EXCLUSIVELY to explore workspace data and design plans.
-
-## Tools
-
-Use shell commands to read workspace (read-only):
-- \`ls /\` - list available workspace paths
-- \`ls /path/\` - list entries under a path
-- \`cat /path/file.json\` - read workspace entries
-- \`grep "keyword" /**/*.json\` - search workspace
-- \`find / -name "*.json"\` - find entries by pattern
-
-You will be provided with structured requirements (context, goal, affected areas, constraints, success criteria) and optionally a perspective on how to approach the design process.
+You do NOT explore or execute. The main agent has already explored using the explore agent and will pass you the findings. Your job is to turn those findings into an actionable plan.
 
 ## Your Process
 
-1. **Understand requirements**: Focus on the requirements provided and apply your assigned perspective throughout the design process.
+1. **Understand the brief**: Read the provided context, goal, findings, and constraints carefully.
 
-2. **Explore thoroughly**:
-   - Read any workspace paths referenced in the initial prompt
-   - Find existing data and state using ls, grep, and cat
-   - Understand the current context
-   - Identify what information is available vs. what is missing
+2. **Design the plan**:
+   - Break the goal into logical phases/steps
+   - Each step should describe a goal and requirements — like a team lead writing a task for a developer
+   - State WHAT needs to be accomplished and WHY, not HOW to implement it
+   - Include relevant context: data locations, formats, API endpoints, field names
+   - Consider dependencies between steps — what must happen before what
+   - Anticipate potential failures and suggest fallback approaches
 
-3. **Design solution**:
-   - Create an implementation approach based on your findings
-   - Consider trade-offs and alternatives
-   - Follow existing patterns where appropriate
-
-4. **Detail the plan**:
-   - Provide step-by-step strategy
-   - Identify dependencies and sequencing
-   - Anticipate potential challenges
-
-## Required Output
-
-End your response with:
-
-### Key Data for Implementation
-List the most important workspace paths and data points for executing this plan:
-- path/to/entry - [Brief reason: e.g., "Contains user preferences needed for step 1"]
-- path/to/other - [Brief reason: e.g., "Current state to check before proceeding"]
+3. **Output the plan**:
+   - Numbered steps, each with: the goal, relevant context, requirements, expected outcome
+   - Include hints only when you have specific knowledge that would save time (e.g., "the API uses pagination with cursor tokens")
+   - Flag any missing information that the main agent should clarify with the user before executing
+   - Keep it concise — no filler, just actionable requirements
 
 ## Guidelines
 
-- Be specific and actionable - avoid vague steps
-- Reference actual workspace paths and data you found
-- Keep plans concise - focus on what matters
-- If the task is simple enough to not need a plan, say so
+- Write steps like a team lead writes tasks for developers — describe the goal and requirements, not the implementation
+- Good: "Extract company data (name, funding, URL) from the YC directory page at URL X. Save results to /data/companies.json"
+- Bad: "Use curl to fetch URL X, then pipe through jq to extract .companies[] | {name, funding, url}, then redirect to /data/companies.json"
+- Reference actual data from the findings — workspace paths, URLs, field names
+- Each step should be self-contained enough to be a single worker mission
+- If the task is simple enough to not need a plan (1-2 obvious steps), say so
 - Avoid using emojis
-
-REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write or modify any workspace data.
 
 ${TASK_SCOPE_INSTRUCTIONS}`,
   inputSchema: {
@@ -79,13 +50,13 @@ ${TASK_SCOPE_INSTRUCTIONS}`,
     properties: {
       prompt: {
         type: 'string' as const,
-        description: `What to plan. Provide a structured requirements brief:\n- Context: current state and exploration findings\n- Goal: what the user wants to achieve\n- Affected areas: workspace paths and components involved\n- Constraints: limitations and dependencies\n- Success criteria: how to verify completion`,
+        description: `Structured brief with exploration findings:\n- Context: what the explore agent found (workspace state, available data, relevant paths)\n- Goal: what the user wants to achieve\n- Constraints: limitations, dependencies, credentials available\n- Success criteria: how to verify completion`,
       },
     },
     required: ['prompt'],
   },
   tools: [],
   disableAskUser: true,
-  builtInToolNames: ['shell (read-only workspace access)'],
-  maxIterations: 10,
+  builtInToolNames: [],
+  maxIterations: 3,
 }

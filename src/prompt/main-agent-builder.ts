@@ -228,8 +228,8 @@ export class MainAgentBuilder {
         sections.push('   - Constraints: limitations and dependencies')
         sections.push('   - Success criteria: how to verify completion')
         sections.push('4. **Plan** - For any task that involves multiple steps (searching, processing, saving), pass the structured brief to the `plan` sub-agent. Do NOT skip planning and jump straight into execution')
-        sections.push('5. **Execute** - Use the `worker` sub-agent for contained tasks, or call tools directly for simple operations')
-        sections.push('6. **Verify** - After work is done, verify results (read saved files, check data quality)')
+        sections.push('5. **Execute** — Delegate to the `worker` sub-agent like a team lead assigns work to a developer. Give it: the goal, relevant context, requirements, and constraints. Do NOT micromanage — the worker decides HOW to accomplish the goal. You may include hints when you have useful domain knowledge, but keep instructions high-level')
+        sections.push('6. **Verify** — Use the `explore` sub-agent to verify results (read saved files, check data quality)')
         sections.push('7. **Present results** - After completion, output a clear summary to the user')
       } else {
         sections.push('1. **Delegate** - Call __sub_agent__ tool to spawn sub-agents')
@@ -263,8 +263,8 @@ export class MainAgentBuilder {
       sections.push('These agents are always available. You MUST use them:')
       sections.push('')
       sections.push('- **explore**: ALWAYS call this BEFORE handling any user request. Give it a focused brief — tell it exactly what to look for and where. It should only read files that are relevant to the task, not explore the entire workspace.')
-      sections.push('- **plan**: Call this BEFORE executing any multi-step task. If the task involves more than one action (e.g. search + process + save, or fetch + analyze + write), you MUST plan first. Do NOT jump straight into execution. Formulate a structured brief (context, goal, affected areas, constraints, success criteria) from your exploration findings.')
-      sections.push('- **worker**: Delegate contained, well-defined tasks (file edits, data updates, mechanical changes) to keep your context clean. Give it a clear brief with what to do, relevant context, and how to verify success.')
+      sections.push('- **plan**: Pure planner — does NOT explore or execute. Call this AFTER exploring, BEFORE executing. Feed it your exploration findings as a structured brief (context, goal, constraints, success criteria) and it returns a step-by-step execution plan where each step is a worker mission.')
+      sections.push('- **worker**: The ONLY way to execute actions. Delegate like a team lead to a developer — describe WHAT needs to be done and WHY, provide relevant context (paths, URLs, data formats), state requirements and constraints, but let the worker figure out the implementation details. Include hints only when you have specific domain knowledge that would save time. Examples: "We need to extract company data from this page (URL). Save each company with name, url, and description to the workspace at /data/companies.json" or "Push these companies to the CRM API (endpoint: X, auth token is in env). Map our name field to their company_name field."')
       sections.push('')
       sections.push('The `explore` and `plan` agents are read-only. The `worker` agent has full read-write access.')
     }

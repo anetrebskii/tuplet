@@ -20,6 +20,8 @@ import { envCommand } from './env.js'
 import { sortCommand } from './sort.js'
 import { wcCommand } from './wc.js'
 import { fileCommand } from './file.js'
+import { dateCommand } from './date.js'
+import { sedCommand } from './sed.js'
 
 export const commands: CommandHandler[] = [
   catCommand,
@@ -37,7 +39,9 @@ export const commands: CommandHandler[] = [
   envCommand,
   sortCommand,
   wcCommand,
-  fileCommand
+  fileCommand,
+  dateCommand,
+  sedCommand
 ]
 
 export {
@@ -56,5 +60,7 @@ export {
   envCommand,
   sortCommand,
   wcCommand,
-  fileCommand
+  fileCommand,
+  dateCommand,
+  sedCommand
 }
