@@ -100,16 +100,14 @@ jobs:
       - name: Override package name for legacy publish
         run: pnpm pkg set name="@alexnetrebskii/hive-agent"
 
-      - name: Append deprecation notice to README
+      - name: Prepend deprecation notice to README
         run: |
-          cat >> README.md << 'EOF'
-
-          ---
-
-          > **This package has been renamed to [`tuplet`](https://www.npmjs.com/package/tuplet).**
-          > Install the new package: `npm install tuplet`
+          NOTICE='> **This package has been renamed to [`tuplet`](https://www.npmjs.com/package/tuplet).** Install the new package: `npm install tuplet`
+          >
           > This package (`@alexnetrebskii/hive-agent`) will continue to receive updates for a limited time but is deprecated.
-          EOF
+
+          '
+          echo "${NOTICE}$(cat README.md)" > README.md
 
       - name: Build
         run: pnpm build

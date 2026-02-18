@@ -1,5 +1,7 @@
 # Tuplet
 
+> Formerly **Hive Agent** ([`@alexnetrebskii/hive-agent`](https://www.npmjs.com/package/@alexnetrebskii/hive-agent)) — same framework, new name.
+
 [![npm version](https://img.shields.io/npm/v/tuplet)](https://www.npmjs.com/package/tuplet)
 [![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/hive-agent/ci.yml)](https://github.com/anetrebskii/hive-agent/actions)
 [![license](https://img.shields.io/github/license/anetrebskii/hive-agent)](https://github.com/anetrebskii/hive-agent/blob/main/LICENSE)
