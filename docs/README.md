@@ -1,19 +1,19 @@
 # Quick Start
 
-Get up and running with Hive Agent.
+Get up and running with Tuplet.
 
 ## Installation
 
 ```bash
-pnpm add @alexnetrebskii/hive-agent
+pnpm add tuplet
 ```
 
 ## Basic Agent
 
 ```typescript
-import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a helpful assistant',
   tools: [],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -51,12 +51,12 @@ Workspace, sub-agents, secrets, progress tracking, and tracing — all in one se
 
 ```typescript
 import {
-  Hive, ClaudeProvider, OpenAIProvider,
+  Tuplet, ClaudeProvider, OpenAIProvider,
   SubAgentBuilder,
   Workspace, FileWorkspaceProvider, MemoryEnvironmentProvider,
   ConsoleLogger, ConsoleTraceProvider,
   type SubAgentConfig, type Tool
-} from '@alexnetrebskii/hive-agent'
+} from 'tuplet'
 
 // Custom tool
 const searchFoodTool: Tool = {
@@ -100,7 +100,7 @@ const workspace = new Workspace({
 await workspace.init()
 
 // Agent
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a nutrition consultant',
   tools: [],
   agents: [researcher],

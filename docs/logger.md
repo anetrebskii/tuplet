@@ -7,14 +7,14 @@ The logger handles internal logging and provides callbacks for real-time UI feed
 Built-in logger that writes to the console:
 
 ```typescript
-import { ConsoleLogger } from '@alexnetrebskii/hive-agent'
+import { ConsoleLogger } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   llm: provider,
   logger: new ConsoleLogger({
     level: 'info',       // 'debug' | 'info' | 'warn' | 'error' (default: 'info')
-    prefix: '[MyApp]',   // default: '[Hive]'
+    prefix: '[MyApp]',   // default: '[Tuplet]'
     timestamps: true      // default: true
   })
 })
@@ -25,7 +25,7 @@ const agent = new Hive({
 Implement the `LogProvider` interface. Only the four log methods are required — all callbacks are optional:
 
 ```typescript
-import type { LogProvider } from '@alexnetrebskii/hive-agent'
+import type { LogProvider } from 'tuplet'
 
 const logger: LogProvider = {
   debug: (msg, data) => console.debug(msg, data),

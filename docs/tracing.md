@@ -14,9 +14,9 @@ You can use both at the same time.
 Prints a real-time execution tree to the console as the agent runs — useful during development:
 
 ```typescript
-import { Hive, ClaudeProvider, ConsoleTraceProvider } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, ConsoleTraceProvider } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   agents: [...],
   llm: new ClaudeProvider({ apiKey: '...' }),
@@ -111,7 +111,7 @@ new ConsoleTraceProvider({
 Implement `TraceProvider` to send traces to a database, observability platform, or any other system:
 
 ```typescript
-import type { TraceProvider, Trace, AgentSpan, LLMCallEvent, ToolCallEvent } from '@alexnetrebskii/hive-agent'
+import type { TraceProvider, Trace, AgentSpan, LLMCallEvent, ToolCallEvent } from 'tuplet'
 
 interface TraceProvider {
   onTraceStart(trace: Trace): void

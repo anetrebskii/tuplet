@@ -1,5 +1,5 @@
 /**
- * Hive Agent Framework - Type Definitions
+ * Tuplet Agent Framework - Type Definitions
  */
 
 // ============================================================================
@@ -218,7 +218,7 @@ export interface EnvironmentProvider {
 
 export type ContextStrategy = 'summarize' | 'error'
 
-export interface HiveConfig {
+export interface TupletConfig {
   /** What the agent is and does (e.g., 'a nutrition consultant that tracks meals and plans diets') */
   role: string
 
@@ -291,7 +291,7 @@ export interface RunOptions {
   /**
    * Agent execution mode:
    * - `'plan'` — Read-only. Shell blocks writes (except plan file). Only TaskList/TaskGet available. System prompt includes plan-mode instructions.
-   * - `'execute'` — Full access. Plan from `.hive/plan.md` injected into system prompt as context.
+   * - `'execute'` — Full access. Plan from `.tuplet/plan.md` injected into system prompt as context.
    * - `undefined` (default) — Full access, no plan injection. Backward compatible.
    */
   mode?: 'plan' | 'execute'

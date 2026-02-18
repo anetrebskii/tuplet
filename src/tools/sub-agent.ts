@@ -8,7 +8,7 @@ import type {
   Tool,
   SubAgentConfig,
   JSONSchema,
-  HiveConfig,
+  TupletConfig,
   RunOptions,
   AgentResult,
   ToolResult,
@@ -20,17 +20,17 @@ import { TraceBuilder } from "../trace.js";
 import { OUTPUT_TOOL_NAME, createOutputTool } from "./output.js";
 
 /**
- * Interface for the parent Hive context needed by task tool
+ * Interface for the parent Tuplet context needed by task tool
  */
 export interface TaskToolContext {
-  config: HiveConfig;
+  config: TupletConfig;
   getCurrentTraceBuilder(): TraceBuilder | undefined;
 }
 
 /**
- * Factory function type for creating sub-Hive instances
+ * Factory function type for creating sub-Tuplet instances
  */
-export type CreateSubHive = (config: HiveConfig) => {
+export type CreateSubTuplet = (config: TupletConfig) => {
   run(message: string, options?: RunOptions): Promise<AgentResult>;
 };
 
@@ -120,7 +120,7 @@ function createSubLogger(
 export function createTaskTool(
   context: TaskToolContext,
   agents: SubAgentConfig[],
-  createSubHive: CreateSubHive
+  createSubTuplet: CreateSubTuplet
 ): Tool {
   const agentNames = agents.map((a) => a.name);
   const agentDescriptions = agents.map(buildAgentDescription).join("\n");
@@ -269,7 +269,7 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           parentTraceBuilder.startSubAgent(agentName, inputMessage);
         }
 
-        const subHive = createSubHive({
+        const subTuplet = createSubTuplet({
           role: agentConfig.name,
           _systemPrompt: `Today's date is ${new Date().toISOString().split('T')[0]}.\n\n${agentConfig.systemPrompt}`,
           tools: subTools,
@@ -284,7 +284,7 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           agents: [],
         });
 
-        const result = await subHive.run(inputMessage, {
+        const result = await subTuplet.run(inputMessage, {
           // Pass trace builder for nested tracing
           _traceBuilder: parentTraceBuilder,
           // Pass workspace to sub-agent so its tools receive the same workspace

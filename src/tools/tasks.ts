@@ -9,7 +9,7 @@ import type { Tool, TaskItem, TaskStatus, TaskComment, LogProvider, TaskProgress
 import type { Workspace } from "../workspace.js";
 
 /** Path where tasks are persisted in Workspace */
-const TASKS_CONTEXT_PATH = '.hive/tasks.json';
+const TASKS_CONTEXT_PATH = '.tuplet/tasks.json';
 
 /** Serialized task state for persistence */
 interface TaskManagerState {

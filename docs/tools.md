@@ -19,7 +19,7 @@ In rare cases where built-in tools aren't enough (e.g. calling a domain-specific
 Each tool has a name, description, parameters schema (JSON Schema), and an execute function:
 
 ```typescript
-import type { Tool } from '@alexnetrebskii/hive-agent'
+import type { Tool } from 'tuplet'
 
 const weatherTool: Tool = {
   name: 'get_weather',
@@ -42,7 +42,7 @@ const weatherTool: Tool = {
   }
 }
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a weather checking assistant',
   tools: [weatherTool],
   llm: provider

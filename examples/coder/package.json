@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.3",
-    "@alexnetrebskii/hive-agent": "file:../.."
+    "tuplet": "file:../.."
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

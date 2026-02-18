@@ -637,11 +637,11 @@ describe('Shell', () => {
     })
 
     it('allows writing to writable paths', async () => {
-      shell.setReadOnly(true, ['.hive/plan.md'])
-      await shell.getFS().mkdir('/.hive')
-      const result = await shell.execute('echo "# Plan" > .hive/plan.md')
+      shell.setReadOnly(true, ['.tuplet/plan.md'])
+      await shell.getFS().mkdir('/.tuplet')
+      const result = await shell.execute('echo "# Plan" > .tuplet/plan.md')
       expect(result.exitCode).toBe(0)
-      expect(await shell.getFS().read('/.hive/plan.md')).toBe('# Plan\n')
+      expect(await shell.getFS().read('/.tuplet/plan.md')).toBe('# Plan\n')
     })
 
     it('allows read commands (ls) in read-only mode', async () => {

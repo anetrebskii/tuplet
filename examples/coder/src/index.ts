@@ -9,7 +9,7 @@
 import 'dotenv/config'
 import * as readline from 'readline'
 import {
-  Hive,
+  Tuplet,
   ClaudeProvider,
   OpenRouterProvider,
   ConsoleLogger,
@@ -24,7 +24,7 @@ import {
   type EnhancedQuestion,
   type QuestionOption,
   type TaskUpdateNotification
-} from '@alexnetrebskii/hive-agent'
+} from 'tuplet'
 
 // --- UI Helpers ---
 
@@ -234,7 +234,7 @@ async function main() {
 
   // No custom tools or sub-agents — relies entirely on built-in:
   // explore, plan, worker, ask_user, workspace, task tracking
-  const agent = new Hive({
+  const agent = new Tuplet({
     role: 'a senior software developer that creates software projects from scratch. ' +
       'You write code files, create directory structures, and verify your work. ' +
       'Use the explore agent to understand existing projects, ' +

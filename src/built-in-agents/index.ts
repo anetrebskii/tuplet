@@ -15,7 +15,7 @@ export { workerAgent } from './worker.js'
 
 /**
  * Get all built-in agents.
- * Returns agents that are always auto-injected into every Hive.
+ * Returns agents that are always auto-injected into every Tuplet.
  */
 export function getBuiltInAgents(): SubAgentConfig[] {
   return [exploreAgent, planAgent, workerAgent]

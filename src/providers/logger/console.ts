@@ -28,7 +28,7 @@ export class ConsoleLogger implements LogProvider {
 
   constructor(config: ConsoleLoggerConfig = {}) {
     this.level = LOG_LEVELS[config.level || 'info']
-    this.prefix = config.prefix || '[Hive]'
+    this.prefix = config.prefix || '[Tuplet]'
     this.timestamps = config.timestamps ?? true
   }
 

@@ -4,7 +4,7 @@
  * Uses OpenFoodFacts API for real nutrition data.
  */
 
-import type { Tool } from '@alexnetrebskii/hive-agent'
+import type { Tool } from 'tuplet'
 
 // Meal log storage
 interface MealEntry {

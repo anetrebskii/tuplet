@@ -1,6 +1,6 @@
-# Hive Agent
+# Tuplet
 
-[![npm version](https://img.shields.io/npm/v/@alexnetrebskii/hive-agent)](https://www.npmjs.com/package/@alexnetrebskii/hive-agent)
+[![npm version](https://img.shields.io/npm/v/tuplet)](https://www.npmjs.com/package/tuplet)
 [![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/hive-agent/ci.yml)](https://github.com/anetrebskii/hive-agent/actions)
 [![license](https://img.shields.io/github/license/anetrebskii/hive-agent)](https://github.com/anetrebskii/hive-agent/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
@@ -10,16 +10,16 @@
 
 Claude Code is impressive: you open a terminal, ask it to code something, and it plans, clarifies, executes. But it's locked to the terminal and local filesystem. What if you need that same intelligence inside your SaaS product, web app, or serverless function — working with your database, your blob storage, your users' data?
 
-Hive gives you exactly that. A powerful, multi-agent framework you plug into your application. Your users get an AI that feels custom-built. You get a library that handles the hard parts.
+Tuplet gives you exactly that. A powerful, multi-agent framework you plug into your application. Your users get an AI that feels custom-built. You get a library that handles the hard parts.
 
-## You Need Hive Agent If
+## You Need Tuplet If
 
 - You want your own AI agent in your app that codes, manages documents, or works with any workspace you share with it
-- You're building on Firebase, Vercel, AWS Lambda, or any serverless platform — Hive is stateless by design
+- You're building on Firebase, Vercel, AWS Lambda, or any serverless platform — Tuplet is stateless by design
 - You're building a SaaS and want to give users a smart AI chat without building an agent framework from scratch
 - Your data lives in databases, blob storage, or APIs — not just the local filesystem
 - You want Claude Code-level intelligence but inside a web application, without VMs or infrastructure to manage
-- You don't want to spend time teaching AI how to work well — Hive handles planning, task tracking, clarifying questions, and tool use out of the box
+- You don't want to spend time teaching AI how to work well — Tuplet handles planning, task tracking, clarifying questions, and tool use out of the box
 
 ## Features
 
@@ -33,7 +33,7 @@ Hive gives you exactly that. A powerful, multi-agent framework you plug into you
 
 ### Built-in Capabilities
 
-- **Workspace** — Like projects in Claude Code. Hive works with workspace files (virtual or real) the same way Claude Code works with your project
+- **Workspace** — Like projects in Claude Code. Tuplet works with workspace files (virtual or real) the same way Claude Code works with your project
 - **Large file processing** — AI reads files >256KB in chunks, just like Claude Code does
 - **Web browsing** — Navigate websites, extract data, interact with pages
 - **API requests with authentication** — Make HTTP requests to external services
@@ -66,12 +66,12 @@ Hive gives you exactly that. A powerful, multi-agent framework you plug into you
 - **Pluggable logging & tracing** — Integrate with Datadog, custom dashboards, or any observability platform
 - **Pluggable workspaces** — Virtual file systems, database-backed storage, or real file system
 
-## Hive Agent vs LangChain.js
+## Tuplet vs LangChain.js
 
-| | **Hive Agent** | **LangChain.js** |
+| | **Tuplet** | **LangChain.js** |
 |---|---|---|
 | **Runtime dependencies** | 1 | 11+ (core) + per-provider packages |
-| **Setup** | `new Hive({ tools, llm })` — one object, done | Chains, Runnables, LCEL, Memory, Agents — multiple abstractions to learn |
+| **Setup** | `new Tuplet({ tools, llm })` — one object, done | Chains, Runnables, LCEL, Memory, Agents — multiple abstractions to learn |
 | **Planning & task tracking** | Built-in, works out of the box | Requires separate `@langchain/langgraph` package |
 | **Clarifying questions** | Built-in | Not included — build your own |
 | **Serverless** | Stateless by design — drop into Lambda/Firebase as-is | Requires external state management and architectural changes |
@@ -81,24 +81,24 @@ Hive gives you exactly that. A powerful, multi-agent framework you plug into you
 
 **When to choose LangChain:** You need a massive ecosystem of integrations (vector stores, retrievers, 50+ providers) or are building complex RAG pipelines with many data sources.
 
-**When to choose Hive:** You want a production-ready agent in your app without the abstraction overhead. One dependency, stateless, works in serverless — and your users get planning, task tracking, and clarifying questions out of the box.
+**When to choose Tuplet:** You want a production-ready agent in your app without the abstraction overhead. One dependency, stateless, works in serverless — and your users get planning, task tracking, and clarifying questions out of the box.
 
 ## Installation
 
 ```bash
-npm install @alexnetrebskii/hive-agent
+npm install tuplet
 ```
 
 ```bash
-pnpm add @alexnetrebskii/hive-agent
+pnpm add tuplet
 ```
 
 ## Quick Start
 
 ```typescript
-import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a helpful assistant',
   tools: [myTool],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })

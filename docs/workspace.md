@@ -9,7 +9,7 @@ Large files (>256 KB) and long lines are handled automatically — the agent rea
 ## Setup
 
 ```typescript
-import { Hive, ClaudeProvider, Workspace, FileWorkspaceProvider } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, Workspace, FileWorkspaceProvider } from 'tuplet'
 
 const workspace = new Workspace({
   // Optional: persist to disk (default: in-memory only)
@@ -39,7 +39,7 @@ const workspace = new Workspace({
 // Load existing data from provider (required for FileWorkspaceProvider)
 await workspace.init()
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a meal planning assistant',
   tools: [...],
   llm: new ClaudeProvider({ apiKey: '...' })

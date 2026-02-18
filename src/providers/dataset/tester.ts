@@ -6,7 +6,7 @@
 
 import { readdir } from 'fs/promises'
 import { join } from 'path'
-import type { Hive } from '../../agent.js'
+import type { Tuplet } from '../../agent.js'
 import type { RunOptions, AgentResult } from '../../types.js'
 import type { RunRecord } from './base.js'
 import { RunReplayer } from './replayer.js'
@@ -86,7 +86,7 @@ export class RunTester {
   /**
    * Run all tests in the runs directory
    */
-  async runAll(agent: Hive): Promise<TestSummary> {
+  async runAll(agent: Tuplet): Promise<TestSummary> {
     const startTime = Date.now()
     const files = await this.getRunFiles()
     const results: TestResult[] = []
@@ -108,7 +108,7 @@ export class RunTester {
   /**
    * Run a single test from a file
    */
-  async runOne(agent: Hive, filePath: string): Promise<TestResult> {
+  async runOne(agent: Tuplet, filePath: string): Promise<TestResult> {
     const startTime = Date.now()
 
     try {

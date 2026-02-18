@@ -1,7 +1,7 @@
 /**
  * Dataset Provider - Type Definitions
  *
- * Types for recording and replaying Hive runs.
+ * Types for recording and replaying Tuplet runs.
  */
 
 import type {
@@ -38,7 +38,7 @@ export interface SerializedSubAgentConfig {
 }
 
 /**
- * Serialized Hive configuration
+ * Serialized Tuplet configuration
  */
 export interface RunRecordConfig {
   role: string
@@ -79,7 +79,7 @@ export interface RunRecord {
   inputMessage: string
   /** Initial history before the run (for replay/testing) */
   initialHistory: Message[]
-  /** Serialized Hive configuration */
+  /** Serialized Tuplet configuration */
   config: RunRecordConfig
   /** Run result data */
   result: RunRecordResult

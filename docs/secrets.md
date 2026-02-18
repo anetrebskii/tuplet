@@ -5,7 +5,7 @@ Pass API keys and other credentials to the agent securely. The agent can list va
 ## Setup
 
 ```typescript
-import { Hive, ClaudeProvider, Workspace, MemoryEnvironmentProvider } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, Workspace, MemoryEnvironmentProvider } from 'tuplet'
 
 const workspace = new Workspace()
 

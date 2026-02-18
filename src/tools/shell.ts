@@ -151,7 +151,7 @@ curl https://api.example.com/users?page=1&limit=10
       // Output truncation with spill-to-disk
       if (result.stdout.length > MAX_OUTPUT_CHARS) {
         const timestamp = Date.now()
-        const spillPath = `.hive/tmp/output-${timestamp}.txt`
+        const spillPath = `.tuplet/tmp/output-${timestamp}.txt`
         const fs = shell.getFS()
         // Write directly to raw provider (spill path is internal)
         await fs.write('/' + spillPath, result.stdout)

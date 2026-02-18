@@ -1,7 +1,7 @@
 /**
  * Tools Module
  *
- * Exports all internal tools used by the Hive agent.
+ * Exports all internal tools used by the Tuplet agent.
  */
 
 // Ask User Tool
@@ -14,7 +14,7 @@ export { OUTPUT_TOOL_NAME, createOutputTool } from "./output.js";
 export {
   createTaskTool,
   type TaskToolContext,
-  type CreateSubHive,
+  type CreateSubTuplet,
 } from "./sub-agent.js";
 
 // Task Management Tools (Claude Code 4-Tool Approach)

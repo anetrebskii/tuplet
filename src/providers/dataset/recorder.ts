@@ -1,12 +1,12 @@
 /**
  * Run Recorder
  *
- * Records Hive run configurations and results to JSON files.
+ * Records Tuplet run configurations and results to JSON files.
  */
 
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import type { HiveConfig, Tool, SubAgentConfig, AgentResult, Message } from '../../types.js'
+import type { TupletConfig, Tool, SubAgentConfig, AgentResult, Message } from '../../types.js'
 import type {
   RunRecord,
   RunRecordConfig,
@@ -23,7 +23,7 @@ export interface RunRecorderConfig {
 }
 
 /**
- * Records Hive runs to JSON files for later analysis and replay
+ * Records Tuplet runs to JSON files for later analysis and replay
  */
 export class RunRecorder {
   private outputDir: string
@@ -36,14 +36,14 @@ export class RunRecorder {
    * Record a run to a JSON file
    * @param inputMessage - The user's input message
    * @param initialHistory - The history before the run started
-   * @param config - The Hive configuration used for the run
-   * @param result - The result from Hive.run()
+   * @param config - The Tuplet configuration used for the run
+   * @param result - The result from Tuplet.run()
    * @returns The file path where the record was saved
    */
   async record(
     inputMessage: string,
     initialHistory: Message[],
-    config: HiveConfig,
+    config: TupletConfig,
     result: AgentResult
   ): Promise<string> {
     const runId = this.generateRunId()
@@ -84,9 +84,9 @@ export class RunRecorder {
   }
 
   /**
-   * Serialize HiveConfig to a JSON-safe format
+   * Serialize TupletConfig to a JSON-safe format
    */
-  private serializeConfig(config: HiveConfig): RunRecordConfig {
+  private serializeConfig(config: TupletConfig): RunRecordConfig {
     return {
       role: config.role,
       maxIterations: config.maxIterations,

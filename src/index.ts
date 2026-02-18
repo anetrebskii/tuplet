@@ -1,11 +1,11 @@
 /**
- * Hive Agent Framework
+ * Tuplet Agent Framework
  *
  * Minimal TypeScript agent framework inspired by Claude Code architecture.
  */
 
 // Main agent class
-export { Hive, PLAN_PATH } from './agent.js'
+export { Tuplet, Tuplet as Hive, PLAN_PATH } from './agent.js'
 
 // Types
 export type {
@@ -27,7 +27,8 @@ export type {
   JSONSchema,
 
   // Agent types
-  HiveConfig,
+  TupletConfig,
+  TupletConfig as HiveConfig,
   SubAgentConfig,
   RunOptions,
   AgentResult,

@@ -1,13 +1,13 @@
 # Task Management
 
-Agents automatically break complex work into tasks and track progress. No setup required — task tools are built-in. When [workspace](./workspace.md) is provided, task state persists to `.hive/tasks.json` across `agent.run()` calls.
+Agents automatically break complex work into tasks and track progress. No setup required — task tools are built-in. When [workspace](./workspace.md) is provided, task state persists to `.tuplet/tasks.json` across `agent.run()` calls.
 
 ## Receiving Task Updates
 
 Subscribe to task changes via the logger to display progress in your UI:
 
 ```typescript
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   tools: [...],
   llm: provider,
@@ -28,7 +28,7 @@ const agent = new Hive({
 Use `formatTaskList` to render a human-readable task list:
 
 ```typescript
-import { formatTaskList, TaskManager } from '@alexnetrebskii/hive-agent'
+import { formatTaskList, TaskManager } from 'tuplet'
 
 const tasks = manager.getAll()
 console.log(formatTaskList(tasks, tasks))
@@ -46,7 +46,7 @@ console.log(formatTaskList(tasks, tasks))
 For custom integrations, you can use the `TaskManager` class outside of an agent:
 
 ```typescript
-import { TaskManager } from '@alexnetrebskii/hive-agent'
+import { TaskManager } from 'tuplet'
 
 const manager = new TaskManager()
 

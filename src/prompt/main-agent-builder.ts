@@ -35,7 +35,7 @@ export class MainAgentBuilder {
   private _skipBuiltInAgents = false
 
   /**
-   * Skip auto-injecting built-in agents (used when Hive already merges them)
+   * Skip auto-injecting built-in agents (used when Tuplet already merges them)
    */
   skipBuiltInAgents(): this {
     this._skipBuiltInAgents = true
@@ -195,7 +195,7 @@ export class MainAgentBuilder {
         whenToUse: a.description,
       }))
     } else {
-      // When called from Hive, built-ins are already merged into subAgents.
+      // When called from Tuplet, built-ins are already merged into subAgents.
       // Detect which ones are built-in by checking against getBuiltInAgents().
       const builtInNames = new Set(getBuiltInAgents().map(a => a.name))
       builtInDefs = (this.config.subAgents || [])

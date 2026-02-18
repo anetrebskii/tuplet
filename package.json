@@ -1,7 +1,7 @@
 {
-  "name": "@alexnetrebskii/hive-agent",
+  "name": "tuplet",
   "version": "0.1.0",
-  "description": "Minimal TypeScript agent framework inspired by Claude Code architecture",
+  "description": "Tuplet — minimal TypeScript agent framework inspired by Claude Code architecture",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -29,7 +29,8 @@
     "claude",
     "openai",
     "tools",
-    "framework"
+    "framework",
+    "tuplet"
   ],
   "author": "",
   "license": "MIT",

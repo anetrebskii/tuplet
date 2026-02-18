@@ -7,9 +7,9 @@ Two ways to persist conversation history across `agent.run()` calls. When histor
 Pass a `RepositoryProvider` and a `conversationId` — history is loaded and saved automatically:
 
 ```typescript
-import { Hive, ClaudeProvider, MemoryRepository } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, MemoryRepository } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   llm: new ClaudeProvider({ apiKey: '...' }),
   repository: new MemoryRepository()  // in-memory, for development

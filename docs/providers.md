@@ -5,7 +5,7 @@ All providers use prompt caching automatucally to reduce costs by up to 90%.
 ## Claude (Anthropic)
 
 ```typescript
-import { ClaudeProvider } from '@alexnetrebskii/hive-agent'
+import { ClaudeProvider } from 'tuplet'
 
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -17,7 +17,7 @@ const provider = new ClaudeProvider({
 ## OpenAI
 
 ```typescript
-import { OpenAIProvider } from '@alexnetrebskii/hive-agent'
+import { OpenAIProvider } from 'tuplet'
 
 const provider = new OpenAIProvider({
   apiKey: process.env.OPENAI_API_KEY,
@@ -44,7 +44,7 @@ const provider = new OpenAIProvider({
 Main agent and [sub-agents](./sub-agents.md) can use different providers:
 
 ```typescript
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   agents: [{
     name: 'fast_helper',
@@ -62,7 +62,7 @@ const agent = new Hive({
 Implement `LLMProvider` to use any LLM:
 
 ```typescript
-import type { LLMProvider, LLMResponse, Message, ToolSchema, LLMOptions } from '@alexnetrebskii/hive-agent'
+import type { LLMProvider, LLMResponse, Message, ToolSchema, LLMOptions } from 'tuplet'
 
 class CustomProvider implements LLMProvider {
   async chat(

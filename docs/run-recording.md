@@ -7,9 +7,9 @@
 Add a `RunRecorder` to capture every run:
 
 ```typescript
-import { Hive, ClaudeProvider, RunRecorder } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, RunRecorder } from 'tuplet'
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a helpful assistant',
   llm: new ClaudeProvider({ apiKey: '...' }),
   recorder: new RunRecorder({ outputDir: './runs' })
@@ -26,9 +26,9 @@ Each recording captures the input message, conversation history, agent config, a
 Replay recordings against your agent with `RunTester`. By default, a test passes if `status` and `toolCalls.length` match:
 
 ```typescript
-import { Hive, RunTester } from '@alexnetrebskii/hive-agent'
+import { Tuplet, RunTester } from 'tuplet'
 
-const agent = new Hive({ /* same config, without recorder */ })
+const agent = new Tuplet({ /* same config, without recorder */ })
 
 const tester = new RunTester({
   runsDir: './runs',

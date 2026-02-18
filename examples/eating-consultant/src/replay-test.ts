@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config'
-import { Hive, ClaudeProvider, RunTester, Workspace, type TestResult } from '@alexnetrebskii/hive-agent'
+import { Tuplet, ClaudeProvider, RunTester, Workspace, type TestResult } from 'tuplet'
 import { nutritionCounterTools, mainAgentTools } from './tools.js'
 
 // System prompt (same as main app)
@@ -103,7 +103,7 @@ async function main() {
     maxTokens: 2000
   })
 
-  const agent = new Hive({
+  const agent = new Tuplet({
     role: 'a nutrition consultant',
     _systemPrompt: SYSTEM_PROMPT,
     tools: mainAgentTools,

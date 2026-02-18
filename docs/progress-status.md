@@ -3,7 +3,7 @@
 Track what your agent is doing in real-time — thinking, calling tools, spawning sub-agents — via the `onProgress` callback on the logger. Useful for showing spinners, status lines, or live activity feeds in your UI.
 
 ```typescript
-const agent = new Hive({
+const agent = new Tuplet({
   role: '...',
   llm: provider,
   logger: {

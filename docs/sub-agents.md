@@ -3,7 +3,7 @@
 Sub-agents let you split work across specialized agents, each with its own system prompt, tools, and optionally a different model. The main agent decides when to delegate — you just define the available sub-agents. Each sub-agent has access to all [built-in tools](./tools.md) automatically.
 
 ```typescript
-import type { SubAgentConfig } from '@alexnetrebskii/hive-agent'
+import type { SubAgentConfig } from 'tuplet'
 
 const researchAgent: SubAgentConfig = {
   name: 'researcher',
@@ -12,7 +12,7 @@ const researchAgent: SubAgentConfig = {
   tools: [webSearchTool, readUrlTool]
 }
 
-const agent = new Hive({
+const agent = new Tuplet({
   role: 'a helpful task assistant',
   agents: [researchAgent],
   llm: provider

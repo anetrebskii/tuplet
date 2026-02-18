@@ -3,7 +3,7 @@
 Two-phase workflow: the agent explores and writes a plan first, then executes it. In plan mode the [workspace](./workspace.md) is read-only — the agent can only write to the plan file. This lets you review the plan before any changes are made.
 
 ```typescript
-const agent = new Hive({ /* config */ })
+const agent = new Tuplet({ /* config */ })
 
 // Phase 1: agent explores workspace and writes a plan (read-only)
 const planResult = await agent.run('Design a caching layer', {
@@ -12,7 +12,7 @@ const planResult = await agent.run('Design a caching layer', {
 })
 
 // Review the plan
-const plan = workspace.read<string>('.hive/plan.md')
+const plan = workspace.read<string>('.tuplet/plan.md')
 console.log(plan)
 
 // Phase 2: plan is injected into the system prompt, full access granted
@@ -26,7 +26,7 @@ const execResult = await agent.run('Implement the plan', {
 
 | Mode | Workspace | Plan |
 | ---- | --------- | ---- |
-| `'plan'` | Read-only (only `/.hive/plan.md` is writable) | Agent writes a new plan |
+| `'plan'` | Read-only (only `/.tuplet/plan.md` is writable) | Agent writes a new plan |
 | `'execute'` | Full access | Previous plan is injected into the system prompt |
 | `undefined` | Full access | No plan — agent works directly (default) |
 

@@ -1,11 +1,11 @@
 /**
- * Hive Agent
+ * Tuplet Agent
  *
  * Main agent class that orchestrates tool execution, sub-agents, and workspace management.
  */
 
 import type {
-  HiveConfig,
+  TupletConfig,
   Tool,
   ToolContext,
   RunOptions,
@@ -30,7 +30,7 @@ import { MainAgentBuilder } from "./prompt/main-agent-builder.js";
 import { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
 
 /** Path where the plan is stored in workspace (relative) */
-export const PLAN_PATH = ".hive/plan.md";
+export const PLAN_PATH = ".tuplet/plan.md";
 
 // Re-export for public API
 export { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
@@ -78,10 +78,10 @@ ${planContent}
 
 
 /**
- * Hive Agent Class
+ * Tuplet Agent Class
  */
-export class Hive {
-  readonly config: HiveConfig;
+export class Tuplet {
+  readonly config: TupletConfig;
   private contextManager: ContextManager;
   private tools: Tool[];
   /** Auto-generated system prompt */
@@ -89,7 +89,7 @@ export class Hive {
   /** Current trace builder (set during run, used by __sub_agent__ tool) */
   private currentTraceBuilder?: TraceBuilder;
 
-  constructor(config: HiveConfig) {
+  constructor(config: TupletConfig) {
     this.config = {
       maxIterations: 50,
       maxContextTokens: 100000,
@@ -137,7 +137,7 @@ export class Hive {
             getCurrentTraceBuilder: () => this.getCurrentTraceBuilder(),
           },
           this.config.agents!,
-          (subConfig) => new Hive(subConfig)
+          (subConfig) => new Tuplet(subConfig)
         )
       );
     }
@@ -378,7 +378,7 @@ export class Hive {
     if (isResuming) {
       await taskManager.restoreFromWorkspace(ws);
     } else {
-      await ws.delete(".hive/tasks.json");
+      await ws.delete(".tuplet/tasks.json");
     }
 
     // Create tool context

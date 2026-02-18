@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from '@alexnetrebskii/hive-agent'
+import { Tuplet, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from 'tuplet'
 import { nutritionCounterTools } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -331,7 +331,7 @@ async function main() {
   await workspace.init()
 
   // Create the main agent with sub-agent and run recorder
-  const agent = new Hive({
+  const agent = new Tuplet({
     role: 'a nutrition consultant that helps users track meals, view nutrition progress, and plan their diet. ' +
       'You can search for food products in the OpenFoodFacts database, log meals with nutrition data, ' +
       'view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent. ' +
