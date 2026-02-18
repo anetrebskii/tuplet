@@ -138,8 +138,8 @@ await workspace.dispose()
 
 ## Examples
 
-- [**Coder**](https://github.com/anetrebskii/hive-agent/tree/main/examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
-- [**Eating Consultant**](https://github.com/anetrebskii/hive-agent/tree/main/examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
+- [**Coder**](https://github.com/anetrebskii/tuplet/tree/main/examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
+- [**Eating Consultant**](https://github.com/anetrebskii/tuplet/tree/main/examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
 
 ## Documentation
 

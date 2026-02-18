@@ -8,8 +8,8 @@ Thanks for your interest in contributing! Here's how to get started.
 2. Clone your fork and install dependencies:
 
 ```bash
-git clone https://github.com/<your-username>/hive-agent.git
-cd hive-agent
+git clone https://github.com/<your-username>/tuplet.git
+cd tuplet
 pnpm install
 ```
 

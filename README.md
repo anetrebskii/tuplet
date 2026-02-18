@@ -3,8 +3,8 @@
 > Formerly **Hive Agent** ([`@alexnetrebskii/hive-agent`](https://www.npmjs.com/package/@alexnetrebskii/hive-agent)) — same framework, new name.
 
 [![npm version](https://img.shields.io/npm/v/tuplet)](https://www.npmjs.com/package/tuplet)
-[![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/hive-agent/ci.yml)](https://github.com/anetrebskii/hive-agent/actions)
-[![license](https://img.shields.io/github/license/anetrebskii/hive-agent)](https://github.com/anetrebskii/hive-agent/blob/main/LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/anetrebskii/tuplet/ci.yml)](https://github.com/anetrebskii/tuplet/actions)
+[![license](https://img.shields.io/github/license/anetrebskii/tuplet)](https://github.com/anetrebskii/tuplet/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![Discord](https://img.shields.io/discord/1339330498498080808?logo=discord&label=Discord)](https://discord.gg/WrZhA6wfdr)
 
@@ -112,26 +112,26 @@ console.log(result.response)
 
 ## Examples
 
-- [**Coder**](https://github.com/anetrebskii/hive-agent/tree/main/examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
-- [**Eating Consultant**](https://github.com/anetrebskii/hive-agent/tree/main/examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
+- [**Coder**](https://github.com/anetrebskii/tuplet/tree/main/examples/coder) — AI software developer that creates projects from scratch using built-in shell, workspace, planning, and task tracking. Zero custom tools.
+- [**Eating Consultant**](https://github.com/anetrebskii/tuplet/tree/main/examples/eating-consultant) — Nutrition assistant with custom tools (OpenFoodFacts API), sub-agents (meal planner), workspace persistence, and run recording.
 
 ## Documentation
 
-- [Quick Start](https://github.com/anetrebskii/hive-agent/blob/main/docs/README.md)
-- [Tools](https://github.com/anetrebskii/hive-agent/blob/main/docs/tools.md)
-- [Sub-Agents](https://github.com/anetrebskii/hive-agent/blob/main/docs/sub-agents.md)
-- [Workspace](https://github.com/anetrebskii/hive-agent/blob/main/docs/workspace.md)
-- [Secrets](https://github.com/anetrebskii/hive-agent/blob/main/docs/secrets.md)
-- [Providers](https://github.com/anetrebskii/hive-agent/blob/main/docs/providers.md)
-- [History](https://github.com/anetrebskii/hive-agent/blob/main/docs/history.md)
-- [Interactive Questions](https://github.com/anetrebskii/hive-agent/blob/main/docs/interactive.md)
-- [Interruption](https://github.com/anetrebskii/hive-agent/blob/main/docs/interruption.md)
-- [Plan Mode](https://github.com/anetrebskii/hive-agent/blob/main/docs/plan-mode.md)
-- [Task Management](https://github.com/anetrebskii/hive-agent/blob/main/docs/task-management.md)
-- [Progress Status](https://github.com/anetrebskii/hive-agent/blob/main/docs/progress-status.md)
-- [Logger](https://github.com/anetrebskii/hive-agent/blob/main/docs/logger.md)
-- [Tracing](https://github.com/anetrebskii/hive-agent/blob/main/docs/tracing.md)
-- [Run Recording](https://github.com/anetrebskii/hive-agent/blob/main/docs/run-recording.md)
+- [Quick Start](https://github.com/anetrebskii/tuplet/blob/main/docs/README.md)
+- [Tools](https://github.com/anetrebskii/tuplet/blob/main/docs/tools.md)
+- [Sub-Agents](https://github.com/anetrebskii/tuplet/blob/main/docs/sub-agents.md)
+- [Workspace](https://github.com/anetrebskii/tuplet/blob/main/docs/workspace.md)
+- [Secrets](https://github.com/anetrebskii/tuplet/blob/main/docs/secrets.md)
+- [Providers](https://github.com/anetrebskii/tuplet/blob/main/docs/providers.md)
+- [History](https://github.com/anetrebskii/tuplet/blob/main/docs/history.md)
+- [Interactive Questions](https://github.com/anetrebskii/tuplet/blob/main/docs/interactive.md)
+- [Interruption](https://github.com/anetrebskii/tuplet/blob/main/docs/interruption.md)
+- [Plan Mode](https://github.com/anetrebskii/tuplet/blob/main/docs/plan-mode.md)
+- [Task Management](https://github.com/anetrebskii/tuplet/blob/main/docs/task-management.md)
+- [Progress Status](https://github.com/anetrebskii/tuplet/blob/main/docs/progress-status.md)
+- [Logger](https://github.com/anetrebskii/tuplet/blob/main/docs/logger.md)
+- [Tracing](https://github.com/anetrebskii/tuplet/blob/main/docs/tracing.md)
+- [Run Recording](https://github.com/anetrebskii/tuplet/blob/main/docs/run-recording.md)
 
 ## License
 

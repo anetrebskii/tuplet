@@ -32,6 +32,14 @@
     "framework",
     "tuplet"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anetrebskii/tuplet.git"
+  },
+  "homepage": "https://github.com/anetrebskii/tuplet#readme",
+  "bugs": {
+    "url": "https://github.com/anetrebskii/tuplet/issues"
+  },
   "author": "",
   "license": "MIT",
   "engines": {
