@@ -9,12 +9,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  version-and-build:
+  version:
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
-      id-token: write
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -33,6 +32,16 @@ jobs:
           majorVersion: 2
           tagPrefix: 'v'
 
+  publish-tuplet:
+    needs: version
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -46,44 +55,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Update package.json version
-        run: pnpm pkg set version=${{ steps.version.outputs.version }}
+      - name: Set version
+        run: pnpm pkg set version=${{ needs.version.outputs.version }}
 
       - name: Build
         run: pnpm build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: |
-            dist/
-            package.json
-            README.md
-            LICENSE
-            pnpm-lock.yaml
-
-  publish-tuplet:
-    needs: version-and-build
-    runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Publish tuplet to npm
         run: pnpm publish --access public --no-git-checks
@@ -92,20 +68,18 @@ jobs:
 
       - name: Summary
         run: |
-          echo "### Published tuplet v${{ needs.version-and-build.outputs.version }} to npm" >> $GITHUB_STEP_SUMMARY
+          echo "### Published tuplet v${{ needs.version.outputs.version }} to npm" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ needs.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
 
   publish-hive:
-    needs: version-and-build
+    needs: version
     runs-on: ubuntu-latest
 
     permissions:
       id-token: write
 
     steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build
+      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -114,7 +88,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version
+        run: pnpm pkg set version=${{ needs.version.outputs.version }}
 
       - name: Override package name for legacy publish
         run: pnpm pkg set name="@alexnetrebskii/hive-agent"
@@ -130,6 +111,9 @@ jobs:
           > This package (`@alexnetrebskii/hive-agent`) will continue to receive updates for a limited time but is deprecated.
           EOF
 
+      - name: Build
+        run: pnpm build
+
       - name: Publish @alexnetrebskii/hive-agent to npm
         run: pnpm publish --access public --no-git-checks
         env:
@@ -137,4 +121,5 @@ jobs:
 
       - name: Summary
         run: |
-          echo "### Published @alexnetrebskii/hive-agent v${{ needs.version-and-build.outputs.version }} to npm (deprecated)" >> $GITHUB_STEP_SUMMARY
+          echo "### Published @alexnetrebskii/hive-agent v${{ needs.version.outputs.version }} to npm (deprecated)" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ needs.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
