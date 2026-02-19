@@ -110,7 +110,20 @@ const agent = new Tuplet({
   logger: {
     ...new ConsoleLogger({ level: 'warn' }),
     onProgress: (update) => {
-      if (update.type === 'tool_start') console.log(`> ${update.message}`)
+      // update.depth: nesting level (0=root, 1=sub-agent, ...)
+      // update.id: correlates start/end pairs (tool_start↔tool_end, sub_agent_start↔sub_agent_end)
+      // update.parentId: links to parent sub_agent_start for tree building
+      const indent = '  '.repeat(update.depth ?? 0)
+      switch (update.type) {
+        case 'thinking':        console.log(`${indent}🤔 ${update.message}`); break
+        case 'text':            console.log(`${indent}💬 ${update.message}`); break
+        case 'tool_start':      console.log(`${indent}🔧 ${update.message}`); break
+        case 'tool_end':        console.log(`${indent}✅ ${update.message}`); break
+        case 'sub_agent_start': console.log(`${indent}🤖 ${update.message}`); break
+        case 'sub_agent_end':   console.log(`${indent}✅ ${update.message}`); break
+        case 'usage':           console.log(`${indent}📊 ${update.message}`); break
+        case 'status':          console.log(`${indent}ℹ️  ${update.message}`); break
+      }
     },
     onTaskUpdate: (update) => {
       console.log(`Tasks: ${update.progress.completed}/${update.progress.total}`)

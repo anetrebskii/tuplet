@@ -29,6 +29,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 
 - **Built-in planning & exploration sub-agents** — AI plans its work before executing, just like Claude Code
 - **Task generation & tracking** — AI generates tasks and follows them, showing progress in real time
+- **Rich progress events** — Stream AI reasoning text, tool execution, token usage, and nested sub-agent activity with structured depth for tree-like UIs
 - **Clarifying questions** — AI asks one question or a series of questions when it needs more context
 - **Interruption mode** — Correct the AI mid-execution if it goes in the wrong direction, just like Claude Code
 - **Optimized built-in prompts** — Carefully tuned prompts for better results across all providers

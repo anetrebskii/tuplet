@@ -43,6 +43,9 @@ export interface ExecutorConfig {
 
   /** Trace builder for execution tracing */
   traceBuilder?: import('./trace.js').TraceBuilder
+
+  /** Nesting depth for progress events (0=root, 1=sub-agent, etc.) */
+  depth?: number
 }
 
 /**
@@ -84,6 +87,11 @@ function truncateForLog(data: unknown, maxLength = 500): string {
   return str.slice(0, maxLength) + `... (${str.length} chars total)`
 }
 
+let nextEventId = 0
+function generateEventId(): string {
+  return `evt_${Date.now()}_${nextEventId++}`
+}
+
 /**
  * Execute a single tool
  */
@@ -91,7 +99,8 @@ async function executeTool(
   tool: Tool,
   params: Record<string, unknown>,
   context: ToolContext,
-  logger?: LogProvider
+  logger?: LogProvider,
+  depth?: number
 ): Promise<{ result: ToolResult; durationMs: number }> {
   const startTime = Date.now()
 
@@ -127,9 +136,12 @@ async function executeTool(
     }
   }
 
+  const toolEventId = generateEventId()
   logger?.onProgress?.({
     type: 'tool_start',
     message: progressMessage,
+    id: toolEventId,
+    depth: depth ?? 0,
     details: { toolName: tool.name }
   })
 
@@ -179,6 +191,8 @@ async function executeTool(
     logger?.onProgress?.({
       type: 'tool_end',
       message: completionMessage,
+      id: toolEventId,
+      depth: depth ?? 0,
       details: { toolName: tool.name, duration: durationMs, success: result.success }
     })
 
@@ -204,6 +218,8 @@ async function executeTool(
     logger?.onProgress?.({
       type: 'tool_end',
       message: `${tool.name} failed`,
+      id: toolEventId,
+      depth: depth ?? 0,
       details: { toolName: tool.name, duration: durationMs, success: false }
     })
 
@@ -282,7 +298,8 @@ export async function executeLoop(
     llmOptions,
     signal,
     shouldContinue,
-    traceBuilder
+    traceBuilder,
+    depth: executorDepth = 0
   } = config
 
   const messages = [...initialMessages]
@@ -290,6 +307,9 @@ export async function executeLoop(
   const thinkingBlocks: string[] = []
   const toolSchemas = toolsToSchemas(tools)
   const modelId = llm.getModelId?.() || 'unknown'
+  let cumulativeInputTokens = 0
+  let cumulativeOutputTokens = 0
+  const executorStartTime = Date.now()
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Check for interruption at start of each iteration
@@ -297,7 +317,8 @@ export async function executeLoop(
     if (interruptReason) {
       logger?.onProgress?.({
         type: 'status',
-        message: `Interrupted: ${interruptReason}`
+        message: `Interrupted: ${interruptReason}`,
+        depth: executorDepth
       })
       return buildInterruptedResult(
         interruptReason,
@@ -314,7 +335,8 @@ export async function executeLoop(
     // Progress: thinking
     logger?.onProgress?.({
       type: 'thinking',
-      message: iteration === 0 ? 'Thinking...' : 'Processing...'
+      message: iteration === 0 ? 'Thinking...' : 'Processing...',
+      depth: executorDepth
     })
 
     // Manage context (truncate/summarize if needed)
@@ -368,8 +390,44 @@ export async function executeLoop(
     // Collect thinking blocks
     thinkingBlocks.push(...extractThinking(response.content))
 
+    // Emit usage event with cumulative token counts
+    if (response.usage) {
+      cumulativeInputTokens += response.usage.inputTokens
+      cumulativeOutputTokens += response.usage.outputTokens
+      logger?.onProgress?.({
+        type: 'usage',
+        message: `Tokens: ${cumulativeInputTokens} in / ${cumulativeOutputTokens} out`,
+        depth: executorDepth,
+        details: {
+          usage: {
+            inputTokens: cumulativeInputTokens,
+            outputTokens: cumulativeOutputTokens,
+            elapsed: Date.now() - executorStartTime
+          }
+        }
+      })
+    }
+
     // Add assistant message to history
     messages.push({ role: 'assistant', content: response.content })
+
+    // Emit AI text blocks as progress events (only when alongside tool calls —
+    // final response text is returned via result.response, not as a progress event)
+    if (response.stopReason === 'tool_use') {
+      const textBlocks = response.content.filter(
+        (b): b is { type: 'text'; text: string } => b.type === 'text'
+      )
+      for (const block of textBlocks) {
+        if (block.text.trim()) {
+          logger?.onProgress?.({
+            type: 'text',
+            message: block.text.length > 120 ? block.text.slice(0, 120) + '...' : block.text,
+            depth: executorDepth,
+            details: { text: block.text }
+          })
+        }
+      }
+    }
 
     // Check if done (no tool use)
     if (response.stopReason !== 'tool_use') {
@@ -380,7 +438,8 @@ export async function executeLoop(
       if (incompleteTasks.length > 0) {
         logger?.onProgress?.({
           type: 'status',
-          message: `${incompleteTasks.length} tasks remaining, continuing...`
+          message: `${incompleteTasks.length} tasks remaining, continuing...`,
+          depth: executorDepth
         })
 
         // Add a reminder to continue working on tasks
@@ -423,7 +482,8 @@ export async function executeLoop(
       if (toolInterruptReason) {
         logger?.onProgress?.({
           type: 'status',
-          message: `Interrupted between tools: ${toolInterruptReason}`
+          message: `Interrupted between tools: ${toolInterruptReason}`,
+          depth: executorDepth
         })
         return buildInterruptedResult(
           toolInterruptReason,
@@ -477,7 +537,8 @@ export async function executeLoop(
         tool,
         toolUse.input,
         toolContext,
-        logger
+        logger,
+        executorDepth
       )
 
       toolCallLogs.push({
@@ -546,7 +607,8 @@ export async function executeLoop(
   // Max iterations reached - return as interrupted instead of throwing
   logger?.onProgress?.({
     type: 'status',
-    message: `Max iterations (${maxIterations}) reached`
+    message: `Max iterations (${maxIterations}) reached`,
+    depth: executorDepth
   })
 
   return buildInterruptedResult(

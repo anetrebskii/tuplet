@@ -163,13 +163,29 @@ export interface LLMProvider {
 }
 
 export interface ProgressUpdate {
-  type: 'thinking' | 'tool_start' | 'tool_end' | 'sub_agent_start' | 'sub_agent_end' | 'status'
+  type:
+    | 'thinking' | 'text' | 'tool_start' | 'tool_end'
+    | 'sub_agent_start' | 'sub_agent_end' | 'status' | 'usage'
   message: string
+  /** Correlation ID for start/end pairs */
+  id?: string
+  /** Nesting depth (0=root, 1=sub-agent, 2=nested sub-agent) */
+  depth?: number
+  /** Parent event ID for tree building */
+  parentId?: string
   details?: {
     toolName?: string
     agentName?: string
     duration?: number
     success?: boolean
+    /** Full AI text for 'text' events */
+    text?: string
+    /** Cumulative stats for 'usage' events */
+    usage?: {
+      inputTokens: number
+      outputTokens: number
+      elapsed?: number
+    }
   }
 }
 

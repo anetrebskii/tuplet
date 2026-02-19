@@ -72,7 +72,8 @@ function buildAgentDescription(agent: SubAgentConfig): string {
  */
 function createSubLogger(
   parentLogger: LogProvider | undefined,
-  agentName: string
+  agentName: string,
+  parentEventId?: string
 ): LogProvider | undefined {
   if (!parentLogger) return undefined;
 
@@ -98,10 +99,12 @@ function createSubLogger(
       parentLogger.onToolResult?.(toolName, result, durationMs);
     },
     onProgress: (update: ProgressUpdate) => {
-      // Prefix sub-agent progress messages
+      // Prefix sub-agent progress messages and propagate depth
       parentLogger.onProgress?.({
         ...update,
         message: `[${agentName}] ${update.message}`,
+        depth: (update.depth ?? 0) + 1,
+        parentId: update.parentId ?? parentEventId,
       });
     },
     onTodoUpdate: (update: TodoUpdate) => {
@@ -112,6 +115,11 @@ function createSubLogger(
       });
     },
   };
+}
+
+let nextSubAgentEventId = 0
+function generateSubAgentEventId(): string {
+  return `sa_${Date.now()}_${nextSubAgentEventId++}`
 }
 
 /**
@@ -243,15 +251,18 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
       );
 
       // Progress: sub-agent starting
+      const subAgentEventId = generateSubAgentEventId()
       context.config.logger?.onProgress?.({
         type: "sub_agent_start",
         message: `Starting ${agentName}...`,
+        id: subAgentEventId,
+        depth: 0,
         details: { agentName },
       });
 
       try {
         // Create a wrapper logger that prefixes sub-agent logs
-        const subLogger = createSubLogger(context.config.logger, agentName);
+        const subLogger = createSubLogger(context.config.logger, agentName, subAgentEventId);
 
         // Use agent-specific LLM/model or fall back to parent's
         const subLlm = agentConfig.llm || context.config.llm;
@@ -336,6 +347,8 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         context.config.logger?.onProgress?.({
           type: "sub_agent_end",
           message: `${agentName} completed`,
+          id: subAgentEventId,
+          depth: 0,
           details: { agentName, success: true },
         });
 
@@ -436,6 +449,8 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         context.config.logger?.onProgress?.({
           type: "sub_agent_end",
           message: `${agentName} failed`,
+          id: subAgentEventId,
+          depth: 0,
           details: { agentName, success: false },
         });
 

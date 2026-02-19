@@ -94,15 +94,34 @@ function displayPendingQuestion(pq: PendingQuestion): void {
 function showProgress(update: ProgressUpdate): void {
   const symbols: Record<ProgressUpdate['type'], string> = {
     thinking: '🤔',
+    text: '💬',
     tool_start: '🔧',
     tool_end: '✅',
     sub_agent_start: '🤖',
     sub_agent_end: '✅',
-    status: 'ℹ️'
+    status: 'ℹ️',
+    usage: '📊'
   }
   const symbol = symbols[update.type] || '•'
+  const depth = update.depth ?? 0
+  const indent = depth > 0 ? '  '.repeat(depth) + '└ ' : ''
 
-  process.stdout.write(`\r\x1b[K${symbol} ${update.message}`)
+  if (update.type === 'text') {
+    // Show AI reasoning text dimmed
+    const text = update.message.replace(/\n/g, ' ')
+    process.stdout.write(`\r\x1b[K${indent}\x1b[2m${symbol} ${text}\x1b[0m\n`)
+    return
+  }
+
+  if (update.type === 'usage') {
+    // Show usage as a compact status line
+    const elapsed = update.details?.usage?.elapsed
+    const elapsedStr = elapsed ? ` (${(elapsed / 1000).toFixed(1)}s)` : ''
+    process.stdout.write(`\r\x1b[K${indent}\x1b[2m${symbol} ${update.message}${elapsedStr}\x1b[0m\n`)
+    return
+  }
+
+  process.stdout.write(`\r\x1b[K${indent}${symbol} ${update.message}`)
 
   if (update.type === 'tool_end' || update.type === 'sub_agent_end') {
     const duration = update.details?.duration ? ` (${update.details.duration}ms)` : ''
