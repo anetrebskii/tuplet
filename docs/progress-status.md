@@ -32,9 +32,10 @@ const agent = new Tuplet({
           hideSpinner()
           break
         case 'usage':
-          // Cumulative token stats after each LLM call
-          const { inputTokens, outputTokens, elapsed } = update.details?.usage ?? {}
+          // Cumulative token stats and cost after each LLM call
+          const { inputTokens, outputTokens, elapsed, callCost, cumulativeCost } = update.details?.usage ?? {}
           console.log(`${indent}Tokens: ${inputTokens} in / ${outputTokens} out (${(elapsed! / 1000).toFixed(1)}s)`)
+          console.log(`${indent}Cost: $${callCost?.toFixed(4)} this call, $${cumulativeCost?.toFixed(4)} total`)
           break
       }
     }
@@ -52,7 +53,7 @@ const agent = new Tuplet({
 | `tool_end` | Tool execution completes | `toolName`, `duration`, `success` |
 | `sub_agent_start` | Sub-agent spawned | `agentName` |
 | `sub_agent_end` | Sub-agent finished | `agentName`, `success` |
-| `usage` | Token stats after LLM call | `usage.inputTokens`, `usage.outputTokens`, `usage.elapsed` |
+| `usage` | Token stats & cost after LLM call | `usage.inputTokens`, `usage.outputTokens`, `usage.elapsed`, `usage.callCost`, `usage.cumulativeCost`, `usage.modelId` |
 | `status` | General status messages | — |
 
 The `message` field always contains a human-readable description (e.g. `"Creating task: 'Fix bug'..."`, `"$ grep -r 'config'"`, `"Delegating to researcher..."`).

@@ -106,12 +106,55 @@ new ConsoleTraceProvider({
 })
 ```
 
+## Real-Time Cost Tracking
+
+Monitor costs as they accumulate during execution — useful for budget enforcement, live dashboards, or aborting expensive runs early.
+
+### Via TraceProvider
+
+Implement the optional `onCostUpdate` callback to receive structured cost data after each LLM call:
+
+```typescript
+import type { TraceProvider, CostUpdate } from 'tuplet'
+
+const traceProvider: TraceProvider = {
+  // ... required callbacks ...
+
+  onCostUpdate(update: CostUpdate) {
+    console.log(`This call: $${update.callCost.toFixed(4)}`)
+    console.log(`Total so far: $${update.cumulativeCost.toFixed(4)}`)
+    console.log(`Model: ${update.modelId}`)
+
+    // Abort if over budget
+    if (update.cumulativeCost > 1.0) {
+      abortController.abort()
+    }
+  }
+}
+```
+
+The `CostUpdate` object contains:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `callCost` | `number` | Cost of this specific LLM call |
+| `cumulativeCost` | `number` | Total cost across all LLM calls so far |
+| `inputTokens` | `number` | Input tokens for this call |
+| `outputTokens` | `number` | Output tokens for this call |
+| `cacheCreationTokens` | `number?` | Cache write tokens (if applicable) |
+| `cacheReadTokens` | `number?` | Cache read tokens (if applicable) |
+| `modelId` | `string` | Model identifier (e.g. `"claude:claude-sonnet-4-20250514"`) |
+
+### Via LogProvider
+
+Cost data is also emitted through `onProgress` events with `type: 'usage'` — see [Progress Status](./progress-status.md).
+
 ## Custom Trace Provider
 
 Implement `TraceProvider` to send traces to a database, observability platform, or any other system:
 
 ```typescript
-import type { TraceProvider, Trace, AgentSpan, LLMCallEvent, ToolCallEvent } from 'tuplet'
+import type { TraceProvider, Trace, AgentSpan, LLMCallEvent, ToolCallEvent, CostUpdate } from 'tuplet'
 
 interface TraceProvider {
   onTraceStart(trace: Trace): void
@@ -120,6 +163,7 @@ interface TraceProvider {
   onAgentEnd(span: AgentSpan, trace: Trace): void
   onLLMCall(event: LLMCallEvent, span: AgentSpan, trace: Trace): void
   onToolCall(event: ToolCallEvent, span: AgentSpan, trace: Trace): void
+  onCostUpdate?(update: CostUpdate): void      // optional — real-time cost tracking
   modelPricing?: Record<string, ModelPricing>
 }
 ```

@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@alexnetrebskii/hive-agent':
-        specifier: file:../..
-        version: file:../..
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
+      tuplet:
+        specifier: file:../..
+        version: file:../..
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -23,10 +23,6 @@ importers:
         version: 5.9.3
 
 packages:
-
-  '@alexnetrebskii/hive-agent@file:../..':
-    resolution: {directory: ../.., type: directory}
-    engines: {node: '>=20.0.0'}
 
   '@anthropic-ai/sdk@0.71.2':
     resolution: {integrity: sha512-TGNDEUuEstk/DKu0/TflXAEt+p+p/WhTlFzEnoosvbaDU2LTjm42igSdlL0VijrKpWejtOKxX0b8A7uc+XiSAQ==}
@@ -55,6 +51,10 @@ packages:
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
+  tuplet@file:../..:
+    resolution: {directory: ../.., type: directory}
+    engines: {node: '>=20.0.0'}
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -64,12 +64,6 @@ packages:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
 snapshots:
-
-  '@alexnetrebskii/hive-agent@file:../..':
-    dependencies:
-      '@anthropic-ai/sdk': 0.71.2
-    transitivePeerDependencies:
-      - zod
 
   '@anthropic-ai/sdk@0.71.2':
     dependencies:
@@ -89,6 +83,12 @@ snapshots:
       ts-algebra: 2.0.0
 
   ts-algebra@2.0.0: {}
+
+  tuplet@file:../..:
+    dependencies:
+      '@anthropic-ai/sdk': 0.71.2
+    transitivePeerDependencies:
+      - zod
 
   typescript@5.9.3: {}
 

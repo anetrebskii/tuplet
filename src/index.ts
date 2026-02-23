@@ -181,6 +181,7 @@ export {
   type ToolCallEvent,
   type TraceContext,
   type ModelPricing,
+  type CostUpdate,
   type ConsoleTraceConfig
 } from './trace.js'
 

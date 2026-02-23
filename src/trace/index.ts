@@ -13,7 +13,8 @@ export type {
   AgentSpan,
   Trace,
   TraceContext,
-  TraceProvider
+  TraceProvider,
+  CostUpdate
 } from './types.js'
 
 export { generateTraceId, generateSpanId } from './types.js'

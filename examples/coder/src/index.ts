@@ -114,10 +114,12 @@ function showProgress(update: ProgressUpdate): void {
   }
 
   if (update.type === 'usage') {
-    // Show usage as a compact status line
-    const elapsed = update.details?.usage?.elapsed
+    // Show usage with real-time cost tracking
+    const usage = update.details?.usage
+    const elapsed = usage?.elapsed
     const elapsedStr = elapsed ? ` (${(elapsed / 1000).toFixed(1)}s)` : ''
-    process.stdout.write(`\r\x1b[K${indent}\x1b[2m${symbol} ${update.message}${elapsedStr}\x1b[0m\n`)
+    const costStr = usage?.cumulativeCost != null ? ` | Cost: $${usage.cumulativeCost.toFixed(4)}` : ''
+    process.stdout.write(`\r\x1b[K${indent}\x1b[2m${symbol} ${update.message}${costStr}${elapsedStr}\x1b[0m\n`)
     return
   }
 

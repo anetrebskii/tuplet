@@ -88,13 +88,23 @@ function displayPendingQuestion(pq: PendingQuestion): void {
 function showProgress(update: ProgressUpdate): void {
   const symbols: Record<ProgressUpdate['type'], string> = {
     thinking: '🤔',
+    text: '💬',
     tool_start: '🔧',
     tool_end: '✅',
     sub_agent_start: '🤖',
     sub_agent_end: '✅',
-    status: 'ℹ️'
+    status: 'ℹ️',
+    usage: '📊'
   }
   const symbol = symbols[update.type] || '•'
+
+  // Show usage as a compact cost line
+  if (update.type === 'usage') {
+    const usage = update.details?.usage
+    const costStr = usage?.cumulativeCost != null ? ` | Cost: $${usage.cumulativeCost.toFixed(4)}` : ''
+    process.stdout.write(`\r\x1b[K\x1b[2m${symbol} ${update.message}${costStr}\x1b[0m\n`)
+    return
+  }
 
   // Clear line and show progress
   process.stdout.write(`\r\x1b[K${symbol} ${update.message}`)

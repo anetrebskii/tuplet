@@ -226,6 +226,16 @@ export class TraceBuilder {
     this.trace.costByModel[modelId].calls += 1
 
     this.provider?.onLLMCall(event, span, this.trace)
+
+    this.provider?.onCostUpdate?.({
+      callCost: cost,
+      cumulativeCost: this.trace.totalCost,
+      inputTokens,
+      outputTokens,
+      cacheCreationTokens: options?.cacheCreationTokens,
+      cacheReadTokens: options?.cacheReadTokens,
+      modelId
+    })
   }
 
   /**
@@ -275,6 +285,13 @@ export class TraceBuilder {
     stripParentRefs(rootSpan)
 
     return this.trace
+  }
+
+  /**
+   * Get cumulative cost across all LLM calls so far
+   */
+  getCumulativeCost(): number {
+    return this.trace.totalCost
   }
 
   /**

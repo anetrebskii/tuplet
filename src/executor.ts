@@ -22,6 +22,7 @@ import type {
 } from './types.js'
 import { ContextManager } from './context-manager.js'
 import { TaskManager } from './tools/tasks.js'
+import { calculateCost } from './trace/pricing.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 
@@ -390,19 +391,32 @@ export async function executeLoop(
     // Collect thinking blocks
     thinkingBlocks.push(...extractThinking(response.content))
 
-    // Emit usage event with cumulative token counts
+    // Emit usage event with cumulative token counts and cost
     if (response.usage) {
       cumulativeInputTokens += response.usage.inputTokens
       cumulativeOutputTokens += response.usage.outputTokens
+
+      const callCost = calculateCost(
+        modelId,
+        response.usage.inputTokens,
+        response.usage.outputTokens,
+        response.cacheUsage?.cacheCreationInputTokens,
+        response.cacheUsage?.cacheReadInputTokens
+      )
+      const cumulativeCost = traceBuilder?.getCumulativeCost() ?? callCost
+
       logger?.onProgress?.({
         type: 'usage',
-        message: `Tokens: ${cumulativeInputTokens} in / ${cumulativeOutputTokens} out`,
+        message: `Tokens: ${cumulativeInputTokens} in / ${cumulativeOutputTokens} out | Cost: $${cumulativeCost.toFixed(4)}`,
         depth: executorDepth,
         details: {
           usage: {
             inputTokens: cumulativeInputTokens,
             outputTokens: cumulativeOutputTokens,
-            elapsed: Date.now() - executorStartTime
+            elapsed: Date.now() - executorStartTime,
+            callCost,
+            cumulativeCost,
+            modelId
           }
         }
       })

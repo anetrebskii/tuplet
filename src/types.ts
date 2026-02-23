@@ -185,6 +185,11 @@ export interface ProgressUpdate {
       inputTokens: number
       outputTokens: number
       elapsed?: number
+      /** Cost of this specific LLM call */
+      callCost?: number
+      /** Cumulative cost across all LLM calls so far */
+      cumulativeCost?: number
+      modelId?: string
     }
   }
 }

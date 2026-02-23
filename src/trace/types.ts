@@ -148,6 +148,21 @@ export interface TraceContext {
 }
 
 /**
+ * Cost update emitted after each LLM call
+ */
+export interface CostUpdate {
+  /** Cost of this specific LLM call */
+  callCost: number
+  /** Cumulative cost across all LLM calls so far */
+  cumulativeCost: number
+  inputTokens: number
+  outputTokens: number
+  cacheCreationTokens?: number
+  cacheReadTokens?: number
+  modelId: string
+}
+
+/**
  * Interface for trace providers
  */
 export interface TraceProvider {
@@ -157,5 +172,7 @@ export interface TraceProvider {
   onAgentEnd(span: AgentSpan, trace: Trace): void
   onLLMCall(event: LLMCallEvent, span: AgentSpan, trace: Trace): void
   onToolCall(event: ToolCallEvent, span: AgentSpan, trace: Trace): void
+  /** Called after each LLM call with per-call and cumulative cost data */
+  onCostUpdate?(update: CostUpdate): void
   modelPricing?: Record<string, ModelPricing>
 }
