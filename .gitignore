@@ -1,3 +1,5 @@
+posts/
+workspace-data/
 dist/
 .env
 node_modules/
