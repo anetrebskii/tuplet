@@ -14,6 +14,13 @@ Claude Code is impressive: you open a terminal, ask it to code something, and it
 
 Tuplet gives you exactly that. A powerful, multi-agent framework you plug into your application. Your users get an AI that feels custom-built. You get a library that handles the hard parts.
 
+## Demo
+
+<!-- VIDEO_PLACEHOLDER: Replace with uploaded video -->
+<!-- Example: https://github.com/user-attachments/assets/xxxxx -->
+
+> See Tuplet in action — AI agent planning tasks, asking clarifying questions, and working with workspace files in a real web app.
+
 ## You Need Tuplet If
 
 - You want your own AI agent in your app that codes, manages documents, or works with any workspace you share with it

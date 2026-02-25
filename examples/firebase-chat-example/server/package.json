@@ -1,0 +1,24 @@
+{
+  "name": "ai-chat-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "tuplet": "file:../../.."
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0"
+  }
+}

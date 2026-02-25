@@ -1,0 +1,18 @@
+{
+  "name": "firebase-chat-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Chat example — Tuplet agent with Firestore + React UI",
+  "scripts": {
+    "setup": "pnpm install && cd server && pnpm install && cd ../client && pnpm install",
+    "dev": "concurrently -n emulator,server,client -c blue,green,cyan \"pnpm dev:emulator\" \"pnpm dev:server\" \"pnpm dev:client\"",
+    "dev:emulator": "firebase emulators:start --only firestore,storage --project ai-chat-demo",
+    "dev:server": "wait-on tcp:127.0.0.1:8080 && cd server && pnpm run dev",
+    "dev:client": "wait-on tcp:127.0.0.1:3000 && cd client && pnpm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "firebase-tools": "^14.5.0",
+    "wait-on": "^8.0.3"
+  }
+}
