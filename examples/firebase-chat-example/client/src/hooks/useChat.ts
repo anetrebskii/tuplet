@@ -17,6 +17,7 @@ export interface UseChatReturn {
   lastTrace: TraceInfo | null
   cumulativeCost: number
   pendingQuestion: PendingQuestion | null
+  workspaceVersion: number
   send: (text: string) => void
   stop: () => void
   newConversation: () => void
@@ -45,6 +46,7 @@ export function useChat(projectId: string): UseChatReturn {
   const [lastTrace, setLastTrace] = useState<TraceInfo | null>(null)
   const [cumulativeCost, setCumulativeCost] = useState(0)
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
+  const [workspaceVersion, setWorkspaceVersion] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
   const streamingRef = useRef('')
 
@@ -166,6 +168,7 @@ export function useChat(projectId: string): UseChatReturn {
                 setPendingQuestion(data.pendingQuestion as PendingQuestion)
               }
 
+              setWorkspaceVersion((v) => v + 1)
               const finalContent = response || contentAcc
               const errorText = (data.error as string) || ''
               if (finalContent || errorText || toolCalls.length > 0 || tasksAcc.length > 0) {
@@ -280,6 +283,7 @@ export function useChat(projectId: string): UseChatReturn {
     lastTrace,
     cumulativeCost,
     pendingQuestion,
+    workspaceVersion,
     send,
     stop,
     newConversation,

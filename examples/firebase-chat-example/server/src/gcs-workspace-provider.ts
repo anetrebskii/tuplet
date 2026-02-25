@@ -50,14 +50,19 @@ export class GCSWorkspaceProvider implements WorkspaceProvider {
   }
 
   async exists(path: string): Promise<boolean> {
+    const clean = path.replace(/^\/+/, '')
+    if (!clean || clean === '.') return true // root always exists
     const [exists] = await this.bucket.file(this.key(path)).exists()
-    return exists
+    if (exists) return true
+    // Could be a directory — check if any files exist with this prefix
+    return this.isDirectory(path)
   }
 
   async list(path: string): Promise<string[]> {
-    const prefix = path === '/' || path === ''
+    const clean = path.replace(/^\/+/, '')
+    const prefix = (!clean || clean === '.')
       ? `${this.prefix}/`
-      : `${this.prefix}/${path.replace(/^\/+/, '').replace(/\/*$/, '/')}`
+      : `${this.prefix}/${clean.replace(/\/*$/, '/')}`
 
     const [files] = await this.bucket.getFiles({ prefix })
     return files
@@ -78,7 +83,9 @@ export class GCSWorkspaceProvider implements WorkspaceProvider {
   }
 
   async isDirectory(path: string): Promise<boolean> {
-    const prefix = `${this.prefix}/${path.replace(/^\/+/, '').replace(/\/*$/, '')}/`
+    const clean = path.replace(/^\/+/, '')
+    if (!clean || clean === '.') return true // root is always a directory
+    const prefix = `${this.prefix}/${clean.replace(/\/*$/, '')}/`
     const [files] = await this.bucket.getFiles({ prefix, maxResults: 1 })
     return files.length > 0
   }

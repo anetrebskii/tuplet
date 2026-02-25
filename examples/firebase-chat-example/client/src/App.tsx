@@ -142,6 +142,7 @@ export default function App() {
                       onCreateFile={handleCreateFile}
                       onRenameFile={handleRenameFile}
                       onUploadFile={handleUploadFile}
+                      refreshKey={chat.workspaceVersion}
                     />
                   </ResizablePanel>
                   <ResizableHandle className="w-px bg-border hover:bg-primary/50 transition-colors" />

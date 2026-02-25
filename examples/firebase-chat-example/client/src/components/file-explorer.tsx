@@ -38,6 +38,7 @@ interface FileExplorerProps {
   onCreateFile?: (path: string) => void
   onRenameFile?: (from: string, to: string) => void
   onUploadFile?: (path: string, content: string) => void
+  refreshKey?: number
 }
 
 interface WorkspaceItem {
@@ -278,6 +279,7 @@ export function FileExplorer({
   onCreateFile,
   onRenameFile,
   onUploadFile,
+  refreshKey,
 }: FileExplorerProps) {
   const [files, setFiles] = useState<FileNode[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -301,7 +303,7 @@ export function FileExplorer({
 
   useEffect(() => {
     loadFiles()
-  }, [loadFiles])
+  }, [loadFiles, refreshKey])
 
   const handleClick = async (path: string) => {
     // Set active folder to the file's parent directory
