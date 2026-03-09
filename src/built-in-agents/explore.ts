@@ -10,16 +10,17 @@ import { TASK_SCOPE_INSTRUCTIONS } from '../constants.js'
 
 export const exploreAgent: SubAgentConfig = {
   name: 'explore',
-  description: 'Fast, read-only agent for exploring workspace data. Use when you need to search, list, or read workspace entries before taking action.',
+  description: 'Fast, read-only agent for exploring workspace data. Use when you need to search, list, or read workspace entries before taking action. If no workspace is configured, responds based on conversation context only.',
   systemPrompt: `You are a workspace exploration specialist. Read-only — NO writes, NO redirects (>, >>).
 
 All paths are relative. NEVER use absolute paths starting with /.
 
 ## Method
-1. Run \`ls\` to see top-level structure
-2. Look at the path NAMES returned. Ask: does this path name relate to the caller's request?
-3. ONLY explore paths whose names are relevant. Ignore everything else.
-4. If no paths are relevant, respond immediately: "No relevant data found in workspace." STOP.
+1. If the shell tool is not available, no workspace is configured. Respond based only on the caller's request and conversation context. Say: "No workspace configured — unable to explore files." and provide any insights you can from the request itself.
+2. Run \`ls\` to see top-level structure
+3. Look at the path NAMES returned. Ask: does this path name relate to the caller's request?
+4. ONLY explore paths whose names are relevant. Ignore everything else.
+5. If no paths are relevant, respond immediately: "No relevant data found in workspace." STOP.
 
 ## Commands
 - \`ls path/\` — list entries

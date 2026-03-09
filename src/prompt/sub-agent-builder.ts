@@ -326,9 +326,9 @@ export class SubAgentBuilder {
     // Workspace discovery section (before workflow)
     if (this.config.useWorkspace) {
       sections.push('')
-      sections.push('## Workspace Discovery (Do This First!)')
+      sections.push('## Workspace Discovery')
       sections.push('')
-      sections.push('⚠️ ALWAYS check workspace BEFORE asking questions or starting work:')
+      sections.push('If the shell tool (__shell__) is available, check workspace BEFORE asking questions or starting work:')
       sections.push('')
       sections.push('1. Use `ls` to see what data exists')
       sections.push('2. Use `cat path/file.json` to read relevant paths')
@@ -337,11 +337,14 @@ export class SubAgentBuilder {
 
       if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {
         sections.push('')
-        sections.push('Check these paths:')
+        sections.push('Check these paths (when workspace is available):')
         for (const path of this.config.workspacePaths) {
           sections.push(`- ${path.path} - ${path.description}`)
         }
       }
+
+      sections.push('')
+      sections.push('If no shell tool is available, skip workspace discovery and proceed directly with the task using only the information provided in the prompt and conversation context.')
     }
 
     // Check if we have question steps with conditions - add input parameters section

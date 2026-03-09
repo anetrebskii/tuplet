@@ -15,7 +15,7 @@ import type {
 import { ContextManager } from "./context-manager.js";
 import { executeLoop } from "./executor.js";
 import { TraceBuilder } from "./trace.js";
-import { Workspace } from "./workspace.js";
+import type { Workspace } from "./workspace.js";
 import { createShellTool } from "./tools/shell.js";
 import {
   createAskUserTool,
@@ -36,7 +36,7 @@ export const PLAN_PATH = ".tuplet/plan.md";
 export { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
 
 /** System prompt prepended in plan mode */
-const PLAN_MODE_INSTRUCTIONS = `# Plan Mode
+const PLAN_MODE_INSTRUCTIONS_WITH_WORKSPACE = `# Plan Mode
 
 You are in **plan mode**. Your job is to understand the current state, then write a plan.
 
@@ -63,6 +63,28 @@ You are in **plan mode**. Your job is to understand the current state, then writ
   ...your plan here...
   EOF
   \`\`\`
+- When your plan is complete, tell the user and summarize it.
+
+`;
+
+const PLAN_MODE_INSTRUCTIONS_NO_WORKSPACE = `# Plan Mode
+
+You are in **plan mode**. Your job is to understand the current state, then write a plan.
+
+## Workflow
+
+1. **Analyze the request** — Use the conversation context and any information the user has provided to understand the current situation.
+2. **Formulate requirements** — Synthesize findings into a structured brief:
+   - Context: current state from conversation
+   - Goal: what the user wants to achieve
+   - Constraints: limitations and dependencies
+   - Success criteria: how to verify completion
+3. **Present the plan** — Summarize your plan directly to the user.
+
+## Rules
+
+- **No workspace available**: There is no shell or workspace. Work only with conversation context.
+- **Allowed tools**: \`explore\` and \`plan\` sub-agents, TaskList, TaskGet, __ask_user__.
 - When your plan is complete, tell the user and summarize it.
 
 `;
@@ -186,7 +208,7 @@ export class Tuplet {
    */
   private getRunTools(
     taskManager: TaskManager,
-    workspace: Workspace,
+    workspace: Workspace | undefined,
     agentName?: string,
     mode?: "plan" | "execute"
   ): Tool[] {
@@ -231,18 +253,26 @@ export class Tuplet {
       planTools.push(createTaskListTool(taskManager, taskToolOptions));
       planTools.push(createTaskGetTool(taskManager, taskToolOptions));
 
-      // Shell (already in read-only mode via setReadOnly)
-      planTools.push(createShellTool(workspace.getShell()));
+      // Shell (only if workspace is available)
+      if (workspace) {
+        planTools.push(createShellTool(workspace.getShell()));
+      }
 
       return planTools;
     }
 
     // Default / execute mode: all tools
-    return [
+    const tools = [
       ...this.tools,
       ...createTaskTools(taskManager, taskToolOptions),
-      createShellTool(workspace.getShell()),
     ];
+
+    // Shell (only if workspace is available)
+    if (workspace) {
+      tools.push(createShellTool(workspace.getShell()));
+    }
+
+    return tools;
   }
 
   /**
@@ -342,32 +372,36 @@ export class Tuplet {
       messages.push({ role: "user", content: message });
     }
 
-    // Ensure workspace always exists (create default if not provided)
-    const ws = workspace ?? new Workspace();
-    await ws.init();
+    // Use provided workspace or leave undefined (workspace is optional)
+    const ws = workspace;
+    if (ws) {
+      await ws.init();
+    }
 
     // Capture existing plan content before cleanup (for prompt injection)
-    const existingPlan = await ws.read<string>(PLAN_PATH);
+    const existingPlan = ws ? await ws.read<string>(PLAN_PATH) : undefined;
     const hasExistingPlan = !!existingPlan && typeof existingPlan === "string";
 
     // Always delete old plan file — each run starts clean.
     // The content is already captured above for prompt injection.
-    if (hasExistingPlan) {
+    if (hasExistingPlan && ws) {
       await ws.delete(PLAN_PATH);
     }
 
     // Set environment provider if provided
-    if (options.env) {
+    if (ws && options.env) {
       ws.setEnvProvider(options.env);
     }
 
     // Configure shell read-only mode based on mode option
-    const shell = ws.getShell();
-    if (mode === "plan") {
-      // Plan mode: read-only shell, only allow writing to the plan file
-      shell.setReadOnly(true, [PLAN_PATH]);
-    } else {
-      shell.setReadOnly(false);
+    if (ws) {
+      const shell = ws.getShell();
+      if (mode === "plan") {
+        // Plan mode: read-only shell, only allow writing to the plan file
+        shell.setReadOnly(true, [PLAN_PATH]);
+      } else {
+        shell.setReadOnly(false);
+      }
     }
 
     // Create task manager for this run.
@@ -377,7 +411,7 @@ export class Tuplet {
     const taskManager = new TaskManager();
     if (isResuming) {
       await taskManager.restoreFromWorkspace(ws);
-    } else {
+    } else if (ws) {
       await ws.delete(".tuplet/tasks.json");
     }
 
@@ -408,7 +442,7 @@ export class Tuplet {
     // Build system prompt based on mode
     let systemPrompt = this.systemPrompt;
     if (mode === "plan") {
-      systemPrompt = PLAN_MODE_INSTRUCTIONS + systemPrompt;
+      systemPrompt = (ws ? PLAN_MODE_INSTRUCTIONS_WITH_WORKSPACE : PLAN_MODE_INSTRUCTIONS_NO_WORKSPACE) + systemPrompt;
     }
 
     // Inject plan content as a user message (not system prompt) to preserve cache

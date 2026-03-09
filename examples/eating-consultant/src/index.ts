@@ -10,6 +10,9 @@ import * as readline from 'readline'
 import { Tuplet, OpenRouterProvider, ConsoleLogger, ConsoleTraceProvider, Workspace, FileWorkspaceProvider, RunRecorder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TaskUpdateNotification } from 'tuplet'
 import { nutritionCounterTools } from './tools.js'
 
+/** Check if workspace mode is enabled via --workspace flag or WORKSPACE env var */
+const useWorkspace = process.argv.includes('--workspace') || process.env.USE_WORKSPACE === '1'
+
 // Helper to get option label (works with both string and QuestionOption)
 function getOptionLabel(opt: string | QuestionOption): string {
   return typeof opt === 'string' ? opt : opt.label
@@ -283,62 +286,66 @@ async function main() {
     maxTokens: 2000
   })
 
-  // Create workspace for agent communication with validation
-  // FileWorkspaceProvider persists workspace data to disk across sessions
-  const workspace = new Workspace({
-    provider: new FileWorkspaceProvider('./workspace-data'),
-    strict: false,  // Allow any path (set to true to restrict to defined paths only)
-    paths: {
-      // Meal plan with schema validation
-      'plan/current.json': {
-        validator: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            goal: { type: 'string' },
-            dailyCalories: { type: 'number' },
-            days: { type: 'array' }
-          },
-          required: ['title', 'days']
-        }
-      },
+  // Create workspace only when --workspace flag is set or USE_WORKSPACE=1
+  // Without workspace, the agent works with tools only (in-memory meal tracking, no file persistence)
+  let workspace: Workspace | undefined
 
-      // Daily totals with initial value
-      'meals/today.json': {
-        validator: {
-          type: 'object',
-          properties: {
-            totalCalories: { type: 'number' },
-            totalProtein: { type: 'number' },
-            totalCarbs: { type: 'number' },
-            totalFat: { type: 'number' },
-            meals: { type: 'array' }
+  if (useWorkspace) {
+    workspace = new Workspace({
+      provider: new FileWorkspaceProvider('./workspace-data'),
+      strict: false,  // Allow any path (set to true to restrict to defined paths only)
+      paths: {
+        // Meal plan with schema validation
+        'plan/current.json': {
+          validator: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              goal: { type: 'string' },
+              dailyCalories: { type: 'number' },
+              days: { type: 'array' }
+            },
+            required: ['title', 'days']
           }
         },
-        value: { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, meals: [] }
-      },
 
-      // User preferences with schema
-      'user/preferences.json': {
-        validator: {
-          type: 'object',
-          properties: {
-            goal: { type: 'string', enum: ['weight_loss', 'muscle_gain', 'maintenance', 'healthy'] },
-            restrictions: { type: 'array' }
+        // Daily totals with initial value
+        'meals/today.json': {
+          validator: {
+            type: 'object',
+            properties: {
+              totalCalories: { type: 'number' },
+              totalProtein: { type: 'number' },
+              totalCarbs: { type: 'number' },
+              totalFat: { type: 'number' },
+              meals: { type: 'array' }
+            }
+          },
+          value: { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, meals: [] }
+        },
+
+        // User preferences with schema
+        'user/preferences.json': {
+          validator: {
+            type: 'object',
+            properties: {
+              goal: { type: 'string', enum: ['weight_loss', 'muscle_gain', 'maintenance', 'healthy'] },
+              restrictions: { type: 'array' }
+            }
           }
-        }
-      },
+        },
 
-      // Notes as markdown (format validation from extension)
-      'notes/advice.md': null,
+        // Notes as markdown (format validation from extension)
+        'notes/advice.md': null,
 
-      // Analysis result as text (format validation from extension)
-      'analysis/summary.txt': null
-    }
-  })
+        // Analysis result as text (format validation from extension)
+        'analysis/summary.txt': null
+      }
+    })
 
-  // Load persisted workspace data from disk
-  await workspace.init()
+    // Load persisted workspace data from disk
+    await workspace.init()
+  }
 
   // Create the main agent with sub-agent and run recorder
   const agent = new Tuplet({
@@ -403,7 +410,8 @@ async function main() {
   console.log('\n' + '='.repeat(60))
   console.log('  Eating Consultant - Powered by OpenFoodFacts')
   console.log('='.repeat(60))
-  console.log('\nCommands: "quit" to exit, "clear" to reset')
+  console.log(`\nWorkspace: ${workspace ? 'enabled (--workspace)' : 'disabled (tools-only mode)'}`)
+  console.log('Commands: "quit" to exit, "clear" to reset')
   console.log('Press ESC to interrupt a running task')
   console.log('')
 
@@ -554,28 +562,30 @@ async function main() {
           }
         }
 
-        // Check if a plan was saved to workspace
-        const plan = await workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
-        if (plan) {
-          console.log('\n📝 Plan saved to workspace:')
-          console.log(`  Title: ${plan.title || 'Meal Plan'}`)
-          if (plan.goal) {
-            console.log(`  Goal: ${plan.goal}`)
+        // Check if a plan was saved to workspace (only when workspace is enabled)
+        if (workspace) {
+          const plan = await workspace.read<{ title?: string; goal?: string; dailyCalories?: number; days?: unknown[] }>('plan/current.json')
+          if (plan) {
+            console.log('\n📝 Plan saved to workspace:')
+            console.log(`  Title: ${plan.title || 'Meal Plan'}`)
+            if (plan.goal) {
+              console.log(`  Goal: ${plan.goal}`)
+            }
+            if (plan.dailyCalories) {
+              console.log(`  Daily calories: ${plan.dailyCalories} kcal`)
+            }
+            if (plan.days && Array.isArray(plan.days)) {
+              console.log(`  Days planned: ${plan.days.length}`)
+            }
           }
-          if (plan.dailyCalories) {
-            console.log(`  Daily calories: ${plan.dailyCalories} kcal`)
-          }
-          if (plan.days && Array.isArray(plan.days)) {
-            console.log(`  Days planned: ${plan.days.length}`)
-          }
-        }
 
-        // Show all workspace entries if any exist
-        const workspaceItems = await workspace.list()
-        if (workspaceItems.length > 0) {
-          console.log('\n📦 Workspace:')
-          for (const item of workspaceItems) {
-            console.log(`  ${item.path}: ${item.preview}`)
+          // Show all workspace entries if any exist
+          const workspaceItems = await workspace.list()
+          if (workspaceItems.length > 0) {
+            console.log('\n📦 Workspace:')
+            for (const item of workspaceItems) {
+              console.log(`  ${item.path}: ${item.preview}`)
+            }
           }
         }
 
