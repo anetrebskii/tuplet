@@ -135,7 +135,12 @@ export class Shell {
   /** Execute a command string (supports sequential commands, pipes, heredocs, comments) */
   async execute(input: string): Promise<ShellResult> {
     try {
-      const parsed = parseCommand(input)
+      const trimmed = input.trim()
+      if (!trimmed) {
+        return { stdout: '', stderr: '', exitCode: 0 }
+      }
+
+      const parsed = parseCommand(trimmed)
 
       if (parsed.length === 0) {
         return { exitCode: 0, stdout: '', stderr: '' }

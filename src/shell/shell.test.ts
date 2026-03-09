@@ -39,6 +39,11 @@ describe('Shell', () => {
       expect(result).toEqual({ exitCode: 0, stdout: '', stderr: '' })
     })
 
+    it('returns empty result for whitespace-only input', async () => {
+      const result = await shell.execute('   \t  \n  ')
+      expect(result).toEqual({ exitCode: 0, stdout: '', stderr: '' })
+    })
+
     it('returns error for unknown commands with list of available ones', async () => {
       const result = await shell.execute('nonexistent arg1')
       expect(result.exitCode).toBe(127)

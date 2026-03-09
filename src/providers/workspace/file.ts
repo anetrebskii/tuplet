@@ -71,6 +71,8 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
   }
 
   async exists(path: string): Promise<boolean> {
+    const clean = path.replace(/^\/+/, '')
+    if (!clean || clean === '.') return true // root always exists
     try {
       await stat(this.toFilePath(path))
       return true
@@ -113,6 +115,8 @@ export class FileWorkspaceProvider implements WorkspaceProvider {
   }
 
   async isDirectory(path: string): Promise<boolean> {
+    const clean = path.replace(/^\/+/, '')
+    if (!clean || clean === '.') return true // root is always a directory
     try {
       const s = await stat(this.toFilePath(path))
       return s.isDirectory()

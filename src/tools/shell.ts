@@ -133,6 +133,10 @@ curl https://api.example.com/users?page=1&limit=10
         }
       }
 
+      if (!command.trim()) {
+        return { success: true, data: { output: '', exitCode: 0 } }
+      }
+
       const result = await shell.execute(command)
 
       if (result.exitCode !== 0) {
