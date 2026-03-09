@@ -140,6 +140,18 @@ curl https://api.example.com/users?page=1&limit=10
       const result = await shell.execute(command)
 
       if (result.exitCode !== 0) {
+        // Exit code 1 with no stderr is typically a "no results" status (e.g. grep no match),
+        // not a real error. Treat it as success so the LLM doesn't retry unnecessarily.
+        if (result.exitCode === 1 && !result.stderr) {
+          return {
+            success: true,
+            data: {
+              output: result.stdout || '(no output)',
+              exitCode: result.exitCode
+            }
+          }
+        }
+
         return {
           success: false,
           error: `\`${command}\` exited with code ${result.exitCode}`,

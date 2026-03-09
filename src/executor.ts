@@ -18,11 +18,18 @@ import type {
   LLMOptions,
   LogProvider,
   AgentResult,
-  PendingQuestion
+  PendingQuestion,
+  ProgressUpdate
 } from './types.js'
 import { ContextManager } from './context-manager.js'
 import { TaskManager } from './tools/tasks.js'
 import { calculateCost } from './trace/pricing.js'
+import {
+  type Activity,
+  describeActivity,
+  classifyTool,
+  classifyShellCommand
+} from './activity.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 
@@ -94,6 +101,22 @@ function generateEventId(): string {
 }
 
 /**
+ * Emit a progress event with activity and label auto-populated.
+ */
+function emitProgress(
+  logger: LogProvider | undefined,
+  update: ProgressUpdate & { activity?: Activity }
+): void {
+  if (!logger?.onProgress) return
+  const enriched: ProgressUpdate = { ...update }
+  if (enriched.activity) {
+    enriched.label = describeActivity(enriched.activity)
+  }
+  logger.onProgress(enriched)
+}
+
+
+/**
  * Execute a single tool
  */
 async function executeTool(
@@ -105,42 +128,49 @@ async function executeTool(
 ): Promise<{ result: ToolResult; durationMs: number }> {
   const startTime = Date.now()
 
-  // Progress: tool starting (with context for specific tools)
+  // Build activity and progress message for tool start
+  let activity: Activity | undefined
   let progressMessage = `Running ${tool.name}...`
-  if (tool.name === 'TaskCreate') {
-    const subject = (params as { subject?: string }).subject
-    progressMessage = subject ? `Creating task: "${subject}"...` : 'Creating task...'
-  } else if (tool.name === 'TaskUpdate') {
-    const status = (params as { status?: string }).status
-    if (status === 'completed') {
-      progressMessage = 'Marking task complete...'
-    } else if (status === 'in_progress') {
-      progressMessage = 'Starting task...'
-    } else if (status === 'deleted') {
-      progressMessage = 'Deleting task...'
-    } else {
-      progressMessage = 'Updating task...'
-    }
-  } else if (tool.name === 'TaskList') {
-    progressMessage = 'Checking tasks...'
-  } else if (tool.name === 'TaskGet') {
-    progressMessage = 'Getting task details...'
-  } else if (tool.name === '__sub_agent__') {
-    const agent = (params as { agent?: string }).agent
-    progressMessage = `Delegating to ${agent}...`
-  } else if (tool.name === '__shell__') {
+
+  if (tool.name === '__shell__') {
     const command = (params as { command?: string }).command
     if (command) {
-      // Show the full command, truncated if too long
+      activity = classifyShellCommand(command)
       const truncated = command.length > 80 ? command.slice(0, 80) + '...' : command
       progressMessage = `$ ${truncated}`
+    }
+  } else {
+    activity = classifyTool(tool.name, params)
+    // Keep backward-compatible messages
+    if (tool.name === 'TaskCreate') {
+      const subject = (params as { subject?: string }).subject
+      progressMessage = subject ? `Creating task: "${subject}"...` : 'Creating task...'
+    } else if (tool.name === 'TaskUpdate') {
+      const status = (params as { status?: string }).status
+      if (status === 'completed') {
+        progressMessage = 'Marking task complete...'
+      } else if (status === 'in_progress') {
+        progressMessage = 'Starting task...'
+      } else if (status === 'deleted') {
+        progressMessage = 'Deleting task...'
+      } else {
+        progressMessage = 'Updating task...'
+      }
+    } else if (tool.name === 'TaskList') {
+      progressMessage = 'Checking tasks...'
+    } else if (tool.name === 'TaskGet') {
+      progressMessage = 'Getting task details...'
+    } else if (tool.name === '__sub_agent__') {
+      const agent = (params as { agent?: string }).agent
+      progressMessage = `Delegating to ${agent}...`
     }
   }
 
   const toolEventId = generateEventId()
-  logger?.onProgress?.({
+  emitProgress(logger, {
     type: 'tool_start',
     message: progressMessage,
+    activity,
     id: toolEventId,
     depth: depth ?? 0,
     details: { toolName: tool.name }
@@ -150,7 +180,8 @@ async function executeTool(
   logger?.debug(`[Tool: ${tool.name}] Executing with params: ${truncateForLog(params)}`)
   logger?.debug(`[Tool: ${tool.name}] Context: conversationId=${context.conversationId}, userId=${context.userId}, remainingTokens=${context.remainingTokens}`)
 
-  logger?.onToolCall?.(tool.name, params)
+  const toolMeta = activity ? { activity, label: describeActivity(activity) } : undefined
+  logger?.onToolCall?.(tool.name, params, toolMeta)
 
   try {
     const result = await tool.execute(params, context)
@@ -189,15 +220,16 @@ async function executeTool(
       }
     }
 
-    logger?.onProgress?.({
+    emitProgress(logger, {
       type: 'tool_end',
       message: completionMessage,
+      activity,
       id: toolEventId,
       depth: depth ?? 0,
       details: { toolName: tool.name, duration: durationMs, success: result.success }
     })
 
-    logger?.onToolResult?.(tool.name, result, durationMs)
+    logger?.onToolResult?.(tool.name, result, durationMs, toolMeta)
 
     return { result, durationMs }
   } catch (error) {
@@ -216,15 +248,16 @@ async function executeTool(
     }
 
     // Progress: tool failed
-    logger?.onProgress?.({
+    emitProgress(logger, {
       type: 'tool_end',
       message: `${tool.name} failed`,
+      activity,
       id: toolEventId,
       depth: depth ?? 0,
       details: { toolName: tool.name, duration: durationMs, success: false }
     })
 
-    logger?.onToolResult?.(tool.name, result, durationMs)
+    logger?.onToolResult?.(tool.name, result, durationMs, toolMeta)
 
     return { result, durationMs }
   }
@@ -316,9 +349,10 @@ export async function executeLoop(
     // Check for interruption at start of each iteration
     const interruptReason = await checkInterruption(signal, shouldContinue)
     if (interruptReason) {
-      logger?.onProgress?.({
+      emitProgress(logger, {
         type: 'status',
         message: `Interrupted: ${interruptReason}`,
+        activity: { type: 'agent:interrupted', reason: interruptReason },
         depth: executorDepth
       })
       return buildInterruptedResult(
@@ -334,9 +368,10 @@ export async function executeLoop(
     logger?.onIteration?.(iteration, messages.length)
 
     // Progress: thinking
-    logger?.onProgress?.({
+    emitProgress(logger, {
       type: 'thinking',
       message: iteration === 0 ? 'Thinking...' : 'Processing...',
+      activity: { type: 'agent:thinking' },
       depth: executorDepth
     })
 
@@ -405,7 +440,7 @@ export async function executeLoop(
       )
       const cumulativeCost = traceBuilder?.getCumulativeCost() ?? callCost
 
-      logger?.onProgress?.({
+      emitProgress(logger, {
         type: 'usage',
         message: `Tokens: ${cumulativeInputTokens} in / ${cumulativeOutputTokens} out | Cost: $${cumulativeCost.toFixed(4)}`,
         depth: executorDepth,
@@ -433,9 +468,10 @@ export async function executeLoop(
       )
       for (const block of textBlocks) {
         if (block.text.trim()) {
-          logger?.onProgress?.({
+          emitProgress(logger, {
             type: 'text',
             message: block.text.length > 120 ? block.text.slice(0, 120) + '...' : block.text,
+            activity: { type: 'agent:responding' },
             depth: executorDepth,
             details: { text: block.text }
           })
@@ -450,7 +486,7 @@ export async function executeLoop(
 
       // If there are incomplete tasks, force the agent to continue working
       if (incompleteTasks.length > 0) {
-        logger?.onProgress?.({
+        emitProgress(logger, {
           type: 'status',
           message: `${incompleteTasks.length} tasks remaining, continuing...`,
           depth: executorDepth
@@ -494,9 +530,10 @@ export async function executeLoop(
       // Check for interruption between tool calls
       const toolInterruptReason = await checkInterruption(signal, shouldContinue)
       if (toolInterruptReason) {
-        logger?.onProgress?.({
+        emitProgress(logger, {
           type: 'status',
           message: `Interrupted between tools: ${toolInterruptReason}`,
+          activity: { type: 'agent:interrupted', reason: toolInterruptReason },
           depth: executorDepth
         })
         return buildInterruptedResult(
@@ -619,9 +656,10 @@ export async function executeLoop(
   }
 
   // Max iterations reached - return as interrupted instead of throwing
-  logger?.onProgress?.({
+  emitProgress(logger, {
     type: 'status',
     message: `Max iterations (${maxIterations}) reached`,
+    activity: { type: 'agent:interrupted', reason: 'max_iterations' },
     depth: executorDepth
   })
 

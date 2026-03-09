@@ -69,6 +69,39 @@ export type {
   EnvironmentInfo
 } from './types.js'
 
+// Activity (semantic progress classification)
+export {
+  describeActivity,
+  extractShellActivity,
+  extractPipelineActivity,
+  classifyTool,
+  classifyShellCommand,
+  type Activity,
+  type ShellHttpRequestActivity,
+  type ShellBrowseActivity,
+  type ShellFileReadActivity,
+  type ShellFileWriteActivity,
+  type ShellFileSearchActivity,
+  type ShellFileManageActivity,
+  type ShellFileInfoActivity,
+  type ShellDataTransformActivity,
+  type ShellSystemActivity,
+  type ShellOtherActivity,
+  type ToolReadFileActivity,
+  type ToolEditFileActivity,
+  type ToolWriteFileActivity,
+  type ToolSearchFilesActivity,
+  type ToolSearchContentActivity,
+  type ToolWebFetchActivity,
+  type ToolWebSearchActivity,
+  type ToolSubAgentActivity,
+  type ToolTaskManageActivity,
+  type ToolOtherActivity,
+  type AgentThinkingActivity,
+  type AgentRespondingActivity,
+  type AgentInterruptedActivity
+} from './activity.js'
+
 // Providers
 export {
   ClaudeProvider,

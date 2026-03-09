@@ -167,6 +167,10 @@ export interface ProgressUpdate {
     | 'thinking' | 'text' | 'tool_start' | 'tool_end'
     | 'sub_agent_start' | 'sub_agent_end' | 'status' | 'usage'
   message: string
+  /** Typed semantic activity classification */
+  activity?: import('./activity.js').Activity
+  /** User-friendly label auto-populated from activity */
+  label?: string
   /** Correlation ID for start/end pairs */
   id?: string
   /** Nesting depth (0=root, 1=sub-agent, 2=nested sub-agent) */
@@ -200,8 +204,8 @@ export interface LogProvider {
   warn(message: string, data?: unknown): void
   error(message: string, data?: unknown): void
 
-  onToolCall?(toolName: string, params: unknown): void
-  onToolResult?(toolName: string, result: ToolResult, durationMs: number): void
+  onToolCall?(toolName: string, params: unknown, meta?: { activity?: import('./activity.js').Activity; label?: string }): void
+  onToolResult?(toolName: string, result: ToolResult, durationMs: number, meta?: { activity?: import('./activity.js').Activity; label?: string }): void
   onIteration?(iteration: number, messageCount: number): void
   onComplete?(result: AgentResult): void
 

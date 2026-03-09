@@ -182,7 +182,14 @@ export const curlCommand: CommandHandler = {
         stderr: ''
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      let message: string
+      if (error instanceof Error) {
+        // Node.js fetch wraps real errors in .cause (e.g. "fetch failed" with cause: ENOTFOUND)
+        const cause = (error as Error & { cause?: Error }).cause
+        message = cause?.message || error.message || 'unknown error'
+      } else {
+        message = String(error) || 'unknown error'
+      }
       return { exitCode: 1, stdout: '', stderr: `curl: ${message}` }
     }
   }

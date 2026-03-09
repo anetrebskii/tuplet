@@ -127,6 +127,7 @@ export function useChat(projectId: string): UseChatReturn {
               toolCalls.push({
                 id: data.id as string,
                 toolName: data.toolName as string,
+                label: data.label as string | undefined,
                 input: data.input,
                 status: 'running',
               })

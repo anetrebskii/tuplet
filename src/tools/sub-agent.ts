@@ -18,6 +18,23 @@ import type {
 } from "../types.js";
 import { TraceBuilder } from "../trace.js";
 import { OUTPUT_TOOL_NAME, createOutputTool } from "./output.js";
+import { describeActivity } from "../activity.js";
+import type { Activity } from "../activity.js";
+
+/**
+ * Emit a progress event with activity and label auto-populated.
+ */
+function emitProgressWithActivity(
+  logger: LogProvider | undefined,
+  update: ProgressUpdate & { activity?: Activity }
+): void {
+  if (!logger?.onProgress) return
+  const enriched: ProgressUpdate = { ...update }
+  if (enriched.activity) {
+    enriched.label = describeActivity(enriched.activity)
+  }
+  logger.onProgress(enriched)
+}
 
 /**
  * Interface for the parent Tuplet context needed by task tool
@@ -252,9 +269,11 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
 
       // Progress: sub-agent starting
       const subAgentEventId = generateSubAgentEventId()
-      context.config.logger?.onProgress?.({
+      const subAgentActivity: Activity = { type: 'tool:sub_agent', agentName }
+      emitProgressWithActivity(context.config.logger, {
         type: "sub_agent_start",
         message: `Starting ${agentName}...`,
+        activity: subAgentActivity,
         id: subAgentEventId,
         depth: 0,
         details: { agentName },
@@ -344,9 +363,10 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         }
 
         // Progress: sub-agent completed
-        context.config.logger?.onProgress?.({
+        emitProgressWithActivity(context.config.logger, {
           type: "sub_agent_end",
           message: `${agentName} completed`,
+          activity: subAgentActivity,
           id: subAgentEventId,
           depth: 0,
           details: { agentName, success: true },
@@ -446,9 +466,10 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
         );
 
         // Progress: sub-agent failed
-        context.config.logger?.onProgress?.({
+        emitProgressWithActivity(context.config.logger, {
           type: "sub_agent_end",
           message: `${agentName} failed`,
+          activity: subAgentActivity,
           id: subAgentEventId,
           depth: 0,
           details: { agentName, success: false },

@@ -9,6 +9,8 @@ export interface ChatMessage {
 export interface ToolCallEntry {
   id: string
   toolName: string
+  /** User-friendly label from activity classification */
+  label?: string
   input?: unknown
   output?: unknown
   durationMs?: number

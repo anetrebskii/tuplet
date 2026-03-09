@@ -123,7 +123,9 @@ function showProgress(update: ProgressUpdate): void {
     return
   }
 
-  process.stdout.write(`\r\x1b[K${indent}${symbol} ${update.message}`)
+  // Prefer label for user-friendly text, fall back to raw message
+  const displayText = update.label ?? update.message
+  process.stdout.write(`\r\x1b[K${indent}${symbol} ${displayText}`)
 
   if (update.type === 'tool_end' || update.type === 'sub_agent_end') {
     const duration = update.details?.duration ? ` (${update.details.duration}ms)` : ''

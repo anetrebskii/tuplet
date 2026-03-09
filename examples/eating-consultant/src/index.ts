@@ -109,8 +109,9 @@ function showProgress(update: ProgressUpdate): void {
     return
   }
 
-  // Clear line and show progress
-  process.stdout.write(`\r\x1b[K${symbol} ${update.message}`)
+  // Clear line and show progress (prefer label for user-friendly text)
+  const displayText = update.label ?? update.message
+  process.stdout.write(`\r\x1b[K${symbol} ${displayText}`)
 
   // If it's an end event, add newline
   if (update.type === 'tool_end' || update.type === 'sub_agent_end') {

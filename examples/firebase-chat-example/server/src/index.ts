@@ -106,17 +106,20 @@ function createSSELogger(res: express.Response): LogProvider {
       sseWrite(res, 'progress', {
         type: update.type,
         message: update.message,
+        label: update.label,
+        activity: update.activity,
         id: update.id,
         depth: update.depth,
         details: update.details,
       })
     },
 
-    onToolCall(toolName: string, params: unknown) {
+    onToolCall(toolName: string, params: unknown, meta?: { label?: string }) {
       toolCounter++
       sseWrite(res, 'tool_start', {
         id: `tc_${toolCounter}`,
         toolName,
+        label: meta?.label,
         input: params,
       })
     },

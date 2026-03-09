@@ -14,6 +14,7 @@ function ToolCallList({ tools }: { tools: ToolCallEntry[] }) {
         <ToolCallDisplay
           key={entry.id}
           toolName={entry.toolName}
+          label={entry.label}
           args={entry.input as Record<string, unknown> || {}}
           state={entry.status === 'running' ? 'input-available' : entry.status === 'completed' ? 'output-available' : 'output-error'}
           output={entry.output ?? entry.error}

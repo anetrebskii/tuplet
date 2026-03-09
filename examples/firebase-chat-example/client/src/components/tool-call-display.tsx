@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils"
 
 interface ToolCallProps {
   toolName: string
+  /** User-friendly label from activity classification */
+  label?: string
   args: Record<string, unknown>
   state: string
   output?: unknown
@@ -32,6 +34,13 @@ const toolIcons: Record<string, React.ReactNode> = {
   read: <FileSearch className="h-4 w-4" />,
   write: <FilePen className="h-4 w-4" />,
   list: <FolderSearch className="h-4 w-4" />,
+  // Tuplet built-in tools
+  __shell__: <Terminal className="h-4 w-4" />,
+  __sub_agent__: <Search className="h-4 w-4" />,
+  TaskCreate: <FileText className="h-4 w-4" />,
+  TaskUpdate: <FilePen className="h-4 w-4" />,
+  TaskList: <FolderSearch className="h-4 w-4" />,
+  TaskGet: <FileSearch className="h-4 w-4" />,
 }
 
 const toolLabels: Record<string, string> = {
@@ -45,6 +54,13 @@ const toolLabels: Record<string, string> = {
   read: "Read",
   write: "Write",
   list: "List",
+  // Tuplet built-in tools
+  __shell__: "Shell",
+  __sub_agent__: "Sub-Agent",
+  TaskCreate: "Create Task",
+  TaskUpdate: "Update Task",
+  TaskList: "List Tasks",
+  TaskGet: "Get Task",
 }
 
 function getToolDescription(toolName: string, args: Record<string, unknown>): string {
@@ -70,14 +86,17 @@ function getToolDescription(toolName: string, args: Record<string, unknown>): st
   }
 }
 
-export function ToolCallDisplay({ toolName, args, state, output }: ToolCallProps) {
+export function ToolCallDisplay({ toolName, label: activityLabel, args, state, output }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const isLoading = state === "input-streaming" || state === "input-available" || state === "running"
   const isComplete = state === "output-available" || state === "completed"
   const isError = state === "output-error" || state === "failed"
 
   const icon = toolIcons[toolName] || <Terminal className="h-4 w-4" />
-  const label = toolLabels[toolName] || toolName
+
+  // When activity label is available, use it as the primary display
+  const displayLabel = activityLabel || toolLabels[toolName] || toolName
+  const description = activityLabel ? undefined : getToolDescription(toolName, args)
 
   return (
     <div className="my-2 rounded-lg border border-tool-border bg-tool-bg overflow-hidden">
@@ -88,10 +107,12 @@ export function ToolCallDisplay({ toolName, args, state, output }: ToolCallProps
         <span className="flex items-center gap-2 text-primary">
           {icon}
         </span>
-        <span className="font-medium text-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground truncate flex-1 text-left font-mono">
-          {getToolDescription(toolName, args)}
-        </span>
+        <span className="font-medium text-foreground">{displayLabel}</span>
+        {description && (
+          <span className="text-xs text-muted-foreground truncate flex-1 text-left font-mono">
+            {description}
+          </span>
+        )}
         <span className="flex items-center gap-1.5 ml-auto shrink-0">
           {isLoading && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />}
           {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
