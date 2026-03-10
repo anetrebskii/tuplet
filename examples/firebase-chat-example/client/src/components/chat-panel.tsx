@@ -11,6 +11,7 @@ interface ChatPanelProps {
   streamingContent: string
   liveActivity: ToolCallEntry[]
   liveTasks: TaskItem[]
+  liveStatus: string
   lastTrace: TraceInfo | null
   cumulativeCost: number
   conversationId: string
@@ -89,6 +90,7 @@ export function ChatPanel({
   streamingContent,
   liveActivity,
   liveTasks,
+  liveStatus,
   lastTrace,
   cumulativeCost,
   conversationId,
@@ -120,13 +122,14 @@ export function ChatPanel({
                 <ChatMessage key={idx} message={message} />
               ))}
               {loading && !streamingContent && liveActivity.length === 0 && (
-                <ThinkingIndicator />
+                <ThinkingIndicator status={liveStatus} />
               )}
               {loading && (streamingContent || liveActivity.length > 0 || liveTasks.length > 0) && (
                 <StreamingMessage
                   content={streamingContent}
                   activity={liveActivity}
                   tasks={liveTasks}
+                  status={liveStatus}
                 />
               )}
               {pendingQuestion && (

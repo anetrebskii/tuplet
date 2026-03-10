@@ -86,7 +86,7 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
   )
 }
 
-export function ThinkingIndicator() {
+export function ThinkingIndicator({ status }: { status?: string }) {
   return (
     <div className="flex gap-3 py-4">
       <div className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center mt-0.5 bg-primary/15 text-primary">
@@ -102,14 +102,17 @@ export function ThinkingIndicator() {
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
           </div>
-          <span>Thinking...</span>
+          <span>{status || "Thinking..."}</span>
         </div>
       </div>
     </div>
   )
 }
 
-export function StreamingMessage({ content, activity, tasks }: { content: string; activity?: ToolCallEntry[]; tasks?: ChatMessageType['tasks'] }) {
+export function StreamingMessage({ content, activity, tasks, status }: { content: string; activity?: ToolCallEntry[]; tasks?: ChatMessageType['tasks']; status?: string }) {
+  // Show status when there's no content yet or between tool calls
+  const showStatus = status && !content
+
   return (
     <div className="flex gap-3 py-4">
       <div className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center mt-0.5 bg-primary/15 text-primary">
@@ -126,6 +129,13 @@ export function StreamingMessage({ content, activity, tasks }: { content: string
 
         {tasks && tasks.length > 0 && (
           <TaskPlan tasks={tasks} defaultExpanded />
+        )}
+
+        {showStatus && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+            <Bot className="h-3.5 w-3.5" />
+            <span>{status}</span>
+          </div>
         )}
 
         {content && (

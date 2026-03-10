@@ -13,6 +13,7 @@ export interface UseChatReturn {
   streamingContent: string
   liveActivity: ToolCallEntry[]
   liveTasks: TaskItem[]
+  liveStatus: string
   conversationId: string
   lastTrace: TraceInfo | null
   cumulativeCost: number
@@ -47,6 +48,7 @@ export function useChat(projectId: string): UseChatReturn {
   const [cumulativeCost, setCumulativeCost] = useState(0)
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
   const [workspaceVersion, setWorkspaceVersion] = useState(0)
+  const [liveStatus, setLiveStatus] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const streamingRef = useRef('')
 
@@ -90,6 +92,7 @@ export function useChat(projectId: string): UseChatReturn {
       setStreamingContent('')
       setLiveActivity([])
       setLiveTasks([])
+      setLiveStatus('')
       setPendingQuestion(null)
       streamingRef.current = ''
 
@@ -122,6 +125,14 @@ export function useChat(projectId: string): UseChatReturn {
               streamingRef.current = contentAcc
               setStreamingContent(contentAcc)
               break
+
+            case 'progress': {
+              const label = data.label as string | undefined
+              if (label) {
+                setLiveStatus(label)
+              }
+              break
+            }
 
             case 'tool_start':
               toolCalls.push({
@@ -233,6 +244,7 @@ export function useChat(projectId: string): UseChatReturn {
         setStreamingContent('')
         setLiveActivity([])
         setLiveTasks([])
+        setLiveStatus('')
         streamingRef.current = ''
         abortRef.current = null
       }
@@ -261,6 +273,7 @@ export function useChat(projectId: string): UseChatReturn {
     setStreamingContent('')
     setLiveActivity([])
     setLiveTasks([])
+    setLiveStatus('')
     setLastTrace(null)
     setCumulativeCost(0)
     setPendingQuestion(null)
@@ -280,6 +293,7 @@ export function useChat(projectId: string): UseChatReturn {
     streamingContent,
     liveActivity,
     liveTasks,
+    liveStatus,
     conversationId,
     lastTrace,
     cumulativeCost,

@@ -117,6 +117,7 @@ export default function App() {
                 streamingContent={chat.streamingContent}
                 liveActivity={chat.liveActivity}
                 liveTasks={chat.liveTasks}
+                liveStatus={chat.liveStatus}
                 lastTrace={chat.lastTrace}
                 cumulativeCost={chat.cumulativeCost}
                 conversationId={chat.conversationId}
