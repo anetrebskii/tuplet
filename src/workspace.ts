@@ -69,6 +69,8 @@ export interface PathConfig {
   value?: unknown
   /** Description shown to AI */
   description?: string
+  /** Treat the key as a regex pattern (anchored with ^...$) for dynamic path matching in strict mode */
+  pattern?: boolean
 }
 
 export interface WorkspaceConfig {
@@ -111,7 +113,13 @@ export interface WorkspaceConfig {
    *     },
    *
    *     // Just initial value, format validation from extension
-   *     "today/meals.json": { value: [] }
+   *     "today/meals.json": { value: [] },
+   *
+   *     // Regex pattern: allow any date-named JSON file under meals/
+   *     "meals/\\d{4}-\\d{2}-\\d{2}\\.json": { pattern: true },
+   *
+   *     // Pattern with validator
+   *     "notes/.+\\.md": { pattern: true, validator: { type: 'string' } }
    *   }
    * })
    * ```
@@ -160,6 +168,7 @@ export class Workspace {
   private shell: Shell
   private validators: Map<string, ValidatorEntry> = new Map()
   private definedPaths: Set<string> = new Set()
+  private pathPatterns: Map<string, RegExp> = new Map()
   private strict: boolean = false
   private initialized: boolean = false
   private unsubscribe: (() => void) | undefined
@@ -252,17 +261,20 @@ export class Workspace {
   }
 
   /**
-   * Check if a path is defined (registered)
+   * Check if a path is defined (registered via paths or matching a pattern)
    */
   isDefined(path: string): boolean {
-    return this.definedPaths.has(path)
+    if (this.definedPaths.has(path)) return true
+    return this.matchPattern(path) !== null
   }
 
   /**
-   * Get all defined paths
+   * Get all defined paths and patterns
    */
   getDefinedPaths(): string[] {
-    return Array.from(this.definedPaths).sort()
+    const paths = Array.from(this.definedPaths)
+    const patterns = Array.from(this.pathPatterns.keys()).map(p => `/${p}/`)
+    return [...paths, ...patterns].sort()
   }
 
   /**
@@ -272,12 +284,19 @@ export class Workspace {
     path: string,
     config: JSONSchema | ValidatorFn | ZodLike | PathConfig | null
   ): void {
-    // Always track this as a defined path
-    this.definedPaths.add(path)
-
     // Handle PathConfig (with value and/or validator)
-    if (config && typeof config === 'object' && ('value' in config || 'validator' in config || 'description' in config)) {
+    if (config && typeof config === 'object' && ('value' in config || 'validator' in config || 'description' in config || 'pattern' in config)) {
       const pc = config as PathConfig
+
+      // Route to pattern registration if flagged
+      if (pc.pattern) {
+        this.registerPattern(path, config)
+        return
+      }
+
+      // Always track this as a defined path
+      this.definedPaths.add(path)
+
       // Register validator if present
       if (pc.validator !== undefined) {
         this.setValidator(path, pc.validator, pc.description)
@@ -289,8 +308,44 @@ export class Workspace {
       return
     }
 
+    // Always track this as a defined path
+    this.definedPaths.add(path)
+
     // Handle direct validator (JSONSchema, ValidatorFn, ZodLike, null)
     this.setValidator(path, config as JSONSchema | ValidatorFn | ZodLike | null)
+  }
+
+  /**
+   * Register a pattern (regex) for dynamic path matching in strict mode.
+   * The pattern string is anchored automatically (^pattern$).
+   */
+  registerPattern(
+    pattern: string,
+    config: JSONSchema | ValidatorFn | ZodLike | PathConfig | null
+  ): void {
+    this.pathPatterns.set(pattern, new RegExp(`^${pattern}$`))
+
+    // Register validator under the pattern key
+    if (config && typeof config === 'object' && ('value' in config || 'validator' in config || 'description' in config)) {
+      const pc = config as PathConfig
+      if (pc.validator !== undefined) {
+        this.setValidator(pattern, pc.validator, pc.description)
+      }
+      return
+    }
+
+    this.setValidator(pattern, config as JSONSchema | ValidatorFn | ZodLike | null)
+  }
+
+  /**
+   * Find the first pattern that matches the given path.
+   * Returns the pattern key or null.
+   */
+  private matchPattern(path: string): string | null {
+    for (const [key, regex] of this.pathPatterns) {
+      if (regex.test(path)) return key
+    }
+    return null
   }
 
   /**
@@ -348,19 +403,24 @@ export class Workspace {
    * @returns WriteResult with success status and any validation errors
    */
   write(path: string, value: unknown, _writtenBy?: string): WriteResult {
-    // Strict mode: only allow writing to defined paths
+    // Strict mode: only allow writing to defined paths or pattern-matched paths
+    let matchedPattern: string | null = null
     if (this.strict && !this.definedPaths.has(path)) {
-      return {
-        success: false,
-        errors: [{
-          path,
-          message: `Path "${path}" is not defined. Available paths: ${this.getDefinedPaths().join(', ') || 'none'}`
-        }]
+      matchedPattern = this.matchPattern(path)
+      if (!matchedPattern) {
+        return {
+          success: false,
+          errors: [{
+            path,
+            message: `Path "${path}" is not defined. Available paths: ${this.getDefinedPaths().join(', ') || 'none'}`
+          }]
+        }
       }
     }
 
     const { ext } = this.parsePathExt(path)
-    const validator = this.validators.get(path)
+    // Use the pattern's validator if the path matched a pattern
+    const validator = this.validators.get(path) ?? (matchedPattern ? this.validators.get(matchedPattern) : undefined)
     let errors: ValidationError[] = []
 
     // Step 1: Format validation (from extension)

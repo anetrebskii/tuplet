@@ -16,7 +16,7 @@ const workspace = new Workspace({
   provider: new FileWorkspaceProvider('./workspace-data'),
 
   // Optional: restrict writes to defined paths only (default: false)
-  strict: false,
+  strict: true,
 
   // Define paths with validation
   paths: {
@@ -32,7 +32,10 @@ const workspace = new Workspace({
         required: ['title', 'days']
       },
       description: 'Weekly meal plan'     // shown to AI in system prompt
-    }
+    },
+
+    // Regex pattern: allow any date-named file under meals/
+    'meals/\\d{4}-\\d{2}-\\d{2}\\.json': { pattern: true }
   }
 })
 
@@ -104,6 +107,59 @@ const workspace = new Workspace({
     }
   }
 })
+```
+
+## Strict Mode
+
+When `strict: true`, agents can only write to paths defined in `paths`. Any write to an undefined path fails with a validation error listing available paths.
+
+```typescript
+const workspace = new Workspace({
+  strict: true,
+  paths: {
+    'config.json': null,
+    'output/result.json': { validator: { type: 'object' } }
+  }
+})
+
+// ✓ Allowed
+workspace.write('config.json', { theme: 'dark' })
+
+// ✗ Fails — path not defined
+workspace.write('unknown/file.json', {})
+```
+
+### Patterns
+
+For dynamic paths that follow a naming convention, use `pattern: true` to treat the key as a regex. The pattern is auto-anchored with `^...$`.
+
+```typescript
+const workspace = new Workspace({
+  strict: true,
+  paths: {
+    // Exact paths
+    'preferences.json': null,
+
+    // Allow any date-named JSON file under meals/
+    'meals/\\d{4}-\\d{2}-\\d{2}\\.json': { pattern: true },
+
+    // Allow any .md file under notes/ — with validator
+    'notes/.+\\.md': { pattern: true, validator: { type: 'string' } }
+  }
+})
+
+// ✓ Matches pattern
+workspace.write('meals/2026-03-29.json', { breakfast: 'oatmeal' })
+workspace.write('notes/shopping.md', '# Shopping list')
+
+// ✗ Fails — no matching path or pattern
+workspace.write('meals/invalid.json', {})
+```
+
+Patterns can also be registered at runtime:
+
+```typescript
+workspace.registerPattern('logs/.+\\.json', null)
 ```
 
 ## Reading Data
