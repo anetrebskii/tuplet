@@ -43,7 +43,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 
 ### Built-in Capabilities
 
-- **Workspace** — Like projects in Claude Code. Tuplet works with workspace files (virtual or real) the same way Claude Code works with your project
+- **Workspace** — Like projects in Claude Code. Tuplet works with workspace files (virtual or real) the same way Claude Code works with your project. Strict mode restricts AI to defined paths with schema validation — all writes (including shell redirections) are validated automatically
 - **Large file processing** — AI reads files >256KB in chunks, just like Claude Code does
 - **Web browsing** — Navigate websites, extract data, interact with pages
 - **API requests with authentication** — Make HTTP requests to external services

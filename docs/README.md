@@ -86,9 +86,10 @@ const researcher: SubAgentConfig = {
   llm: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' })
 }
 
-// Workspace with validation
+// Workspace with strict mode and validation
 const workspace = new Workspace({
   provider: new FileWorkspaceProvider('./workspace-data'),
+  strict: true, // AI can only write to defined paths
   paths: {
     'user/preferences.json': { value: { allergies: [], goal: 'healthy eating' } },
     'plan/meals.json': {
