@@ -33,6 +33,7 @@ import { Shell } from './shell/shell.js'
 import type { ShellConfig } from './shell/types.js'
 import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
 import { MemoryWorkspaceProvider } from './providers/workspace/memory.js'
+import { spill } from './spill.js'
 
 export interface WorkspaceEntry {
   value: unknown
@@ -56,6 +57,25 @@ export type ValidatorFn = (value: unknown) => ValidationError[] | null
 /** Zod-like schema interface (duck typing to avoid hard dependency) */
 export interface ZodLike {
   safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { errors: Array<{ path: (string | number)[]; message: string }> } }
+}
+
+/** Internal Zod structure for schema extraction (duck-typed, no hard dependency) */
+interface ZodInternals {
+  _def?: {
+    typeName?: string
+    description?: string
+    checks?: unknown[]
+    type?: unknown        // ZodArray inner type
+    innerType?: unknown   // ZodOptional/ZodNullable/ZodDefault inner
+    shape?: unknown       // ZodObject shape (may be function or object)
+    values?: string[]     // ZodEnum values
+    value?: unknown       // ZodLiteral value
+    options?: unknown[]   // ZodUnion options
+    minLength?: { value: number }
+    maxLength?: { value: number }
+  }
+  description?: string
+  shape?: Record<string, ZodInternals>
 }
 
 
@@ -263,15 +283,12 @@ export class Workspace {
             return msg
           }).join('\n')
 
-          // Include schema hint so AI can fix the issue
+          // Include validator hint so AI can fix the issue
           const validator = this.validators.get(wsPath)
             ?? (this.matchPattern(wsPath) ? this.validators.get(this.matchPattern(wsPath)!) : undefined)
-          let schemaHint = ''
-          if (validator?.schema) {
-            schemaHint = `\nExpected schema: ${JSON.stringify(validator.schema, null, 2)}`
-          }
+          const hint = this.formatValidatorHint(validator, wsPath)
 
-          throw new Error(`Validation failed for '${wsPath}':\n${errors}${schemaHint}`)
+          throw new Error(`Validation failed for '${wsPath}':\n${errors}${hint ? `\n${hint.trim()}` : ''}`)
         }
       },
       delete: async (path: string) => {
@@ -381,8 +398,9 @@ export class Workspace {
       const v = this.validators.get(path)
       const desc = v?.description ?? ''
       lines.push(`- \`${path}\`${desc ? ` - ${desc}` : ''}`)
-      if (this.strict && v?.schema) {
-        lines.push(`  Schema: \`${JSON.stringify(v.schema)}\``)
+      if (this.strict) {
+        const hint = this.formatValidatorHint(v, path)
+        if (hint) lines.push(hint)
       }
     }
 
@@ -390,8 +408,9 @@ export class Workspace {
       const v = this.validators.get(pattern)
       const desc = v?.description ?? ''
       lines.push(`- \`/${pattern}/\` (pattern)${desc ? ` - ${desc}` : ''}`)
-      if (this.strict && v?.schema) {
-        lines.push(`  Schema: \`${JSON.stringify(v.schema)}\``)
+      if (this.strict) {
+        const hint = this.formatValidatorHint(v, pattern)
+        if (hint) lines.push(hint)
       }
     }
 
@@ -504,6 +523,140 @@ export class Workspace {
       this.validators.set(path, { type: 'zod', zod: validator, description })
     } else if ('type' in validator) {
       this.validators.set(path, { type: 'schema', schema: validator as JSONSchema, description })
+    }
+  }
+
+  /** Max characters for inline schema in the prompt */
+  private static readonly MAX_INLINE_SCHEMA_LENGTH = 500
+
+  /**
+   * Format a validator entry as a prompt hint line.
+   * Small schemas are shown inline. Large schemas are spilled to .tuplet/tmp/ and referenced.
+   */
+  private formatValidatorHint(v: ValidatorEntry | undefined, path?: string): string {
+    if (!v) return ''
+
+    let schemaObj: Record<string, unknown> | null = null
+    if (v.schema) {
+      schemaObj = v.schema as unknown as Record<string, unknown>
+    } else if (v.zod) {
+      schemaObj = Workspace.extractZodSchema(v.zod)
+    }
+
+    if (schemaObj) {
+      const full = JSON.stringify(schemaObj)
+      if (full.length <= Workspace.MAX_INLINE_SCHEMA_LENGTH) {
+        return `  Schema: \`${full}\``
+      }
+      // Too large — spill to .tuplet/tmp/ and reference
+      const name = `schema-${(path ?? 'unknown').replace(/\//g, '-')}.json`
+      spill(this.internalProvider, name, JSON.stringify(schemaObj, null, 2)).catch(() => {})
+      return `  Schema: too large for inline display. Run \`cat .tuplet/tmp/${name}\` to see the full schema.`
+    }
+
+    if (v.zod) {
+      return `  Validator: Zod schema${v.description ? ` — ${v.description}` : ''}`
+    }
+    if (v.validate) {
+      return `  Validator: custom function${v.description ? ` — ${v.description}` : ''}`
+    }
+    return ''
+  }
+
+  /**
+   * Extract a JSON-like schema description from a Zod-like object by inspecting _def internals.
+   * Returns null if the structure is unrecognizable.
+   */
+  private static extractZodSchema(zod: ZodLike): Record<string, unknown> | null {
+    return Workspace.extractZodType(zod as ZodInternals)
+  }
+
+  private static extractZodType(z: ZodInternals): Record<string, unknown> | null {
+    const def = z?._def
+    if (!def?.typeName) return null
+
+    const desc = z.description ?? def.description
+    const base = (obj: Record<string, unknown>) => desc ? { ...obj, description: desc } : obj
+
+    switch (def.typeName) {
+      case 'ZodString': {
+        const result: Record<string, unknown> = { type: 'string' }
+        if (def.checks) {
+          for (const check of def.checks as Array<{ kind: string; value?: unknown }>) {
+            if (check.kind === 'min') result.minLength = check.value
+            else if (check.kind === 'max') result.maxLength = check.value
+            else if (check.kind === 'email') result.format = 'email'
+            else if (check.kind === 'url') result.format = 'url'
+            else if (check.kind === 'uuid') result.format = 'uuid'
+          }
+        }
+        return base(result)
+      }
+      case 'ZodNumber': {
+        const result: Record<string, unknown> = { type: 'number' }
+        if (def.checks) {
+          for (const check of def.checks as Array<{ kind: string; value?: unknown }>) {
+            if (check.kind === 'min') result.minimum = check.value
+            else if (check.kind === 'max') result.maximum = check.value
+            else if (check.kind === 'int') result.type = 'integer'
+          }
+        }
+        return base(result)
+      }
+      case 'ZodBoolean':
+        return base({ type: 'boolean' })
+      case 'ZodArray': {
+        const items = def.type ? Workspace.extractZodType(def.type as ZodInternals) : undefined
+        const result: Record<string, unknown> = { type: 'array' }
+        if (items) result.items = items
+        if (def.minLength?.value != null) result.minItems = def.minLength.value
+        if (def.maxLength?.value != null) result.maxItems = def.maxLength.value
+        return base(result)
+      }
+      case 'ZodObject': {
+        const rawShape = (z as { shape?: Record<string, ZodInternals> }).shape
+          ?? (typeof def.shape === 'function' ? (def.shape as () => Record<string, ZodInternals>)() : undefined)
+        const result: Record<string, unknown> = { type: 'object' }
+        if (rawShape) {
+          const properties: Record<string, unknown> = {}
+          const required: string[] = []
+          for (const [key, fieldSchema] of Object.entries(rawShape) as [string, ZodInternals][]) {
+            const extracted = Workspace.extractZodType(fieldSchema)
+            if (extracted) properties[key] = extracted
+            // If the field is NOT optional/nullable, it's required
+            if (fieldSchema._def?.typeName !== 'ZodOptional' && fieldSchema._def?.typeName !== 'ZodNullable') {
+              required.push(key)
+            }
+          }
+          if (Object.keys(properties).length > 0) result.properties = properties
+          if (required.length > 0) result.required = required
+        }
+        return base(result)
+      }
+      case 'ZodEnum':
+        return base({ type: 'string', enum: def.values })
+      case 'ZodOptional': {
+        const inner = def.innerType ? Workspace.extractZodType(def.innerType as ZodInternals) : null
+        return inner ?? null
+      }
+      case 'ZodNullable': {
+        const inner = def.innerType ? Workspace.extractZodType(def.innerType as ZodInternals) : null
+        if (inner) return { ...inner, nullable: true }
+        return null
+      }
+      case 'ZodDefault': {
+        const inner = def.innerType ? Workspace.extractZodType(def.innerType as ZodInternals) : null
+        return inner ?? null
+      }
+      case 'ZodLiteral':
+        return base({ const: def.value })
+      case 'ZodUnion': {
+        const options = (def.options as ZodInternals[])?.map(o => Workspace.extractZodType(o)).filter(Boolean)
+        if (options?.length) return base({ oneOf: options })
+        return null
+      }
+      default:
+        return null
     }
   }
 
