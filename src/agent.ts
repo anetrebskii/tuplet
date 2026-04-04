@@ -293,7 +293,7 @@ export class Tuplet {
     // Default / execute mode: all tools
     const tools = [
       ...this.tools,
-      ...createTaskTools(taskManager, taskToolOptions),
+      ...(this.config.disableTaskTools ? [] : createTaskTools(taskManager, taskToolOptions)),
     ];
 
     // Shell (only if workspace is available)

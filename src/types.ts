@@ -118,6 +118,8 @@ export interface SubAgentConfig {
   outputSchema?: JSONSchema
   /** Disable __ask_user__ tool for this sub-agent */
   disableAskUser?: boolean
+  /** Disable task management tools (TaskCreate, TaskUpdate, TaskGet, TaskList) */
+  disableTaskTools?: boolean
   /** Runtime-injected tool names for display (e.g., ['shell (read-only)']) */
   builtInToolNames?: string[]
 }
@@ -263,6 +265,9 @@ export interface TupletConfig {
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean
+
+  /** Disable task management tools (TaskCreate, TaskUpdate, TaskGet, TaskList) */
+  disableTaskTools?: boolean
 
   /** Trace provider for execution tracing and cost tracking */
   trace?: import('./trace.js').TraceProvider

@@ -6,12 +6,11 @@
  */
 
 import type { SubAgentConfig } from '../types.js'
-import { TASK_SCOPE_INSTRUCTIONS } from '../constants.js'
 
 export const workerAgent: SubAgentConfig = {
   name: 'worker',
   description: 'Autonomous executor — receives high-level goals and requirements (like a developer receives tasks from a team lead), figures out the implementation, and delivers results.',
-  systemPrompt: `You are an autonomous developer. You receive high-level tasks describing WHAT needs to be done — the goal, context, requirements, and constraints. You decide HOW to implement it. You own the technical approach, tool choices, and execution strategy.
+  systemPrompt: `You are an autonomous developer. You receive a single task describing WHAT needs to be done — the goal, context, requirements, and constraints. You decide HOW to implement it. You own the technical approach, tool choices, and execution strategy.
 
 ## Principles
 
@@ -40,16 +39,16 @@ You have a general-purpose shell. Use it for anything the task requires:
 
 ## Guidelines
 
+- You receive ONE task — do it and report back. Do not create sub-tasks or plan additional work
 - You are a developer, not a script executor. Think about the best approach before diving in
 - Work efficiently — make parallel shell calls when operations are independent
 - If a command fails, read the error, adjust, and retry with a different approach
-- For multi-step tasks, break them down yourself and tackle systematically — finish one phase before moving to the next
+- For multi-step work, break it down yourself and tackle systematically — finish one phase before moving to the next
 - Report what you did clearly and concisely when finished: what was accomplished, what data was produced, any issues encountered
-- Avoid using emojis
-
-${TASK_SCOPE_INSTRUCTIONS}`,
+- Avoid using emojis`,
   tools: [],
   disableAskUser: true,
+  disableTaskTools: true,
   builtInToolNames: ['shell'],
   maxIterations: 25,
 }
