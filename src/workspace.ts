@@ -190,13 +190,86 @@ export class Workspace {
     this.provider = config?.provider ?? new MemoryWorkspaceProvider()
     this.shell = new Shell({
       ...config?.shell,
-      fs: this.provider
+      fs: this.createProxyProvider()
     })
 
     if (config?.paths) {
       for (const [key, value] of Object.entries(config.paths)) {
         this.registerPath(key, value)
       }
+    }
+  }
+
+  /**
+   * Create a proxy WorkspaceProvider that routes writes through Workspace.write()
+   * (template method: validate → delegate to provider).
+   * All other operations delegate directly to the underlying provider.
+   */
+  private createProxyProvider(): WorkspaceProvider {
+    return {
+      read: (path: string) => this.provider.read(path),
+      write: async (path: string, content: string) => {
+        // Strip leading / for Workspace.write() (it adds it back internally)
+        const wsPath = path.startsWith('/') ? path.slice(1) : path
+
+        // Parse content into typed value based on extension
+        let value: unknown = content
+        if (wsPath.endsWith('.json')) {
+          try {
+            value = JSON.parse(content)
+          } catch {
+            // Keep as string — format validation will report the error
+          }
+        } else if (wsPath.endsWith('.num')) {
+          const n = Number(content.trim())
+          if (!isNaN(n)) value = n
+        } else if (wsPath.endsWith('.bool')) {
+          const t = content.trim().toLowerCase()
+          if (t === 'true') value = true
+          else if (t === 'false') value = false
+        }
+
+        const result = this.write(wsPath, value)
+        if (!result.success) {
+          const errors = result.errors?.map(e => {
+            let msg = `${e.path}: ${e.message}`
+            if (e.expected) msg += ` (expected: ${e.expected})`
+            if (e.received) msg += ` (got: ${e.received})`
+            return msg
+          }).join('\n')
+
+          // Include schema hint so AI can fix the issue
+          const validator = this.validators.get(wsPath)
+            ?? (this.matchPattern(wsPath) ? this.validators.get(this.matchPattern(wsPath)!) : undefined)
+          let schemaHint = ''
+          if (validator?.schema) {
+            schemaHint = `\nExpected schema: ${JSON.stringify(validator.schema, null, 2)}`
+          }
+
+          throw new Error(`Validation failed for '${wsPath}':\n${errors}${schemaHint}`)
+        }
+      },
+      delete: async (path: string) => {
+        if (this.strict) {
+          const wsPath = path.startsWith('/') ? path.slice(1) : path
+          throw new Error(`Strict mode: cannot delete '${wsPath}'. Defined paths: ${this.getDefinedPaths().join(', ') || 'none'}`)
+        }
+        return this.provider.delete(path)
+      },
+      exists: (path: string) => this.provider.exists(path),
+      list: (path: string) => this.provider.list(path),
+      glob: (pattern: string) => this.provider.glob(pattern),
+      mkdir: async (path: string) => {
+        if (this.strict) {
+          const wsPath = path.startsWith('/') ? path.slice(1) : path
+          throw new Error(`Strict mode: cannot create directory '${wsPath}'. Defined paths: ${this.getDefinedPaths().join(', ') || 'none'}`)
+        }
+        return this.provider.mkdir(path)
+      },
+      isDirectory: (path: string) => this.provider.isDirectory(path),
+      size: this.provider.size
+        ? (path: string) => this.provider.size!(path)
+        : undefined,
     }
   }
 
