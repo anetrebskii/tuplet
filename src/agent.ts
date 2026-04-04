@@ -451,6 +451,14 @@ export class Tuplet {
       messages.splice(1, 0, { role: "assistant", content: "I'll follow this plan." });
     }
 
+    // Inject workspace prompt section (paths, strict mode, schemas)
+    if (ws) {
+      const wsSection = ws.getPromptSection();
+      if (wsSection) {
+        systemPrompt += `\n\n${wsSection}`;
+      }
+    }
+
     // Inject task scope + built-in tool guidance into system prompt
     systemPrompt += `\n\n${TASK_SCOPE_INSTRUCTIONS}
 

@@ -139,6 +139,9 @@ export interface WriteResult {
   errors?: ValidationError[]
 }
 
+/** Internal path prefix — always writable, bypasses strict mode */
+const INTERNAL_PREFIX = '.tuplet/'
+
 /** Supported format extensions */
 type FormatExt = 'json' | 'md' | 'txt' | 'num' | 'bool'
 type SchemaExt = 'schema' | 'zod' | 'validate'
@@ -157,6 +160,12 @@ export interface WorkspaceConfigExt extends WorkspaceConfig {
   shell?: ShellConfig
   /** Async persistence provider */
   provider?: WorkspaceProvider
+  /**
+   * Persist .tuplet/ internal files through the workspace provider.
+   * - false (default): .tuplet/ files are kept in memory only (not sent to custom providers)
+   * - true: .tuplet/ files are written to the workspace provider (e.g., Firebase, S3)
+   */
+  persistInternal?: boolean
 }
 
 /**
@@ -165,6 +174,8 @@ export interface WorkspaceConfigExt extends WorkspaceConfig {
  */
 export class Workspace {
   private provider: WorkspaceProvider
+  /** Provider for .tuplet/ internal files (memory by default, or main provider if persistInternal) */
+  private internalProvider: WorkspaceProvider
   private shell: Shell
   private validators: Map<string, ValidatorEntry> = new Map()
   private definedPaths: Set<string> = new Set()
@@ -188,6 +199,9 @@ export class Workspace {
   constructor(config?: WorkspaceConfigExt) {
     this.strict = config?.strict ?? false
     this.provider = config?.provider ?? new MemoryWorkspaceProvider()
+    this.internalProvider = config?.persistInternal
+      ? this.provider
+      : new MemoryWorkspaceProvider()
     this.shell = new Shell({
       ...config?.shell,
       fs: this.createProxyProvider()
@@ -200,17 +214,28 @@ export class Workspace {
     }
   }
 
+  /** Resolve provider by path: .tuplet/ → internalProvider, everything else → provider */
+  private resolveProvider(path: string): WorkspaceProvider {
+    const wsPath = path.startsWith('/') ? path.slice(1) : path
+    return wsPath.startsWith(INTERNAL_PREFIX) ? this.internalProvider : this.provider
+  }
+
   /**
    * Create a proxy WorkspaceProvider that routes writes through Workspace.write()
    * (template method: validate → delegate to provider).
-   * All other operations delegate directly to the underlying provider.
+   * .tuplet/ paths are routed to internalProvider (memory by default).
    */
   private createProxyProvider(): WorkspaceProvider {
     return {
-      read: (path: string) => this.provider.read(path),
+      read: (path: string) => this.resolveProvider(path).read(path),
       write: async (path: string, content: string) => {
         // Strip leading / for Workspace.write() (it adds it back internally)
         const wsPath = path.startsWith('/') ? path.slice(1) : path
+
+        // .tuplet/ is internal — write directly, skip validation
+        if (wsPath.startsWith(INTERNAL_PREFIX)) {
+          return this.internalProvider.write(path, content)
+        }
 
         // Parse content into typed value based on extension
         let value: unknown = content
@@ -250,26 +275,27 @@ export class Workspace {
         }
       },
       delete: async (path: string) => {
-        if (this.strict) {
-          const wsPath = path.startsWith('/') ? path.slice(1) : path
-          throw new Error(`Strict mode: cannot delete '${wsPath}'. Defined paths: ${this.getDefinedPaths().join(', ') || 'none'}`)
+        const wsPath = path.startsWith('/') ? path.slice(1) : path
+        if (this.strict && !wsPath.startsWith(INTERNAL_PREFIX) && this.isDefined(wsPath)) {
+          throw new Error(`Strict mode: cannot delete defined path '${wsPath}'`)
         }
-        return this.provider.delete(path)
+        return this.resolveProvider(path).delete(path)
       },
-      exists: (path: string) => this.provider.exists(path),
-      list: (path: string) => this.provider.list(path),
-      glob: (pattern: string) => this.provider.glob(pattern),
+      exists: (path: string) => this.resolveProvider(path).exists(path),
+      list: (path: string) => this.resolveProvider(path).list(path),
+      glob: (pattern: string) => this.resolveProvider(pattern).glob(pattern),
       mkdir: async (path: string) => {
-        if (this.strict) {
-          const wsPath = path.startsWith('/') ? path.slice(1) : path
+        const wsPath = path.startsWith('/') ? path.slice(1) : path
+        if (this.strict && !wsPath.startsWith(INTERNAL_PREFIX)) {
           throw new Error(`Strict mode: cannot create directory '${wsPath}'. Defined paths: ${this.getDefinedPaths().join(', ') || 'none'}`)
         }
-        return this.provider.mkdir(path)
+        return this.resolveProvider(path).mkdir(path)
       },
-      isDirectory: (path: string) => this.provider.isDirectory(path),
-      size: this.provider.size
-        ? (path: string) => this.provider.size!(path)
-        : undefined,
+      isDirectory: (path: string) => this.resolveProvider(path).isDirectory(path),
+      size: (path: string) => {
+        const p = this.resolveProvider(path)
+        return p.size ? p.size(path) : Promise.resolve(null)
+      },
     }
   }
 
@@ -331,6 +357,45 @@ export class Workspace {
    */
   isStrict(): boolean {
     return this.strict
+  }
+
+  /**
+   * Generate a prompt section describing workspace paths and constraints.
+   * In strict mode, includes warnings and schemas. Returns empty string if no paths are defined.
+   */
+  getPromptSection(): string {
+    const definedPaths = Array.from(this.definedPaths)
+    const patternKeys = Array.from(this.pathPatterns.keys())
+    if (definedPaths.length === 0 && patternKeys.length === 0) return ''
+
+    const lines = ['## Workspace Storage', '']
+
+    if (this.strict) {
+      lines.push('**Strict mode is enabled.** You can ONLY read and write to the paths listed below.')
+      lines.push('Writing to unlisted paths, creating new directories, or deleting defined files will fail.')
+      lines.push('Before writing, check the expected schema for each path below.')
+      lines.push('')
+    }
+
+    for (const path of definedPaths) {
+      const v = this.validators.get(path)
+      const desc = v?.description ?? ''
+      lines.push(`- \`${path}\`${desc ? ` - ${desc}` : ''}`)
+      if (this.strict && v?.schema) {
+        lines.push(`  Schema: \`${JSON.stringify(v.schema)}\``)
+      }
+    }
+
+    for (const pattern of patternKeys) {
+      const v = this.validators.get(pattern)
+      const desc = v?.description ?? ''
+      lines.push(`- \`/${pattern}/\` (pattern)${desc ? ` - ${desc}` : ''}`)
+      if (this.strict && v?.schema) {
+        lines.push(`  Schema: \`${JSON.stringify(v.schema)}\``)
+      }
+    }
+
+    return lines.join('\n')
   }
 
   /**
@@ -476,6 +541,14 @@ export class Workspace {
    * @returns WriteResult with success status and any validation errors
    */
   write(path: string, value: unknown, _writtenBy?: string): WriteResult {
+    // .tuplet/ is internal — always allowed, skip validation
+    if (path.startsWith(INTERNAL_PREFIX)) {
+      const fsPath = path.startsWith('/') ? path : `/${path}`
+      const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+      this.internalProvider.write(fsPath, content).catch(() => {})
+      return { success: true }
+    }
+
     // Strict mode: only allow writing to defined paths or pattern-matched paths
     let matchedPattern: string | null = null
     if (this.strict && !this.definedPaths.has(path)) {
@@ -758,7 +831,7 @@ export class Workspace {
    */
   async read<T = unknown>(path: string): Promise<T | undefined> {
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    const content = await this.provider.read(fsPath)
+    const content = await this.resolveProvider(path).read(fsPath)
     if (content === null) return undefined
 
     try {
@@ -773,15 +846,19 @@ export class Workspace {
    */
   async has(path: string): Promise<boolean> {
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    return this.provider.exists(fsPath)
+    return this.resolveProvider(path).exists(fsPath)
   }
 
   /**
-   * Delete a path from the workspace
+   * Delete a path from the workspace.
+   * In strict mode, defined paths cannot be deleted (.tuplet/ is always allowed).
    */
   async delete(path: string): Promise<boolean> {
+    if (this.strict && !path.startsWith(INTERNAL_PREFIX) && this.isDefined(path)) {
+      return false
+    }
     const fsPath = path.startsWith('/') ? path : `/${path}`
-    return this.provider.delete(fsPath)
+    return this.resolveProvider(path).delete(fsPath)
   }
 
   /**

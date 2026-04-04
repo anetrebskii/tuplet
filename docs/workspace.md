@@ -56,7 +56,7 @@ await workspace.dispose()
 
 ## Validation
 
-Files are validated by extension automatically:
+All writes — including shell redirections (`echo '{}' > file.json`, `sed -i`, etc.) — are validated automatically. Files are validated by extension:
 
 | Extension | Validates |
 |-----------|-----------|
@@ -65,6 +65,8 @@ Files are validated by extension automatically:
 | `.txt` | String |
 | `.num` | Number |
 | `.bool` | Boolean |
+
+When validation fails through the shell, the AI sees the error in stderr along with the expected schema (if defined), so it can fix its output.
 
 For stricter validation, pass a `validator` — JSON Schema, Zod schema, or a custom function:
 
@@ -111,7 +113,9 @@ const workspace = new Workspace({
 
 ## Strict Mode
 
-When `strict: true`, agents can only write to paths defined in `paths`. Any write to an undefined path fails with a validation error listing available paths.
+When `strict: true`, agents can only write to paths defined in `paths`. Any write to an undefined path fails with a validation error listing available paths. Defined paths are also **protected from deletion** — they cannot be removed by the agent. Creating new directories is blocked as well.
+
+The `.tuplet/` directory is **exempt from strict mode** — it is used internally by the framework for plan storage, task management, and temporary files. Reads, writes, deletes, and directory creation under `.tuplet/` always succeed regardless of strict mode.
 
 ```typescript
 const workspace = new Workspace({
@@ -122,12 +126,44 @@ const workspace = new Workspace({
   }
 })
 
-// ✓ Allowed
+// ✓ Allowed — defined path
 workspace.write('config.json', { theme: 'dark' })
 
 // ✗ Fails — path not defined
 workspace.write('unknown/file.json', {})
+
+// ✗ Fails — cannot delete a defined path
+// shell: rm config.json
+
+// ✗ Fails — cannot create directories in strict mode
+// shell: mkdir newdir
+
+// ✓ Always allowed — .tuplet/ is internal
+// shell: cat << 'EOF' > .tuplet/plan.md
 ```
+
+### Strict Mode Prompt
+
+Use `MainAgentBuilder.setWorkspaceStrict()` to tell the AI about strict mode constraints and show schemas in the system prompt:
+
+```typescript
+import { MainAgentBuilder } from 'tuplet'
+
+const builder = new MainAgentBuilder()
+  .role('a meal planning assistant')
+  .setWorkspaceStrict()
+  .addWorkspacePath('plan/current.json', 'Weekly meal plan', {
+    type: 'object',
+    properties: { title: { type: 'string' }, days: { type: 'array' } },
+    required: ['title', 'days']
+  })
+  .addWorkspacePath('meals/today.json', 'Daily nutrition totals')
+```
+
+This generates a prompt section that tells the AI:
+- Strict mode is enabled — only listed paths are writable
+- Writing to unlisted paths, creating directories, or deleting files will fail
+- The expected schema for each path (when provided)
 
 ### Patterns
 
@@ -160,6 +196,29 @@ Patterns can also be registered at runtime:
 
 ```typescript
 workspace.registerPattern('logs/.+\\.json', null)
+```
+
+## Internal Files (.tuplet/)
+
+The `.tuplet/` directory stores framework internals:
+
+| Path | Purpose |
+|------|---------|
+| `.tuplet/plan.md` | Agent's current plan |
+| `.tuplet/tasks.json` | Task management state |
+| `.tuplet/tmp/*` | Temporary files (e.g., large output spill) |
+
+By default, `.tuplet/` files are kept **in memory only** — they are not sent to custom workspace providers. This prevents internal framework data from polluting your storage backend.
+
+To persist `.tuplet/` files through the provider (e.g., for debugging or cross-session plan recovery), set `persistInternal: true`:
+
+```typescript
+const workspace = new Workspace({
+  provider: new FirebaseWorkspaceProvider(...),
+  persistInternal: true,  // .tuplet/ files go to Firebase too
+  strict: true,
+  paths: { ... }
+})
 ```
 
 ## Reading Data
