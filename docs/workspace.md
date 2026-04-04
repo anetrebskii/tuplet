@@ -142,28 +142,14 @@ workspace.write('unknown/file.json', {})
 // shell: cat << 'EOF' > .tuplet/plan.md
 ```
 
-### Strict Mode Prompt
+When strict mode is enabled, the framework **automatically** injects a prompt section into the AI's system prompt at run time. This section:
 
-Use `MainAgentBuilder.setWorkspaceStrict()` to tell the AI about strict mode constraints and show schemas in the system prompt:
+- Tells the AI that strict mode is enabled and only listed paths are writable
+- Lists all defined paths with their descriptions
+- Shows the expected JSON schema for each path (when a validator is defined)
+- Warns that writing to unlisted paths, creating directories, or deleting defined files will fail
 
-```typescript
-import { MainAgentBuilder } from 'tuplet'
-
-const builder = new MainAgentBuilder()
-  .role('a meal planning assistant')
-  .setWorkspaceStrict()
-  .addWorkspacePath('plan/current.json', 'Weekly meal plan', {
-    type: 'object',
-    properties: { title: { type: 'string' }, days: { type: 'array' } },
-    required: ['title', 'days']
-  })
-  .addWorkspacePath('meals/today.json', 'Daily nutrition totals')
-```
-
-This generates a prompt section that tells the AI:
-- Strict mode is enabled — only listed paths are writable
-- Writing to unlisted paths, creating directories, or deleting files will fail
-- The expected schema for each path (when provided)
+No manual prompt configuration is needed — just set `strict: true` and define your paths.
 
 ### Patterns
 
