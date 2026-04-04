@@ -546,7 +546,20 @@ export async function executeLoop(
         )
       }
 
-      // Handle ask_user tool specially
+      // Find the tool — reject hallucinated tool calls early
+      const tool = tools.find(t => t.name === toolUse.name)
+
+      if (!tool) {
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: JSON.stringify({ success: false, error: `Unknown tool: ${toolUse.name}` }),
+          is_error: true
+        })
+        continue
+      }
+
+      // Handle ask_user tool specially — pause execution and return to caller
       if (toolUse.name === ASK_USER_TOOL_NAME) {
         const input = toolUse.input as {
           questions?: import('./types.js').EnhancedQuestion[]
@@ -569,19 +582,6 @@ export async function executeLoop(
           pendingQuestion,
           status: 'needs_input'
         }
-      }
-
-      // Find and execute the tool
-      const tool = tools.find(t => t.name === toolUse.name)
-
-      if (!tool) {
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: JSON.stringify({ success: false, error: `Unknown tool: ${toolUse.name}` }),
-          is_error: true
-        })
-        continue
       }
 
       const { result, durationMs } = await executeTool(
