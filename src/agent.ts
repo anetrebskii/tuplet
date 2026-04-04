@@ -90,6 +90,35 @@ You are in **plan mode**. Your job is to understand the current state, then writ
 `;
 
 /** User message injected at start of execute mode when a plan exists */
+/**
+ * Format tool descriptions for injection into system prompt.
+ * Ensures models that don't fully support native tool definitions
+ * still see available tools and their schemas.
+ */
+function formatToolsPromptSection(tools: Tool[]): string {
+  if (tools.length === 0) return "";
+
+  const lines = ["\n\n## Available Tools\n"];
+  lines.push("You MUST use these tools by calling them — never pretend to use a tool or fabricate results.\n");
+
+  for (const tool of tools) {
+    lines.push(`### \`${tool.name}\``);
+    // Include first line of description only to keep prompt compact
+    if (tool.description) {
+      const firstLine = tool.description.split("\n")[0].trim();
+      lines.push(firstLine);
+    }
+    if (tool.parameters) {
+      lines.push("```json");
+      lines.push(JSON.stringify(tool.parameters, null, 2));
+      lines.push("```");
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
 function planContextMessage(planContent: string): string {
   return `The following plan was created during the planning phase. Use it as guidance for your implementation. Follow the plan steps and mark tasks as completed as you finish them.
 
@@ -466,6 +495,10 @@ export class Tuplet {
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
 
 
+    // Build tools list and inject their descriptions into system prompt
+    const runTools = this.getRunTools(taskManager, ws, this.config.agentName, mode);
+    systemPrompt += formatToolsPromptSection(runTools);
+
     // Execute the agent loop — wrapped in try/finally to guarantee history is saved
     // on any outcome: complete, interrupted, error, or unexpected crash.
     let result: AgentResult;
@@ -473,7 +506,7 @@ When you need information the user hasn't provided and you cannot find it via ot
       result = await executeLoop(
         {
           systemPrompt,
-          tools: this.getRunTools(taskManager, ws, this.config.agentName, mode),
+          tools: runTools,
           llm: this.config.llm,
           logger: this.config.logger,
           maxIterations: this.config.maxIterations!,
