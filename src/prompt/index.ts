@@ -9,6 +9,7 @@ export type {
   SubAgentDef,
   ToolDef,
   WorkspacePathDef,
+  WorkspaceStorageOptions,
   TaskExample,
   WorkflowStep,
   OutputFormat,

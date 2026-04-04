@@ -8,6 +8,7 @@ import type {
   SubAgentDef,
   ToolDef,
   WorkspacePathDef,
+  WorkspaceStorageOptions,
   TaskExample,
   WorkflowStep,
   OutputFormat,
@@ -137,13 +138,31 @@ export function directToolsSection(tools: ToolDef[]): string {
 /**
  * Generate workspace storage section
  */
-export function workspaceStorageSection(paths: WorkspacePathDef[]): string {
+export function workspaceStorageSection(paths: WorkspacePathDef[]): string
+export function workspaceStorageSection(options: WorkspaceStorageOptions): string
+export function workspaceStorageSection(arg: WorkspacePathDef[] | WorkspaceStorageOptions): string {
+  const { paths, strict } = Array.isArray(arg)
+    ? { paths: arg, strict: false }
+    : arg
+
   if (paths.length === 0) return ''
 
   const lines = ['## Workspace Storage', '']
-  for (const path of paths) {
-    lines.push(`- ${path.path} - ${path.description}`)
+
+  if (strict) {
+    lines.push('**Strict mode is enabled.** You can ONLY read and write to the paths listed below.')
+    lines.push('Writing to unlisted paths, creating new directories, or deleting files will fail.')
+    lines.push('Before writing, check the expected schema for each path below.')
+    lines.push('')
   }
+
+  for (const path of paths) {
+    lines.push(`- \`${path.path}\` - ${path.description}`)
+    if (strict && path.schema) {
+      lines.push(`  Schema: \`${JSON.stringify(path.schema)}\``)
+    }
+  }
+
   return lines.join('\n')
 }
 

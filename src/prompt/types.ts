@@ -31,6 +31,16 @@ export interface ToolDef {
 export interface WorkspacePathDef {
   path: string
   description: string
+  /** JSON Schema for this path (shown to AI in strict mode) */
+  schema?: Record<string, unknown>
+}
+
+/**
+ * Workspace storage section options
+ */
+export interface WorkspaceStorageOptions {
+  paths: WorkspacePathDef[]
+  strict?: boolean
 }
 
 /**
@@ -81,6 +91,8 @@ export interface MainAgentPromptConfig {
   }
   directTools?: ToolDef[]
   workspacePaths?: WorkspacePathDef[]
+  /** When true, workspace is in strict mode — prompt tells AI to check schemas before writing */
+  workspaceStrict?: boolean
   rules?: string[]
   examples?: TaskExample[]
   customSections?: Array<{

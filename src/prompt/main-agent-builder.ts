@@ -117,8 +117,8 @@ export class MainAgentBuilder {
   /**
    * Add a workspace path definition
    */
-  addWorkspacePath(path: string, description: string): this {
-    this.config.workspacePaths!.push({ path, description })
+  addWorkspacePath(path: string, description: string, schema?: Record<string, unknown>): this {
+    this.config.workspacePaths!.push({ path, description, schema })
     return this
   }
 
@@ -127,6 +127,15 @@ export class MainAgentBuilder {
    */
   addWorkspacePaths(paths: WorkspacePathDef[]): this {
     this.config.workspacePaths!.push(...paths)
+    return this
+  }
+
+  /**
+   * Enable strict workspace mode in the prompt.
+   * Tells AI that only defined paths are allowed and shows schemas.
+   */
+  setWorkspaceStrict(strict = true): this {
+    this.config.workspaceStrict = strict
     return this
   }
 
@@ -288,7 +297,10 @@ export class MainAgentBuilder {
     // Workspace storage
     if (this.config.workspacePaths && this.config.workspacePaths.length > 0) {
       sections.push('')
-      sections.push(workspaceStorageSection(this.config.workspacePaths))
+      sections.push(workspaceStorageSection({
+        paths: this.config.workspacePaths,
+        strict: this.config.workspaceStrict
+      }))
     }
 
     // Task examples

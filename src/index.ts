@@ -172,6 +172,7 @@ export {
   type SubAgentDef,
   type ToolDef,
   type WorkspacePathDef,
+  type WorkspaceStorageOptions,
   type TaskExample,
   type WorkflowStep,
   type OutputFormat,
