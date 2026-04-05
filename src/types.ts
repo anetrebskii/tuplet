@@ -269,6 +269,16 @@ export interface TupletConfig {
   /** Disable task management tools (TaskCreate, TaskUpdate, TaskGet, TaskList) */
   disableTaskTools?: boolean
 
+  /**
+   * Whitelist of allowed URL patterns for HTTP requests (curl, browse).
+   * Supports wildcards in host and path:
+   * - `https://*.openfoodfacts.org/api/**` — only API paths on any subdomain
+   * - `https://api.example.com/v2/**` — only v2 endpoints
+   * - `*.example.com` — shorthand for any scheme, any path
+   * If not set, all URLs are allowed.
+   */
+  allowedUrls?: string[]
+
   /** Trace provider for execution tracing and cost tracking */
   trace?: import('./trace.js').TraceProvider
 

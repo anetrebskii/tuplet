@@ -441,6 +441,7 @@ async function main() {
     tools: nutritionCounterTools,
     agents: subAgents,
     llm: llmProvider,
+    allowedUrls: ['https://*.openfoodfacts.org/**'],
     logger: createProgressLogger(),
     maxIterations: 15,
     trace: new ConsoleTraceProvider({ showCosts: true }),

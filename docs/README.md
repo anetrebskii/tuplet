@@ -107,6 +107,12 @@ const agent = new Tuplet({
   agents: [researcher],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY }),
 
+  // Restrict which URLs the agent (and all sub-agents) can access
+  allowedUrls: [
+    'https://*.openfoodfacts.org/**',   // any path on OpenFoodFacts
+    'https://api.example.com/v2/**',    // only v2 endpoints
+  ],
+
   // Progress & logging
   logger: {
     ...new ConsoleLogger({ level: 'warn' }),
@@ -160,6 +166,7 @@ await workspace.dispose()
 - [Tools](./tools.md) - Built-in tools and creating custom ones
 - [Sub-Agents](./sub-agents.md) - Delegating to specialized agents
 - [Workspace](./workspace.md) - Virtual filesystem with validation
+- [URL Allowlisting](./url-allowlist.md) - Restrict which URLs the agent can access
 - [Secrets](./secrets.md) - Secure credential management
 - [Providers](./providers.md) - Claude, OpenAI, OpenRouter
 - [History](./history.md) - Conversation persistence and summarization

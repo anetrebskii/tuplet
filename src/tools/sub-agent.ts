@@ -308,6 +308,8 @@ assistant: "I'll invoke the __sub_agent__ tool to activate the welcome-handler a
           maxIterations: agentConfig.maxIterations || context.config.maxIterations,
           disableAskUser: agentConfig.disableAskUser ?? false,
           disableTaskTools: agentConfig.disableTaskTools ?? false,
+          // Inherit security policy from parent
+          allowedUrls: context.config.allowedUrls,
           // Pass parent's trace config for nested sub-agents
           trace: context.config.trace,
           agentName: agentName,

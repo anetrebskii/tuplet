@@ -47,6 +47,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 - **Large file processing** — AI reads files >256KB in chunks, just like Claude Code does
 - **Web browsing** — Navigate websites, extract data, interact with pages
 - **API requests with authentication** — Make HTTP requests to external services
+- **URL allowlisting** — Restrict which URLs the agent can access via `curl`/`browse` with wildcard patterns (`https://*.example.com/api/**`)
 
 ### Multi-Provider
 
@@ -129,6 +130,7 @@ console.log(result.response)
 - [Tools](https://github.com/anetrebskii/tuplet/blob/main/docs/tools.md)
 - [Sub-Agents](https://github.com/anetrebskii/tuplet/blob/main/docs/sub-agents.md)
 - [Workspace](https://github.com/anetrebskii/tuplet/blob/main/docs/workspace.md)
+- [URL Allowlisting](https://github.com/anetrebskii/tuplet/blob/main/docs/url-allowlist.md)
 - [Secrets](https://github.com/anetrebskii/tuplet/blob/main/docs/secrets.md)
 - [Providers](https://github.com/anetrebskii/tuplet/blob/main/docs/providers.md)
 - [History](https://github.com/anetrebskii/tuplet/blob/main/docs/history.md)

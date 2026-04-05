@@ -3,6 +3,7 @@
  */
 
 import type { CommandHandler, CommandContext, ShellResult } from '../types.js'
+import { validateUrl } from '../url-validation.js'
 
 /** Base64 encode a string (works in Node.js and modern runtimes) */
 function base64Encode(str: string): string {
@@ -113,6 +114,11 @@ export const curlCommand: CommandHandler = {
 
     if (!url) {
       return { exitCode: 1, stdout: '', stderr: 'curl: no URL specified' }
+    }
+
+    const hostError = validateUrl(url, ctx.allowedUrls)
+    if (hostError) {
+      return { exitCode: 1, stdout: '', stderr: `curl: ${hostError}` }
     }
 
     try {

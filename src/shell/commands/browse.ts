@@ -3,6 +3,7 @@
  */
 
 import type { CommandHandler, CommandContext, ShellResult } from '../types.js'
+import { validateUrl } from '../url-validation.js'
 
 /**
  * Convert HTML to readable plain text.
@@ -135,6 +136,11 @@ export const browseCommand: CommandHandler = {
 
     if (!url) {
       return { exitCode: 1, stdout: '', stderr: 'browse: no URL specified' }
+    }
+
+    const hostError = validateUrl(url, ctx.allowedUrls)
+    if (hostError) {
+      return { exitCode: 1, stdout: '', stderr: `browse: ${hostError}` }
     }
 
     try {

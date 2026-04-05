@@ -67,6 +67,12 @@ export interface CommandContext {
   envProvider?: import('../types.js').EnvironmentProvider
   /** Whether this command's output is being piped to another command */
   piped?: boolean
+  /**
+   * Whitelist of allowed URL patterns for HTTP requests (curl, browse).
+   * Supports wildcards: `*.example.com/api/**`, `https://cdn.example.com/images/*`.
+   * If undefined or empty, all URLs are allowed.
+   */
+  allowedUrls?: string[]
 }
 
 export interface ParsedCommand {

@@ -29,6 +29,7 @@ export class Shell {
   private readOnly: boolean = false
   private writablePaths: string[] = []
   private envProvider?: EnvironmentProvider
+  private allowedUrls?: string[]
 
   constructor(options: ShellOptions = {}) {
     const { fs: externalFS, envProvider, ...config } = options
@@ -125,6 +126,15 @@ export class Shell {
   setReadOnly(enabled: boolean, writablePaths?: string[]): void {
     this.readOnly = enabled
     this.writablePaths = writablePaths ?? []
+  }
+
+  /**
+   * Set allowed URL patterns for curl/browse HTTP requests.
+   * Supports wildcards: `https://*.example.com/api/**`.
+   * Pass undefined or empty array to allow all URLs.
+   */
+  setAllowedUrls(urls: string[] | undefined): void {
+    this.allowedUrls = urls && urls.length > 0 ? urls : undefined
   }
 
   /** Check if read-only mode is enabled */
@@ -241,7 +251,8 @@ export class Shell {
       config: this.config,
       stdin: stdin !== undefined ? stdin : cmd.stdinContent,
       envProvider: this.envProvider,
-      piped: !!cmd.pipe
+      piped: !!cmd.pipe,
+      allowedUrls: this.allowedUrls
     }
 
     // Validate and normalize redirection paths

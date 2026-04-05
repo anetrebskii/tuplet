@@ -207,6 +207,10 @@ const workspace = new Workspace({
 })
 ```
 
+## URL Restrictions
+
+To restrict which URLs the agent can access via `curl` and `browse`, use `allowedUrls` on the agent — not on the workspace. See [URL Allowlisting](./url-allowlist.md).
+
 ## Reading Data
 
 After `agent.run()` completes, read what the agent wrote:

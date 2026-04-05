@@ -422,15 +422,15 @@ export class Tuplet {
       ws.setEnvProvider(options.env);
     }
 
-    // Configure shell read-only mode based on mode option
+    // Configure shell based on mode and security options
     if (ws) {
       const shell = ws.getShell();
       if (mode === "plan") {
-        // Plan mode: read-only shell, only allow writing to the plan file
         shell.setReadOnly(true, [PLAN_PATH]);
       } else {
         shell.setReadOnly(false);
       }
+      shell.setAllowedUrls(this.config.allowedUrls);
     }
 
     // Create task manager for this run.
