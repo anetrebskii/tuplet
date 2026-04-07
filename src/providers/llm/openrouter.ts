@@ -26,6 +26,7 @@ export interface OpenRouterProviderConfig {
   baseURL?: string
   referer?: string
   title?: string
+  cache?: boolean
 }
 
 interface OpenAIContentPart {
@@ -87,6 +88,7 @@ export class OpenRouterProvider implements LLMProvider {
   private baseURL: string
   private referer?: string
   private title?: string
+  private cache: boolean
 
   constructor(config: OpenRouterProviderConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || ''
@@ -95,14 +97,11 @@ export class OpenRouterProvider implements LLMProvider {
     this.baseURL = config.baseURL || 'https://openrouter.ai/api/v1'
     this.referer = config.referer
     this.title = config.title
+    this.cache = config.cache !== false
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
     }
-  }
-
-  private isAnthropicModel(model?: string): boolean {
-    return (model || this.model).startsWith('anthropic/')
   }
 
   async chat(
@@ -111,8 +110,7 @@ export class OpenRouterProvider implements LLMProvider {
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const useCache = this.isAnthropicModel(options.model)
-    const openaiMessages = this.convertMessages(systemPrompt, messages, useCache)
+    const openaiMessages = this.convertMessages(systemPrompt, messages, this.cache)
     const openaiTools = this.convertTools(tools)
 
     const requestBody: Record<string, unknown> = {

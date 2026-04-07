@@ -359,8 +359,8 @@ async function main() {
 
   const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: "moonshotai/kimi-k2",
-    maxTokens: 2000,
+    model: "moonshotai/kimi-k2.5",    
+    maxTokens: 2000    
   });
 
   // Create workspace only when --workspace flag is set or USE_WORKSPACE=1
