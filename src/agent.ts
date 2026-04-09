@@ -103,18 +103,19 @@ function formatToolsPromptSection(tools: Tool[]): string {
   lines.push("You MUST use these tools by calling them — never pretend to use a tool or fabricate results.\n");
 
   for (const tool of tools) {
-    lines.push(`### \`${tool.name}\``);
-    // Include first line of description only to keep prompt compact
-    if (tool.description) {
-      const firstLine = tool.description.split("\n")[0].trim();
-      lines.push(firstLine);
+    // Compact format: name + first line of description + required params only
+    const desc = tool.description?.split("\n")[0].trim() || "";
+    const params = tool.parameters as { required?: string[]; properties?: Record<string, { type?: string; description?: string }> } | undefined;
+    const required = params?.required;
+    if (required && required.length > 0 && params?.properties) {
+      const paramList = required.map(name => {
+        const prop = params.properties![name];
+        return prop ? `${name}: ${prop.type || 'string'}` : name;
+      }).join(", ");
+      lines.push(`- **${tool.name}**(${paramList}) - ${desc}`);
+    } else {
+      lines.push(`- **${tool.name}** - ${desc}`);
     }
-    if (tool.parameters) {
-      lines.push("```json");
-      lines.push(JSON.stringify(tool.parameters, null, 2));
-      lines.push("```");
-    }
-    lines.push("");
   }
 
   return lines.join("\n");
@@ -152,7 +153,7 @@ export class Tuplet {
     this.contextManager = new ContextManager(
       this.config.maxContextTokens,
       this.config.contextStrategy,
-      this.config.llm,
+      this.config.compactLlm || this.config.llm,
       this.config.compactBuffer
     );
 
@@ -509,8 +510,12 @@ When you need information the user hasn't provided and you cannot find it via ot
 
 
     // Build tools list and inject their descriptions into system prompt
+    // (skip if provider sends tool schemas natively via the API to avoid duplication)
     const runTools = this.getRunTools(taskManager, ws, this.config.agentName, mode);
-    systemPrompt += formatToolsPromptSection(runTools);
+    const nativeTools = this.config.nativeToolUse ?? this.config.llm.supportsNativeTools;
+    if (!nativeTools) {
+      systemPrompt += formatToolsPromptSection(runTools);
+    }
 
     // Execute the agent loop — wrapped in try/finally to guarantee history is saved
     // on any outcome: complete, interrupted, error, or unexpected crash.

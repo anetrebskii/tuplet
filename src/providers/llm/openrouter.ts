@@ -81,6 +81,20 @@ interface OpenAIResponse {
   }
 }
 
+/**
+ * Model prefixes that reliably handle tool descriptions from the API tools parameter,
+ * making system prompt tool listings redundant. Other models may support tool calling
+ * but still benefit from having tool descriptions in the system prompt.
+ */
+const NATIVE_TOOL_PREFIXES = [
+  'anthropic/',
+  'openai/',
+]
+
+function modelSupportsNativeTools(model: string): boolean {
+  return NATIVE_TOOL_PREFIXES.some(p => model.startsWith(p))
+}
+
 export class OpenRouterProvider implements LLMProvider {
   private apiKey: string
   private model: string
@@ -102,6 +116,10 @@ export class OpenRouterProvider implements LLMProvider {
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
     }
+  }
+
+  get supportsNativeTools(): boolean {
+    return modelSupportsNativeTools(this.model)
   }
 
   async chat(

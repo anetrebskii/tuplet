@@ -162,6 +162,10 @@ export interface LLMProvider {
    * Format: "provider:model" (e.g., "claude:claude-3-haiku-20240307")
    */
   getModelId?(): string
+
+  /** Whether this provider handles tool schemas via the API's native tool parameter.
+   *  Set automatically by built-in providers (Claude, OpenAI). */
+  supportsNativeTools?: boolean
 }
 
 export interface ProgressUpdate {
@@ -282,6 +286,18 @@ export interface TupletConfig {
   contextStrategy?: ContextStrategy
   /** Tokens reserved as buffer before compaction triggers (default: 10% of maxContextTokens) */
   compactBuffer?: number
+
+  /** LLM provider for summarization/compaction. Defaults to the main `llm`.
+   *  Use a cheaper model (e.g., Haiku) to reduce costs. */
+  compactLlm?: LLMProvider
+
+  /**
+   * Skip tool descriptions in the system prompt.
+   * Set to true when your model supports native tool use (Claude, GPT-4, kimi-k2.5, etc.)
+   * to avoid sending tool schemas twice (in system prompt AND API tools parameter).
+   * Default: false (tools listed in system prompt for compatibility with all models).
+   */
+  nativeToolUse?: boolean
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean

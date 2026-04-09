@@ -64,6 +64,7 @@ interface OpenAIResponse {
 }
 
 export class OpenAIProvider implements LLMProvider {
+  readonly supportsNativeTools = true
   private apiKey: string
   private model: string
   private maxTokens: number

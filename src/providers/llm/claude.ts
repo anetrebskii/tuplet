@@ -22,6 +22,7 @@ export interface ClaudeProviderConfig {
 }
 
 export class ClaudeProvider implements LLMProvider {
+  readonly supportsNativeTools = true
   private client: Anthropic
   private model: string
   private maxTokens: number
