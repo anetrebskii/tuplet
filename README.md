@@ -72,6 +72,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 ### Extensibility
 
 - **Custom tools** — Define any tool with typed parameters and execution logic
+- **Skills** — Lazy-loaded prompts for specialized workflows. Only metadata is in the system prompt; full instructions load on demand when the model activates a skill
 - **Custom sub-agents** — Spawn specialized agents with their own tools, prompts, and even different LLM providers
 - **Pluggable storage** — Bring your own chat history provider (Firestore, Redis, Postgres, anything)
 - **Pluggable logging & tracing** — Integrate with Datadog, custom dashboards, or any observability platform
@@ -128,6 +129,7 @@ console.log(result.response)
 
 - [Quick Start](https://github.com/anetrebskii/tuplet/blob/main/docs/README.md)
 - [Tools](https://github.com/anetrebskii/tuplet/blob/main/docs/tools.md)
+- [Skills](https://github.com/anetrebskii/tuplet/blob/main/docs/skills.md)
 - [Sub-Agents](https://github.com/anetrebskii/tuplet/blob/main/docs/sub-agents.md)
 - [Workspace](https://github.com/anetrebskii/tuplet/blob/main/docs/workspace.md)
 - [URL Allowlisting](https://github.com/anetrebskii/tuplet/blob/main/docs/url-allowlist.md)

@@ -55,7 +55,7 @@ import {
   SubAgentBuilder,
   Workspace, FileWorkspaceProvider, MemoryEnvironmentProvider,
   ConsoleLogger, ConsoleTraceProvider,
-  type SubAgentConfig, type Tool
+  type SubAgentConfig, type SkillConfig, type Tool
 } from 'tuplet'
 
 // Custom tool
@@ -100,10 +100,22 @@ const workspace = new Workspace({
 })
 await workspace.init()
 
+// Skills - lazy-loaded prompts for specialized workflows
+const logMealSkill: SkillConfig = {
+  name: 'log_meal',
+  description: 'Log what the user ate with nutrition data',
+  whenToUse: 'User mentions eating or drinking something',
+  prompt: `Log the user's meal:
+1. Search for the food using search_food
+2. Ask for portion size if not specified
+3. Record with nutrition data and show summary`
+}
+
 // Agent
 const agent = new Tuplet({
   role: 'a nutrition consultant',
   tools: [],
+  skills: [logMealSkill],
   agents: [researcher],
   llm: new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY }),
 
@@ -164,6 +176,7 @@ await workspace.dispose()
 ## Documentation
 
 - [Tools](./tools.md) - Built-in tools and creating custom ones
+- [Skills](./skills.md) - Lazy-loaded prompts for specialized workflows
 - [Sub-Agents](./sub-agents.md) - Delegating to specialized agents
 - [Workspace](./workspace.md) - Virtual filesystem with validation
 - [URL Allowlisting](./url-allowlist.md) - Restrict which URLs the agent can access
