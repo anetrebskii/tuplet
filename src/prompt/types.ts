@@ -81,10 +81,17 @@ export interface OutputFormat {
 /**
  * Configuration for MainAgentBuilder
  */
+export interface SkillDef {
+  name: string
+  description: string
+  whenToUse: string
+}
+
 export interface MainAgentPromptConfig {
   role?: string
   description?: string
   subAgents?: SubAgentDef[]
+  skills?: SkillDef[]
   questionHandling?: {
     description?: string
     exampleFlow?: string[]

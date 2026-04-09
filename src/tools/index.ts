@@ -34,5 +34,8 @@ export {
   type TodoToolOptions,
 } from "./tasks.js";
 
+// Skill Tool (lazy-loaded prompt activation)
+export { createSkillTool, SKILL_TOOL_NAME, type SkillDef } from "./skill.js";
+
 // Shell Tool (bash-like context access)
 export { createShellTool } from "./shell.js";

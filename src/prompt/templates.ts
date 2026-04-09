@@ -53,6 +53,28 @@ export function subAgentsTable(agents: SubAgentDef[]): string {
 }
 
 /**
+ * Generate skills listing section
+ */
+export function skillsSection(skills: Array<{ name: string; description: string; whenToUse: string }>): string {
+  if (skills.length === 0) return ''
+
+  const lines = [
+    '## Available Skills',
+    '',
+    'Skills provide specialized instructions for specific tasks. When a user\'s request matches a skill\'s "When to Use" trigger, you MUST activate it by calling `__skill__` BEFORE doing anything else. Do NOT handle the task directly - always load the skill first.',
+    '',
+    '| Skill | Description | When to Use |',
+    '|-------|-------------|-------------|'
+  ]
+
+  for (const skill of skills) {
+    lines.push(`| **${skill.name}** | ${skill.description} | ${skill.whenToUse} |`)
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Generate sub-agent parameters documentation
  */
 export function subAgentParametersSection(agents: SubAgentDef[]): string {

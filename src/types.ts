@@ -240,6 +240,23 @@ export interface EnvironmentProvider {
 }
 
 // ============================================================================
+// Skills
+// ============================================================================
+
+export interface SkillConfig {
+  /** Unique name used to activate the skill (e.g., 'log_meal') */
+  name: string
+  /** Short description shown in system prompt listing */
+  description: string
+  /** When the model should activate this skill */
+  whenToUse: string
+  /** Full prompt loaded when skill is activated */
+  prompt: string
+  /** If true, only user can invoke via slash command - model cannot auto-activate */
+  disableModelInvocation?: boolean
+}
+
+// ============================================================================
 // Agent Configuration
 // ============================================================================
 
@@ -252,6 +269,9 @@ export interface TupletConfig {
   tools: Tool[]
 
   agents?: SubAgentConfig[]
+
+  /** Skills - lazy-loaded prompts activated by name */
+  skills?: SkillConfig[]
 
   llm: LLMProvider
   logger?: LogProvider

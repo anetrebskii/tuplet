@@ -32,6 +32,7 @@ import {
 } from './activity.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
+const SKILL_TOOL_NAME = '__skill__'
 
 export interface ExecutorConfig {
   systemPrompt: string
@@ -345,6 +346,8 @@ export async function executeLoop(
   let cumulativeOutputTokens = 0
   const executorStartTime = Date.now()
 
+  let activatedSkill: { name: string; prompt: string } | null = null
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Check for interruption at start of each iteration
     const interruptReason = await checkInterruption(signal, shouldContinue)
@@ -643,16 +646,39 @@ export async function executeLoop(
         }
       }
 
+      // Detect skill activation
+      let toolResult = result
+      if (toolUse.name === SKILL_TOOL_NAME && result.success && result.data) {
+        const sd = result.data as { __skillActivation?: boolean; skillName?: string; skillPrompt?: string }
+        if (sd.__skillActivation) {
+          activatedSkill = { name: sd.skillName!, prompt: sd.skillPrompt! }
+          toolResult = { success: true, data: { message: `Skill "${sd.skillName}" activated. Follow the instructions below.` } }
+        }
+      }
+
       toolResults.push({
         type: 'tool_result',
         tool_use_id: toolUse.id,
-        content: JSON.stringify(result),
-        is_error: !result.success
+        content: JSON.stringify(toolResult),
+        is_error: !toolResult.success
       })
     }
 
     // Add tool results as user message
     messages.push({ role: 'user', content: toolResults })
+
+    // Inject skill prompt if activated during this iteration
+    if (activatedSkill) {
+      messages.push({
+        role: 'assistant',
+        content: `Skill "${activatedSkill.name}" loaded. Following its instructions now.`
+      })
+      messages.push({
+        role: 'user',
+        content: `<skill name="${activatedSkill.name}">\n${activatedSkill.prompt}\n</skill>`
+      })
+      activatedSkill = null
+    }
   }
 
   // Max iterations reached - return as interrupted instead of throwing

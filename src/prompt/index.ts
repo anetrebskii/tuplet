@@ -8,6 +8,7 @@
 export type {
   SubAgentDef,
   ToolDef,
+  SkillDef,
   WorkspacePathDef,
   WorkspaceStorageOptions,
   TaskExample,
@@ -24,6 +25,7 @@ export { SubAgentBuilder } from './sub-agent-builder.js'
 export {
   roleSection,
   subAgentsTable,
+  skillsSection,
   questionHandlingSection,
   directToolsSection,
   workspaceStorageSection,

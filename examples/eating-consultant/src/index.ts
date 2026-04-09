@@ -18,6 +18,7 @@ import {
   SubAgentBuilder,
   type Message,
   type SubAgentConfig,
+  type SkillConfig,
   type ProgressUpdate,
   type PendingQuestion,
   type EnhancedQuestion,
@@ -360,7 +361,7 @@ async function main() {
   const llmProvider = new OpenRouterProvider({
     apiKey,
     model: "moonshotai/kimi-k2.5",    
-    maxTokens: 2000    
+    maxTokens: 2000,
   });
 
   // Create workspace only when --workspace flag is set or USE_WORKSPACE=1
@@ -431,14 +432,84 @@ async function main() {
   // Load persisted workspace data from disk
   await workspace.init();
 
-  // Create the main agent with sub-agent and run recorder
+  // Skills - lazy-loaded prompts for specialized workflows
+  const skills: SkillConfig[] = [
+    {
+      name: "collect_user_profile",
+      description: "Collect user profile: goals, body metrics, allergies, activity level",
+      whenToUse: "New user, first conversation, or user says 'настрой меня' / 'мои данные' / 'set up my profile'",
+      prompt: `Collect the user's nutrition profile step by step using __ask_user__.
+
+Ask these questions (one at a time or grouped logically):
+1. Goal: weight loss, muscle gain, maintenance, or general healthy eating
+2. Current weight (kg) and height (cm)
+3. Age and sex (for BMR calculation)
+4. Activity level: sedentary, light (1-2x/week), moderate (3-4x/week), active (5+/week)
+5. Food allergies or intolerances (if any)
+6. Dietary restrictions: vegetarian, vegan, halal, kosher, none
+
+After collecting all info, calculate their estimated daily calorie needs using Mifflin-St Jeor:
+- Men: BMR = 10 * weight(kg) + 6.25 * height(cm) - 5 * age - 161
+- Women: BMR = 10 * weight(kg) + 6.25 * height(cm) - 5 * age + 5
+- TDEE = BMR * activity multiplier (1.2 sedentary, 1.375 light, 1.55 moderate, 1.725 active)
+- Adjust for goal: -500 for weight loss, +300 for muscle gain
+
+Save the complete profile to workspace at user/profile.json.
+Present a summary with their daily targets (calories, protein, carbs, fat).
+Be encouraging and supportive throughout.`,
+    },
+    {
+      name: "log_meal",
+      description: "Log what the user ate with nutrition data from OpenFoodFacts",
+      whenToUse: "User mentions eating or drinking something (e.g., 'I had pasta', 'ate an apple', 'drank coffee')",
+      prompt: `Log the user's meal with accurate nutrition data.
+
+Steps:
+1. Extract food items from the user's message
+2. For each item, call search_food to find it in OpenFoodFacts
+3. If multiple matches, pick the most relevant one (or ask user if ambiguous)
+4. Ask for portion size if not specified. Suggest: small (100-150g), medium (200-250g), large (300-350g)
+5. Ask which meal: breakfast, lunch, dinner, or snack (if not obvious from context/time)
+6. Call log_meal for each item with the nutrition data
+7. Show a brief summary: what was logged, calories, and key macros (protein, carbs, fat)
+
+If the user mentions a dish (e.g., "Caesar salad"), search for it as-is first.
+If not found, break it into components and log each.
+
+Always be encouraging. Never judge food choices. If something is high-calorie, just present the facts neutrally.`,
+    },
+    {
+      name: "analyze_day",
+      description: "Analyze daily nutrition totals and give recommendations",
+      whenToUse: "User asks for daily summary, analysis, recommendations, or 'how am I doing today'",
+      prompt: `Analyze the user's nutrition for today.
+
+Steps:
+1. Call get_daily_totals to get current intake
+2. Read user profile from workspace (user/profile.json) if available
+3. Compare actual intake vs. targets (if profile exists)
+4. Provide analysis:
+   - Calories: consumed vs. target, remaining budget
+   - Protein: is it sufficient? (aim for 1.6-2.2g/kg for active people, 0.8g/kg minimum)
+   - Carbs and fat balance
+   - Fiber: aim for 25-30g/day
+5. Give 1-2 specific, actionable suggestions for the rest of the day
+   (e.g., "You're low on protein - consider adding chicken or Greek yogurt to dinner")
+
+If no meals logged yet, say so and encourage the user to start logging.
+If no profile exists, suggest running the profile setup first.
+Keep the tone supportive and practical.`,
+    },
+  ];
+
+  // Create the main agent with sub-agent, skills, and run recorder
   const agent = new Tuplet({
     role:
       "a nutrition consultant that helps users track meals, view nutrition progress, and plan their diet. " +
-      "You can search for food products in the OpenFoodFacts database, log meals with nutrition data, " +
-      "view daily nutrition totals, and clear the meal log. You delegate meal planning to a specialized sub-agent. " +
+      "You have skills for specific workflows - activate them when the user's request matches. " +
       "Present results in a friendly, encouraging way. Use Russian if user speaks Russian.",
     tools: nutritionCounterTools,
+    skills,
     agents: subAgents,
     llm: llmProvider,
     allowedUrls: ['https://*.openfoodfacts.org/**'],

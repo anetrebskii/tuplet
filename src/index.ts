@@ -30,6 +30,7 @@ export type {
   TupletConfig,
   TupletConfig as HiveConfig,
   SubAgentConfig,
+  SkillConfig,
   RunOptions,
   AgentResult,
   AgentStatus,

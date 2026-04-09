@@ -11,10 +11,12 @@ import type {
 } from './types.js'
 import type { Tool, SubAgentConfig } from '../types.js'
 import { getBuiltInAgents } from '../built-in-agents/index.js'
+import type { SkillConfig } from '../types.js'
 import {
   roleSection,
   subAgentsTable,
   subAgentParametersSection,
+  skillsSection,
   questionHandlingSection,
   directToolsSection,
   workspaceStorageSection,
@@ -111,6 +113,20 @@ export class MainAgentBuilder {
         description: desc
       })
     }
+    return this
+  }
+
+  /**
+   * Set skills from SkillConfig objects.
+   * Only model-invocable skills are included in the prompt listing.
+   */
+  skills(configs: SkillConfig[]): this {
+    const visible = configs.filter(s => !s.disableModelInvocation)
+    this.config.skills = visible.map(s => ({
+      name: s.name,
+      description: s.description,
+      whenToUse: s.whenToUse,
+    }))
     return this
   }
 
@@ -277,6 +293,12 @@ export class MainAgentBuilder {
       sections.push('- **worker**: The ONLY way to execute actions. Delegate like a team lead to a developer — describe WHAT needs to be done and WHY, provide relevant context (paths, URLs, data formats), state requirements and constraints, but let the worker figure out the implementation details. Include hints only when you have specific domain knowledge that would save time. Examples: "We need to extract company data from this page (URL). Save each company with name, url, and description to the workspace at data/companies.json" or "Push these companies to the CRM API (endpoint: X, auth token is in env). Map our name field to their company_name field."')
       sections.push('')
       sections.push('The `explore` and `plan` agents are read-only. The `worker` agent has full read-write access.')
+    }
+
+    // Skills listing
+    if (this.config.skills && this.config.skills.length > 0) {
+      sections.push('')
+      sections.push(skillsSection(this.config.skills))
     }
 
     // Question handling (only when explicitly configured)

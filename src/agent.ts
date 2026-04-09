@@ -20,6 +20,7 @@ import { createShellTool } from "./tools/shell.js";
 import {
   createAskUserTool,
   createTaskTool as createSubAgentTool,
+  createSkillTool,
   TaskManager,
   createTaskTools,
   createTaskGetTool,
@@ -213,6 +214,9 @@ export class Tuplet {
     if (this.config.tools?.length) {
       builder.tools(this.config.tools);
     }
+    if (this.config.skills?.length) {
+      builder.skills(this.config.skills);
+    }
 
     return builder.build();
   }
@@ -295,6 +299,15 @@ export class Tuplet {
       ...this.tools,
       ...(this.config.disableTaskTools ? [] : createTaskTools(taskManager, taskToolOptions)),
     ];
+
+    // Skill tool (if skills are defined)
+    if (this.config.skills?.length) {
+      const skillDefs = this.config.skills.map(s => ({
+        name: s.name,
+        prompt: s.prompt,
+      }));
+      tools.push(createSkillTool(skillDefs));
+    }
 
     // Shell (only if workspace is available)
     if (workspace) {
