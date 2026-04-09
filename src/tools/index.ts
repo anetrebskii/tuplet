@@ -37,5 +37,8 @@ export {
 // Skill Tool (lazy-loaded prompt activation)
 export { createSkillTool, SKILL_TOOL_NAME, type SkillDef } from "./skill.js";
 
+// Tool Search (deferred tool loading)
+export { createToolSearchTool, TOOL_SEARCH_NAME, isCoreToolName } from "./tool-search.js";
+
 // Shell Tool (bash-like context access)
 export { createShellTool } from "./shell.js";

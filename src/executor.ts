@@ -33,6 +33,8 @@ import {
 
 const ASK_USER_TOOL_NAME = '__ask_user__'
 const SKILL_TOOL_NAME = '__skill__'
+const SUB_AGENT_TOOL_NAME = '__sub_agent__'
+const TOOL_SEARCH_NAME = '__tool_search__'
 
 export interface ExecutorConfig {
   systemPrompt: string
@@ -43,6 +45,12 @@ export interface ExecutorConfig {
   contextManager: ContextManager
   taskManager: TaskManager
   llmOptions?: LLMOptions
+
+  /** Orchestration instructions injected on first __sub_agent__ call (lazy-loaded) */
+  orchestrationPrompt?: string
+
+  /** Tools available for deferred loading via __tool_search__ */
+  deferredTools?: Tool[]
 
   /** AbortSignal for cancellation */
   signal?: AbortSignal
@@ -324,13 +332,15 @@ export async function executeLoop(
 ): Promise<AgentResult> {
   const {
     systemPrompt,
-    tools,
+    tools: initialTools,
     llm,
     logger,
     maxIterations,
     contextManager,
     taskManager,
     llmOptions,
+    orchestrationPrompt,
+    deferredTools,
     signal,
     shouldContinue,
     traceBuilder,
@@ -340,13 +350,18 @@ export async function executeLoop(
   const messages = [...initialMessages]
   const toolCallLogs: ToolCallLog[] = []
   const thinkingBlocks: string[] = []
-  const toolSchemas = toolsToSchemas(tools)
+  const tools = [...initialTools]
+  let toolSchemas = toolsToSchemas(tools)
   const modelId = llm.getModelId?.() || 'unknown'
   let cumulativeInputTokens = 0
   let cumulativeOutputTokens = 0
   const executorStartTime = Date.now()
 
   let activatedSkill: { name: string; prompt: string } | null = null
+  let orchestrationInjected = !orchestrationPrompt // skip if no prompt
+
+  // Deferred tool loading: track which tools have been loaded via __tool_search__
+  const deferredToolMap = new Map((deferredTools || []).map(t => [t.name, t]))
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Check for interruption at start of each iteration
@@ -646,6 +661,21 @@ export async function executeLoop(
         }
       }
 
+      // Detect tool search - load deferred tools for next iteration
+      if (toolUse.name === TOOL_SEARCH_NAME && result.success && result.data) {
+        const tsr = result.data as { __toolSearchResult?: boolean; loadedTools?: string[] }
+        if (tsr.__toolSearchResult && tsr.loadedTools) {
+          for (const name of tsr.loadedTools) {
+            const tool = deferredToolMap.get(name)
+            if (tool && !toolSchemas.some(s => s.name === name)) {
+              toolSchemas = [...toolSchemas, { name: tool.name, description: tool.description, input_schema: tool.parameters }]
+              // Also add to tools array so executeTool can find it
+              tools.push(tool)
+            }
+          }
+        }
+      }
+
       // Detect skill activation
       let toolResult = result
       if (toolUse.name === SKILL_TOOL_NAME && result.success && result.data) {
@@ -678,6 +708,19 @@ export async function executeLoop(
         content: `<skill name="${activatedSkill.name}">\n${activatedSkill.prompt}\n</skill>`
       })
       activatedSkill = null
+    }
+
+    // Inject orchestration instructions on first __sub_agent__ call
+    if (!orchestrationInjected && toolCallLogs.some(tc => tc.name === SUB_AGENT_TOOL_NAME)) {
+      orchestrationInjected = true
+      messages.push({
+        role: 'assistant',
+        content: 'Loading orchestration workflow instructions.'
+      })
+      messages.push({
+        role: 'user',
+        content: `<system-reminder>\n${orchestrationPrompt}\n</system-reminder>`
+      })
     }
   }
 

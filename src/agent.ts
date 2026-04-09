@@ -21,6 +21,8 @@ import {
   createAskUserTool,
   createTaskTool as createSubAgentTool,
   createSkillTool,
+  createToolSearchTool,
+  isCoreToolName,
   TaskManager,
   createTaskTools,
   createTaskGetTool,
@@ -139,6 +141,8 @@ export class Tuplet {
   private tools: Tool[];
   /** Auto-generated system prompt */
   private systemPrompt: string;
+  /** Orchestration instructions loaded on first __sub_agent__ call */
+  private orchestrationPrompt: string | null;
   /** Current trace builder (set during run, used by __sub_agent__ tool) */
   private currentTraceBuilder?: TraceBuilder;
 
@@ -179,7 +183,9 @@ export class Tuplet {
     }
 
     // Build system prompt from description (after agents are merged)
-    this.systemPrompt = this.buildSystemPrompt();
+    const { systemPrompt, orchestrationPrompt } = this.buildPrompts();
+    this.systemPrompt = systemPrompt;
+    this.orchestrationPrompt = orchestrationPrompt;
 
     // Add __sub_agent__ tool if sub-agents are defined
     if (this.config.agents && this.config.agents.length > 0) {
@@ -197,12 +203,12 @@ export class Tuplet {
   }
 
   /**
-   * Build system prompt from config.description using MainAgentBuilder.
+   * Build system prompt and orchestration prompt from config.
    * If _systemPrompt is set (sub-agent internal), use it directly.
    */
-  private buildSystemPrompt(): string {
+  private buildPrompts(): { systemPrompt: string; orchestrationPrompt: string | null } {
     if (this.config._systemPrompt) {
-      return this.config._systemPrompt;
+      return { systemPrompt: this.config._systemPrompt, orchestrationPrompt: null };
     }
 
     const builder = new MainAgentBuilder()
@@ -219,7 +225,10 @@ export class Tuplet {
       builder.skills(this.config.skills);
     }
 
-    return builder.build();
+    return {
+      systemPrompt: builder.build(),
+      orchestrationPrompt: builder.buildOrchestrationPrompt(),
+    };
   }
 
   /**
@@ -238,14 +247,15 @@ export class Tuplet {
 
   /**
    * Get tools including internal tools for a specific run.
-   * In plan mode, only a restricted set of tools is returned.
+   * Returns core tools (always sent to API) and deferred tools (loaded on demand).
+   * In plan mode, only a restricted set of tools is returned (no deferral).
    */
   private getRunTools(
     taskManager: TaskManager,
     workspace: Workspace | undefined,
     agentName?: string,
     mode?: "plan" | "execute"
-  ): Tool[] {
+  ): { coreTools: Tool[]; deferredTools: Tool[] } {
     const taskToolOptions = {
       logger: this.config.logger,
       agentName,
@@ -292,11 +302,11 @@ export class Tuplet {
         planTools.push(createShellTool(workspace.getShell()));
       }
 
-      return planTools;
+      return { coreTools: planTools, deferredTools: [] };
     }
 
     // Default / execute mode: all tools
-    const tools = [
+    const allTools: Tool[] = [
       ...this.tools,
       ...(this.config.disableTaskTools ? [] : createTaskTools(taskManager, taskToolOptions)),
     ];
@@ -307,15 +317,31 @@ export class Tuplet {
         name: s.name,
         prompt: s.prompt,
       }));
-      tools.push(createSkillTool(skillDefs));
+      allTools.push(createSkillTool(skillDefs));
     }
 
     // Shell (only if workspace is available)
     if (workspace) {
-      tools.push(createShellTool(workspace.getShell()));
+      allTools.push(createShellTool(workspace.getShell()));
     }
 
-    return tools;
+    // Split into core (always loaded) and deferred (loaded via __tool_search__)
+    const coreTools: Tool[] = []
+    const deferredTools: Tool[] = []
+    for (const tool of allTools) {
+      if (isCoreToolName(tool.name)) {
+        coreTools.push(tool)
+      } else {
+        deferredTools.push(tool)
+      }
+    }
+
+    // Add __tool_search__ if there are deferred tools
+    if (deferredTools.length > 0) {
+      coreTools.push(createToolSearchTool(deferredTools))
+    }
+
+    return { coreTools, deferredTools };
   }
 
   /**
@@ -509,12 +535,13 @@ export class Tuplet {
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
 
 
-    // Build tools list and inject their descriptions into system prompt
-    // (skip if provider sends tool schemas natively via the API to avoid duplication)
-    const runTools = this.getRunTools(taskManager, ws, this.config.agentName, mode);
+    // Build tools list — split into core (always in API) and deferred (loaded on demand)
+    const { coreTools, deferredTools } = this.getRunTools(taskManager, ws, this.config.agentName, mode);
+    // All tools listed in system prompt (compact format) for models without native tool support
+    const allRunTools = [...coreTools, ...deferredTools];
     const nativeTools = this.config.nativeToolUse ?? this.config.llm.supportsNativeTools;
     if (!nativeTools) {
-      systemPrompt += formatToolsPromptSection(runTools);
+      systemPrompt += formatToolsPromptSection(allRunTools);
     }
 
     // Execute the agent loop — wrapped in try/finally to guarantee history is saved
@@ -524,13 +551,15 @@ When you need information the user hasn't provided and you cannot find it via ot
       result = await executeLoop(
         {
           systemPrompt,
-          tools: runTools,
+          tools: coreTools,
           llm: this.config.llm,
           logger: this.config.logger,
           maxIterations: this.config.maxIterations!,
           contextManager: this.contextManager,
           taskManager,
           llmOptions: {},
+          orchestrationPrompt: this.orchestrationPrompt ?? undefined,
+          deferredTools: deferredTools.length > 0 ? deferredTools : undefined,
           signal,
           shouldContinue,
           traceBuilder,
