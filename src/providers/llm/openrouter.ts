@@ -165,7 +165,16 @@ export class OpenRouterProvider implements LLMProvider {
       throw new Error(`OpenRouter API error: ${errorData.error?.message || response.statusText}`)
     }
 
-    const data = await response.json() as OpenAIResponse
+    const data = await response.json() as OpenAIResponse & { error?: { message?: string; code?: number } }
+
+    // OpenRouter can return 200 OK with an error body (e.g. provider timeout)
+    if (data.error) {
+      throw new Error(`OpenRouter API error: ${data.error.message || 'provider returned an error'}`)
+    }
+
+    if (!data.choices?.[0]?.message) {
+      throw new Error(`OpenRouter API error: empty response (no choices returned)`)
+    }
 
     return this.convertResponse(data)
   }

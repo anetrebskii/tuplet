@@ -4,7 +4,6 @@
  * Implementation of LLMProvider for Anthropic's Claude API.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
 import type {
   LLMProvider,
   LLMResponse,
@@ -19,20 +18,77 @@ export interface ClaudeProviderConfig {
   apiKey?: string
   model?: string
   maxTokens?: number
+  baseURL?: string
+}
+
+interface AnthropicTextBlock {
+  type: 'text'
+  text: string
+  cache_control?: { type: 'ephemeral' }
+}
+
+interface AnthropicToolUseBlock {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+interface AnthropicThinkingBlock {
+  type: 'thinking'
+  thinking: string
+}
+
+type AnthropicResponseBlock = AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock
+
+interface AnthropicContentBlockParam {
+  type: string
+  text?: string
+  id?: string
+  name?: string
+  input?: Record<string, unknown>
+  tool_use_id?: string
+  content?: string
+  is_error?: boolean
+  thinking?: string
+  cache_control?: { type: 'ephemeral' }
+}
+
+interface AnthropicMessageParam {
+  role: 'user' | 'assistant'
+  content: string | AnthropicContentBlockParam[]
+}
+
+interface AnthropicTool {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+  cache_control?: { type: 'ephemeral' }
+}
+
+interface AnthropicResponse {
+  content: AnthropicResponseBlock[]
+  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence'
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
 }
 
 export class ClaudeProvider implements LLMProvider {
   readonly supportsNativeTools = true
-  private client: Anthropic
+  private apiKey: string
   private model: string
   private maxTokens: number
+  private baseURL: string
 
   constructor(config: ClaudeProviderConfig = {}) {
-    this.client = new Anthropic({
-      apiKey: config.apiKey
-    })
+    this.apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY || ''
     this.model = config.model || 'claude-sonnet-4-20250514'
     this.maxTokens = config.maxTokens || 8192
+    this.baseURL = config.baseURL || 'https://api.anthropic.com'
   }
 
   async chat(
@@ -45,23 +101,41 @@ export class ClaudeProvider implements LLMProvider {
     const anthropicTools = this.convertTools(tools)
     const systemContent = this.buildSystemContent(systemPrompt)
 
-    const requestParams: Anthropic.MessageCreateParams = {
+    const requestBody: Record<string, unknown> = {
       model: options.model || this.model,
       max_tokens: this.maxTokens,
       system: systemContent,
-      messages: anthropicMessages,
-      tools: anthropicTools.length > 0 ? anthropicTools : undefined
+      messages: anthropicMessages
     }
 
-    const response = await this.client.messages.create(requestParams)
+    if (anthropicTools.length > 0) {
+      requestBody.tools = anthropicTools
+    }
 
-    return this.convertResponse(response)
+    const response = await fetch(`${this.baseURL}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: response.statusText } })) as { error?: { message?: string } }
+      throw new Error(`Anthropic API error: ${errorData.error?.message || response.statusText}`)
+    }
+
+    const data = await response.json() as AnthropicResponse
+
+    return this.convertResponse(data)
   }
 
   /**
    * Build system content with caching
    */
-  private buildSystemContent(systemPrompt: string): Anthropic.TextBlockParam[] {
+  private buildSystemContent(systemPrompt: string): AnthropicTextBlock[] {
     return [{
       type: 'text' as const,
       text: systemPrompt,
@@ -69,7 +143,7 @@ export class ClaudeProvider implements LLMProvider {
     }]
   }
 
-  private convertMessages(messages: Message[]): Anthropic.MessageParam[] {
+  private convertMessages(messages: Message[]): AnthropicMessageParam[] {
     // Find the last user message index for cache breakpoint
     const lastUserIndex = this.findLastUserMessageIndex(messages)
 
@@ -93,10 +167,8 @@ export class ClaudeProvider implements LLMProvider {
       const blocks = this.convertContentBlocks(msg.content)
 
       if (shouldCache && blocks.length > 0) {
-        // Add cache_control to the last block
         const lastBlock = blocks[blocks.length - 1]
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(lastBlock as any).cache_control = { type: 'ephemeral' }
+        lastBlock.cache_control = { type: 'ephemeral' }
       }
 
       return { role: msg.role, content: blocks }
@@ -115,7 +187,7 @@ export class ClaudeProvider implements LLMProvider {
     return -1
   }
 
-  private convertContentBlocks(blocks: ContentBlock[]): Anthropic.ContentBlockParam[] {
+  private convertContentBlocks(blocks: ContentBlock[]): AnthropicContentBlockParam[] {
     return blocks.map(block => {
       switch (block.type) {
         case 'text':
@@ -139,32 +211,27 @@ export class ClaudeProvider implements LLMProvider {
         default:
           throw new Error(`Unknown content block type: ${(block as ContentBlock).type}`)
       }
-    }) as Anthropic.ContentBlockParam[]
+    })
   }
 
-  private convertTools(tools: ToolSchema[]): Anthropic.Tool[] {
+  private convertTools(tools: ToolSchema[]): AnthropicTool[] {
     return tools.map((tool, index) => {
       const isLast = index === tools.length - 1
-      const baseTool = {
+      const baseTool: AnthropicTool = {
         name: tool.name,
         description: tool.description,
-        input_schema: tool.input_schema as Anthropic.Tool.InputSchema
+        input_schema: tool.input_schema as unknown as Record<string, unknown>
       }
 
-      // Add cache_control to the last tool
       if (isLast) {
-        return {
-          ...baseTool,
-          cache_control: { type: 'ephemeral' as const }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any
+        baseTool.cache_control = { type: 'ephemeral' as const }
       }
 
       return baseTool
     })
   }
 
-  private convertResponse(response: Anthropic.Message): LLMResponse {
+  private convertResponse(response: AnthropicResponse): LLMResponse {
     const content: ContentBlock[] = response.content.map(block => {
       switch (block.type) {
         case 'text':
@@ -176,11 +243,9 @@ export class ClaudeProvider implements LLMProvider {
             name: block.name,
             input: block.input as Record<string, unknown>
           }
+        case 'thinking':
+          return { type: 'thinking' as const, thinking: block.thinking }
         default:
-          // Handle thinking blocks and other types
-          if ('thinking' in block) {
-            return { type: 'thinking' as const, thinking: (block as { thinking: string }).thinking }
-          }
           return { type: 'text' as const, text: '' }
       }
     })
@@ -190,9 +255,7 @@ export class ClaudeProvider implements LLMProvider {
       response.stop_reason === 'max_tokens' ? 'max_tokens' :
       'end_turn'
 
-    // Extract cache usage from response
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const usage = response.usage as any
+    const usage = response.usage
     const cacheUsage = (usage.cache_creation_input_tokens || usage.cache_read_input_tokens)
       ? {
           cacheCreationInputTokens: usage.cache_creation_input_tokens || 0,
@@ -204,8 +267,8 @@ export class ClaudeProvider implements LLMProvider {
       content,
       stopReason,
       usage: {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens
       },
       cacheUsage
     }
