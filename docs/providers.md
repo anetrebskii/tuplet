@@ -11,6 +11,7 @@ const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
   model: 'claude-sonnet-4-20250514',  // default
   maxTokens: 8192,                    // default
+  baseURL: '...',                     // optional, for proxies
 })
 ```
 

@@ -82,7 +82,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 
 | | **Tuplet** | **LangChain.js** |
 |---|---|---|
-| **Runtime dependencies** | 1 | 11+ (core) + per-provider packages |
+| **Runtime dependencies** | 0 | 11+ (core) + per-provider packages |
 | **Setup** | `new Tuplet({ tools, llm })` — one object, done | Chains, Runnables, LCEL, Memory, Agents — multiple abstractions to learn |
 | **Planning & task tracking** | Built-in, works out of the box | Requires separate `@langchain/langgraph` package |
 | **Clarifying questions** | Built-in | Not included — build your own |
