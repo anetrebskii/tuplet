@@ -17,6 +17,7 @@ import type {
   CacheUsage
 } from '../../types.js'
 
+import { defaultSanitize } from '../../sanitize.js'
 import type { ModelPricing } from '../../trace/types.js'
 
 export interface OpenRouterProviderConfig {
@@ -326,12 +327,13 @@ export class OpenRouterProvider implements LLMProvider {
     const choice = response.choices[0]
     const content: ContentBlock[] = []
 
-    // Add text content if present
+    // Strip reasoning-channel artifacts (harmony `<|channel|>` markers, leading
+    // `thought\n`) that some OpenRouter models emit as plain text in content.
     if (choice.message.content) {
-      content.push({
-        type: 'text',
-        text: choice.message.content
-      })
+      const cleaned = defaultSanitize(choice.message.content)
+      if (cleaned.length > 0) {
+        content.push({ type: 'text', text: cleaned })
+      }
     }
 
     // Convert tool calls

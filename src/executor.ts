@@ -22,7 +22,6 @@ import type {
   ProgressUpdate
 } from './types.js'
 import { ContextManager } from './context-manager.js'
-import { sanitizeAssistantContent } from './sanitize.js'
 import { TaskManager } from './tools/tasks.js'
 import { calculateCost } from './trace/pricing.js'
 import {
@@ -64,9 +63,6 @@ export interface ExecutorConfig {
 
   /** Nesting depth for progress events (0=root, 1=sub-agent, etc.) */
   depth?: number
-
-  /** Sanitizer applied to assistant text blocks before history push + response. */
-  sanitize?: (text: string) => string
 }
 
 /**
@@ -348,8 +344,7 @@ export async function executeLoop(
     signal,
     shouldContinue,
     traceBuilder,
-    depth: executorDepth = 0,
-    sanitize
+    depth: executorDepth = 0
   } = config
 
   const messages = [...initialMessages]
@@ -515,12 +510,7 @@ export async function executeLoop(
       })
     }
 
-    // Sanitize assistant text blocks before persisting to history. Runs before
-    // the push so poisoned artifacts (harmony markers, leading `thought\n`)
-    // don't reinforce themselves on the next turn.
-    const assistantContent = sanitize
-      ? sanitizeAssistantContent(response.content, sanitize)
-      : response.content
+    const assistantContent = response.content
 
     // Add assistant message to history
     messages.push({ role: 'assistant', content: assistantContent })
