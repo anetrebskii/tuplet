@@ -106,6 +106,8 @@ export interface MainAgentPromptConfig {
     title: string
     content: string
   }>
+  /** When true, suppress prompt guidance that references the __ask_user__ tool */
+  disableAskUser?: boolean
 }
 
 /**

@@ -156,6 +156,15 @@ export class MainAgentBuilder {
   }
 
   /**
+   * Suppress all prompt guidance that references the __ask_user__ tool.
+   * Use when the tool is not registered (disableAskUser on the Tuplet config).
+   */
+  setDisableAskUser(disabled = true): this {
+    this.config.disableAskUser = disabled
+    return this
+  }
+
+  /**
    * Add a behavioral rule
    */
   addRule(rule: string): this {
@@ -219,7 +228,9 @@ export class MainAgentBuilder {
     lines.push('Follow this workflow when delegating to sub-agents:')
     lines.push('')
     lines.push('1. **Explore first** - Use the `explore` sub-agent to check workspace state. Give it a SPECIFIC brief: what paths to check, what data to look for. Do NOT send vague instructions like "explore everything"')
-    lines.push('2. **Clarify if needed** - If the request is vague or ambiguous, ask the user using __ask_user__ BEFORE doing work')
+    if (!this.config.disableAskUser) {
+      lines.push('2. **Clarify if needed** - If the request is vague or ambiguous, ask the user using __ask_user__ BEFORE doing work')
+    }
     lines.push('3. **Formulate requirements** - Synthesize findings into: Context, Goal, Affected areas, Constraints, Success criteria')
     lines.push('4. **Plan** - For multi-step tasks, pass the structured brief to the `plan` sub-agent')
     lines.push('5. **Create tasks** - After receiving the plan, create one task per step using TaskCreate')
@@ -237,7 +248,9 @@ export class MainAgentBuilder {
     lines.push('')
     lines.push('- ALWAYS explore workspace state before doing anything else')
     lines.push('- ALWAYS plan before executing multi-step tasks')
-    lines.push('- NEVER assume credentials exist — check workspace first, then ask user')
+    if (!this.config.disableAskUser) {
+      lines.push('- NEVER assume credentials exist — check workspace first, then ask user')
+    }
     lines.push('- If a tool call fails, read the response and adapt — do not blindly retry')
     lines.push('- After completing work, verify results by reading back saved data')
 
@@ -349,7 +362,9 @@ export class MainAgentBuilder {
 
     // Rules (always at the end): combine default rules with user rules
     const defaultRules = [
-      'For vague or ambiguous requests, ask the user to clarify BEFORE starting work. Use __ask_user__ to confirm key details',
+      ...(this.config.disableAskUser
+        ? []
+        : ['For vague or ambiguous requests, ask the user to clarify BEFORE starting work. Use __ask_user__ to confirm key details']),
       'If a tool call fails, read the response carefully and decide how to proceed. Do not blindly retry the same approach',
       'After completing work, present a summary to the user',
     ]

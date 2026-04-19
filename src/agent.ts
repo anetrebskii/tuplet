@@ -213,7 +213,8 @@ export class Tuplet {
 
     const builder = new MainAgentBuilder()
       .role(this.config.role)
-      .skipBuiltInAgents();
+      .skipBuiltInAgents()
+      .setDisableAskUser(this.config.disableAskUser === true);
 
     if (this.config.agents?.length) {
       builder.agents(this.config.agents);
@@ -529,10 +530,13 @@ export class Tuplet {
     }
 
     // Inject task scope + built-in tool guidance into system prompt
-    systemPrompt += `\n\n${TASK_SCOPE_INSTRUCTIONS}
+    systemPrompt += `\n\n${TASK_SCOPE_INSTRUCTIONS}`;
+    if (!this.config.disableAskUser) {
+      systemPrompt += `
 
 ### Asking the User
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
+    }
 
 
     // Build tools list — split into core (always in API) and deferred (loaded on demand)
