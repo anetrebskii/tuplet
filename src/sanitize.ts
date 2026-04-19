@@ -6,7 +6,8 @@
  */
 
 const CHANNEL_HEADER_RE = /<\|?channel\|?>\s*\w+\s*<\|?(channel|message)\|?>/gi
-const STRAY_MARKER_RE = /<\|?(message|end|start|return)\|?>/gi
+const STRAY_MARKER_RE =
+  /<\|?(channel|message|end|start|return|system|user|assistant|developer|constrain)\|?>/gi
 const LEADING_THOUGHT_RE = /^[\t ]*thought[\t ]*\r?\n/
 
 export function defaultSanitize(text: string): string {

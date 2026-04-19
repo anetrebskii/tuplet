@@ -22,6 +22,10 @@ describe('defaultSanitize', () => {
     expect(out).toContain('Answer')
   })
 
+  it('strips bare channel marker with no header', () => {
+    expect(defaultSanitize('<channel|>Привет!')).toBe('Привет!')
+  })
+
   it('is a no-op on clean text', () => {
     expect(defaultSanitize('Hello world')).toBe('Hello world')
   })
