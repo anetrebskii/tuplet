@@ -33,4 +33,9 @@ describe('defaultSanitize', () => {
   it('returns empty string when the entire text is an artifact', () => {
     expect(defaultSanitize('thought\n')).toBe('')
   })
+
+  it('strips channel-name preceding a channel marker (no newline)', () => {
+    const input = 'thought<|channel>final<|message|>Записала яблоко'
+    expect(defaultSanitize(input)).toBe('Записала яблоко')
+  })
 })
