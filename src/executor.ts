@@ -368,6 +368,41 @@ export async function executeLoop(
   // Deferred tool loading: track which tools have been loaded via __tool_search__
   const deferredToolMap = new Map((deferredTools || []).map(t => [t.name, t]))
 
+  // Pre-promote deferred tools that were already loaded earlier in this conversation.
+  // Walk history in order and replay __tool_search__ selections so the tools block
+  // matches the state at the end of the previous turn — otherwise the prompt cache
+  // misses on the history prefix and the model re-emits __tool_search__.
+  if (deferredToolMap.size > 0) {
+    const promoted = new Set<string>()
+    const promote = (name: string) => {
+      if (promoted.has(name)) return
+      const tool = deferredToolMap.get(name)
+      if (!tool) return
+      if (toolSchemas.some(s => s.name === name)) return
+      tools.push(tool)
+      toolSchemas = [...toolSchemas, { name: tool.name, description: tool.description, input_schema: tool.parameters }]
+      promoted.add(name)
+    }
+    for (const msg of initialMessages) {
+      if (!Array.isArray(msg.content)) continue
+      for (const block of msg.content) {
+        if (block.type !== 'tool_use') continue
+        if (block.name === TOOL_SEARCH_NAME) {
+          const query = typeof block.input?.query === 'string' ? block.input.query : ''
+          const match = query.match(/^select:(.+)$/i)
+          if (!match) continue
+          for (const name of match[1].split(',').map(s => s.trim())) {
+            promote(name)
+          }
+        } else {
+          // Tool was called directly without a prior search in history (e.g. evicted
+          // from a pruned older message). Promote anyway so it stays executable.
+          promote(block.name)
+        }
+      }
+    }
+  }
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Check for interruption at start of each iteration
     const interruptReason = await checkInterruption(signal, shouldContinue)
