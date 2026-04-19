@@ -22,6 +22,7 @@ import type {
   ProgressUpdate
 } from './types.js'
 import { ContextManager } from './context-manager.js'
+import { sanitizeAssistantContent } from './sanitize.js'
 import { TaskManager } from './tools/tasks.js'
 import { calculateCost } from './trace/pricing.js'
 import {
@@ -63,6 +64,9 @@ export interface ExecutorConfig {
 
   /** Nesting depth for progress events (0=root, 1=sub-agent, etc.) */
   depth?: number
+
+  /** Sanitizer applied to assistant text blocks before history push + response. */
+  sanitize?: (text: string) => string
 }
 
 /**
@@ -344,7 +348,8 @@ export async function executeLoop(
     signal,
     shouldContinue,
     traceBuilder,
-    depth: executorDepth = 0
+    depth: executorDepth = 0,
+    sanitize
   } = config
 
   const messages = [...initialMessages]
@@ -475,13 +480,20 @@ export async function executeLoop(
       })
     }
 
+    // Sanitize assistant text blocks before persisting to history. Runs before
+    // the push so poisoned artifacts (harmony markers, leading `thought\n`)
+    // don't reinforce themselves on the next turn.
+    const assistantContent = sanitize
+      ? sanitizeAssistantContent(response.content, sanitize)
+      : response.content
+
     // Add assistant message to history
-    messages.push({ role: 'assistant', content: response.content })
+    messages.push({ role: 'assistant', content: assistantContent })
 
     // Emit AI text blocks as progress events (only when alongside tool calls —
     // final response text is returned via result.response, not as a progress event)
     if (response.stopReason === 'tool_use') {
-      const textBlocks = response.content.filter(
+      const textBlocks = assistantContent.filter(
         (b): b is { type: 'text'; text: string } => b.type === 'text'
       )
       for (const block of textBlocks) {
@@ -525,7 +537,7 @@ export async function executeLoop(
       }
 
       const result: AgentResult = {
-        response: extractText(response.content),
+        response: extractText(assistantContent),
         history: messages,
         toolCalls: toolCallLogs,
         thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
@@ -538,7 +550,7 @@ export async function executeLoop(
     }
 
     // Execute tool calls
-    const toolUseBlocks = response.content.filter(
+    const toolUseBlocks = assistantContent.filter(
       (block): block is ToolUseBlock => block.type === 'tool_use'
     )
 

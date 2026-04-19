@@ -14,6 +14,7 @@ import type {
 } from "./types.js";
 import { ContextManager } from "./context-manager.js";
 import { executeLoop } from "./executor.js";
+import { defaultSanitize } from "./sanitize.js";
 import { TraceBuilder } from "./trace.js";
 import type { Workspace } from "./workspace.js";
 import { createShellTool } from "./tools/shell.js";
@@ -544,6 +545,11 @@ When you need information the user hasn't provided and you cannot find it via ot
       systemPrompt += formatToolsPromptSection(allRunTools);
     }
 
+    // Resolve sanitizer: custom override wins; else default unless explicitly disabled.
+    const sanitize =
+      this.config.outputSanitizer
+        ?? (this.config.sanitizeReasoningArtifacts === false ? undefined : defaultSanitize);
+
     // Execute the agent loop — wrapped in try/finally to guarantee history is saved
     // on any outcome: complete, interrupted, error, or unexpected crash.
     let result: AgentResult;
@@ -563,6 +569,7 @@ When you need information the user hasn't provided and you cannot find it via ot
           signal,
           shouldContinue,
           traceBuilder,
+          sanitize,
         },
         messages,
         toolContext
@@ -588,6 +595,11 @@ When you need information the user hasn't provided and you cannot find it via ot
           this.config.logger?.warn("Failed to save history", saveError);
         }
       }
+    }
+
+    // Defense-in-depth: sanitize the final response (no-op on already-clean text).
+    if (sanitize && result.response) {
+      result.response = sanitize(result.response);
     }
 
     // End trace and attach to result (only for root agent, not sub-agents)

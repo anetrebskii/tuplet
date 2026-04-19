@@ -326,6 +326,20 @@ export interface TupletConfig {
 
   /** @internal Raw system prompt — used by sub-agent tool. Users should use `description`. */
   _systemPrompt?: string
+
+  /**
+   * Custom sanitizer applied to assistant text blocks before persisting to
+   * history and before returning `result.response`. Replaces the default
+   * pipeline entirely when provided.
+   */
+  outputSanitizer?: (text: string) => string
+
+  /**
+   * Strip reasoning-channel artifacts (harmony `<|channel|>` / `<|message|>`
+   * markers, leading `thought\n`) from assistant output. Default: true.
+   * Set to false to preserve raw output (e.g. for a debug UI).
+   */
+  sanitizeReasoningArtifacts?: boolean
 }
 
 // ============================================================================
