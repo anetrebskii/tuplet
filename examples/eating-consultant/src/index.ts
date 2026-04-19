@@ -2,7 +2,7 @@
  * Eating Consultant - Demo Terminal App
  *
  * An AI-powered nutrition assistant using OpenFoodFacts API.
- * Main agent handles meals directly; delegates meal planning to a sub-agent.
+ * Main agent drives every workflow through skills — no sub-agents.
  */
 
 import "dotenv/config";
@@ -15,9 +15,7 @@ import {
   Workspace,
   FileWorkspaceProvider,
   RunRecorder,
-  SubAgentBuilder,
   type Message,
-  type SubAgentConfig,
   type SkillConfig,
   type ProgressUpdate,
   type PendingQuestion,
@@ -224,132 +222,6 @@ function createProgressLogger() {
   };
 }
 
-// Define output schema for meal planner
-const mealPlannerOutputSchema = {
-  type: "object" as const,
-  properties: {
-    plan: {
-      type: "object",
-      description:
-        "The meal plan object with title, goal, dailyCalories, and days array",
-    },
-    summary: { type: "string", description: "Brief summary of the plan" },
-  },
-  required: ["plan", "summary"] as string[],
-};
-
-// Build meal planner prompt using SubAgentBuilder
-const mealPlannerPrompt = new SubAgentBuilder()
-  .role("a meal planning specialist")
-  .task("Gather requirements and create a detailed meal plan.")
-  .addWorkspacePath(
-    "user/preferences.json",
-    "User preferences with goal and restrictions",
-  )
-  .addWorkspacePath("meals/today.json", "Today's nutrition totals")
-  // Enable todo tracking - AI creates own plan
-  .useTodoTracking({
-    exampleSteps: [
-      "Reading user preferences from workspace",
-      "Asking user about calorie target",
-      "Creating 5-day meal plan for weight loss",
-      "Saving plan to workspace",
-    ],
-  })
-  // Questions to ask if info is missing
-  .addQuestionStep("Gather Goal", {
-    condition: "If goal is not in workspace and not provided",
-    question: "What's your goal?",
-    options: ["Weight loss", "Muscle gain", "Maintain weight", "Eat healthier"],
-  })
-  .addQuestionStep("Gather Daily Calories", {
-    condition: "If daily calories is not provided",
-    question: "What's your daily calorie target?",
-    options: ["1500 kcal", "1800 kcal", "2000 kcal", "2500 kcal"],
-  })
-  .addQuestionStep("Gather Days", {
-    condition: "If days is not provided",
-    question: "How many days should I plan?",
-    options: ["3 days", "5 days", "7 days"],
-  })
-  // Guidelines for plan creation
-  .addGuidelines([
-    "Stay within ±100 calories of the daily target",
-    "Include variety across days",
-    "Balance macros appropriately for the goal",
-  ])
-  // Things to avoid
-  .constraints([
-    "Never suggest foods that conflict with dietary restrictions",
-    "Do not repeat the same meal on consecutive days",
-    "Avoid unrealistic portion sizes",
-  ])
-  // Example of expected output
-  .addExample(
-    "User wants 1800 kcal/day for weight loss, 3 days",
-    '{ plan: { title: "3-Day Weight Loss Plan", dailyCalories: 1800, days: [...] }, summary: "Created 3-day plan..." }',
-    "Each day totals ~1800 kcal with balanced macros",
-  )
-  .addSection(
-    "Plan Format",
-    `Create a plan object:
-{
-  "title": "Plan name",
-  "goal": "User's goal",
-  "dailyCalories": number,
-  "days": [{ "day": "Monday", "meals": { breakfast, lunch, dinner, snacks }, "totalCalories": N }]
-}`,
-  )
-  .outputSchema(mealPlannerOutputSchema)
-  .build();
-
-// Planner sub-agent - creates meal plans
-const plannerAgent: SubAgentConfig = {
-  name: "meal_planner",
-  description: "Create detailed meal plans based on user goals and preferences",
-  systemPrompt: mealPlannerPrompt,
-
-  inputSchema: {
-    type: "object",
-    properties: {
-      goal: {
-        type: "string",
-        description:
-          "User goal: weight_loss, muscle_gain, maintenance, healthy (agent will ask if not provided)",
-      },
-      dailyCalories: {
-        type: "number",
-        description: "Target daily calories (agent will ask if not provided)",
-      },
-      restrictions: {
-        type: "array",
-        description:
-          "Dietary restrictions: vegetarian, vegan, gluten-free, dairy-free, etc.",
-      },
-      days: {
-        type: "number",
-        description:
-          "Number of days to plan, 1-7 (agent will ask if not provided)",
-      },
-      language: {
-        type: "string",
-        description:
-          'Language for the plan: "ru" for Russian, "en" for English',
-      },
-    },
-    required: [],
-  },
-
-  outputSchema: mealPlannerOutputSchema,
-
-  tools: [],
-};
-
-// Sub-agents for specialized tasks only
-const subAgents = [plannerAgent];
-
-// Main agent description
-
 async function main() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -360,7 +232,7 @@ async function main() {
 
   const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: "moonshotai/kimi-k2.5",    
+    model: "google/gemma-4-26b-a4b-it",
     maxTokens: 2000,
   });
 
@@ -479,6 +351,36 @@ If not found, break it into components and log each.
 Always be encouraging. Never judge food choices. If something is high-calorie, just present the facts neutrally.`,
     },
     {
+      name: "create_meal_plan",
+      description: "Create a personalized multi-day meal plan with calorie and macro targets",
+      whenToUse: "User asks to plan meals, build a menu, or 'составь план питания' / 'plan my meals'",
+      prompt: `Create a meal plan for the user and save it to workspace.
+
+Steps:
+1. Read user/preferences.json from workspace if it exists (goal, restrictions, allergies)
+2. If goal not known, ask via __ask_user__: "What's your goal?" — options: Weight loss, Muscle gain, Maintenance, Healthy
+3. If daily calorie target not known, ask: "What's your daily calorie target?" — options: 1500, 1800, 2000, 2500
+4. If number of days not known, ask: "How many days should I plan?" — options: 3, 5, 7
+5. Build the plan: each day has breakfast, lunch, dinner, and snacks with calorie counts
+6. Write the plan to workspace at plan/current.json using workspace_write and exactly this shape:
+   {
+     "title": "<plan name>",
+     "goal": "<user goal>",
+     "dailyCalories": <number>,
+     "days": [
+       { "day": "Monday", "meals": { "breakfast": "...", "lunch": "...", "dinner": "...", "snacks": "..." }, "totalCalories": <N> }
+     ]
+   }
+7. Reply with a short summary: title, days, daily calories.
+
+Rules:
+- Stay within ±100 kcal of the daily target
+- Never repeat the same meal on consecutive days
+- Respect every dietary restriction strictly
+- Realistic portion sizes only
+- Use Russian if the user is writing in Russian`,
+    },
+    {
       name: "analyze_day",
       description: "Analyze daily nutrition totals and give recommendations",
       whenToUse: "User asks for daily summary, analysis, recommendations, or 'how am I doing today'",
@@ -502,7 +404,7 @@ Keep the tone supportive and practical.`,
     },
   ];
 
-  // Create the main agent with sub-agent, skills, and run recorder
+  // Create the main agent: skills-only, no sub-agents
   const agent = new Tuplet({
     role:
       "a nutrition consultant that helps users track meals, view nutrition progress, and plan their diet. " +
@@ -510,7 +412,7 @@ Keep the tone supportive and practical.`,
       "Present results in a friendly, encouraging way. Use Russian if user speaks Russian.",
     tools: nutritionCounterTools,
     skills,
-    agents: subAgents,
+    agents: [],
     llm: llmProvider,
     allowedUrls: ['https://*.openfoodfacts.org/**'],
     logger: createProgressLogger(),
