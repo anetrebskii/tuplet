@@ -28,6 +28,35 @@ export interface OpenRouterProviderConfig {
   referer?: string
   title?: string
   cache?: boolean
+  /**
+   * Max retries when the model returns a fuzzy response (empty, or leaked
+   * chat-template markers, etc.) — treated as a stochastic glitch. Default: 2.
+   * Set to 0 to disable.
+   */
+  maxFuzzyRetries?: number
+}
+
+/**
+ * Patterns that indicate the model emitted chat-template artefacts as plain
+ * text instead of a clean response (observed mostly on Gemma-family models).
+ */
+const FUZZY_CONTENT_PATTERNS: RegExp[] = [
+  /<\|?tool_call\|?>/i,
+  /<\|"\|>/,
+  /^\s*call\s*:\s*\w+\s*\{/,
+  /<function_call\b/i,
+  /<tool_use\b/i,
+]
+
+/**
+ * A response is "fuzzy" if it has no tool calls AND the text is either empty
+ * or contains leaked template markers. From the caller's perspective this is
+ * just a broken response that should be retried.
+ */
+export function isFuzzyResponse(content: string | null | undefined, hasToolCalls: boolean): boolean {
+  if (hasToolCalls) return false
+  if (!content || !content.trim()) return true
+  return FUZZY_CONTENT_PATTERNS.some(re => re.test(content))
 }
 
 interface OpenAIContentPart {
@@ -104,6 +133,7 @@ export class OpenRouterProvider implements LLMProvider {
   private referer?: string
   private title?: string
   private cache: boolean
+  private maxFuzzyRetries: number
 
   constructor(config: OpenRouterProviderConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || ''
@@ -113,6 +143,7 @@ export class OpenRouterProvider implements LLMProvider {
     this.referer = config.referer
     this.title = config.title
     this.cache = config.cache !== false
+    this.maxFuzzyRetries = config.maxFuzzyRetries ?? 2
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
@@ -155,6 +186,54 @@ export class OpenRouterProvider implements LLMProvider {
       headers['X-Title'] = this.title
     }
 
+    // Retry on fuzzy responses (empty content, leaked chat-template markers,
+    // etc.) — stochastic model glitches that a plain retry usually fixes.
+    // Tokens from failed attempts are summed into the returned usage so cost
+    // accounting stays correct; only the final response is returned, so the
+    // fuzzy text can never leak into chat history.
+    const maxAttempts = 1 + Math.max(0, this.maxFuzzyRetries)
+    let lastData: OpenAIResponse | undefined
+    let totalInput = 0
+    let totalOutput = 0
+    let totalCacheRead = 0
+    let totalCacheWrite = 0
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const data = await this.requestOnce(requestBody, headers)
+      lastData = data
+
+      const details = data.usage.prompt_tokens_details
+      const cachedRead = details?.cached_tokens || 0
+      const cacheWrite = details?.cache_write_tokens || 0
+      totalInput += data.usage.prompt_tokens - cachedRead - cacheWrite
+      totalOutput += data.usage.completion_tokens
+      totalCacheRead += cachedRead
+      totalCacheWrite += cacheWrite
+
+      const choice = data.choices[0]
+      const hasToolCalls = (choice.message.tool_calls ?? []).length > 0
+      if (!isFuzzyResponse(choice.message.content, hasToolCalls)) {
+        break
+      }
+    }
+
+    const converted = this.convertResponse(lastData!)
+    const cacheUsage: CacheUsage | undefined =
+      totalCacheRead || totalCacheWrite
+        ? { cacheReadInputTokens: totalCacheRead, cacheCreationInputTokens: totalCacheWrite }
+        : undefined
+
+    return {
+      ...converted,
+      usage: { inputTokens: totalInput, outputTokens: totalOutput },
+      cacheUsage
+    }
+  }
+
+  private async requestOnce(
+    requestBody: Record<string, unknown>,
+    headers: Record<string, string>
+  ): Promise<OpenAIResponse> {
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers,
@@ -177,7 +256,7 @@ export class OpenRouterProvider implements LLMProvider {
       throw new Error(`OpenRouter API error: empty response (no choices returned)`)
     }
 
-    return this.convertResponse(data)
+    return data
   }
 
   private convertMessages(systemPrompt: string, messages: Message[], useCache: boolean): OpenAIMessage[] {
