@@ -144,6 +144,7 @@ console.log(result.response)
 - [Logger](https://github.com/anetrebskii/tuplet/blob/main/docs/logger.md)
 - [Tracing](https://github.com/anetrebskii/tuplet/blob/main/docs/tracing.md)
 - [Run Recording](https://github.com/anetrebskii/tuplet/blob/main/docs/run-recording.md)
+- [Prompt Sections & History Injections](https://github.com/anetrebskii/tuplet/blob/main/docs/prompt-sections.md)
 
 ## License
 

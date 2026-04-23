@@ -244,6 +244,63 @@ export interface EnvironmentProvider {
 }
 
 // ============================================================================
+// Prompt Sections & History Injections (issue #15)
+// ============================================================================
+
+export interface SectionContext<TContext = unknown> {
+  /** Host-provided context passed via RunOptions.context */
+  context: TContext
+  /** Current conversation id (empty string if none) */
+  conversationId: string
+}
+
+export interface TurnContext<TContext = unknown> extends SectionContext<TContext> {
+  /** 1-based index of the turn currently being processed */
+  turnIndex: number
+  /** Plain-text of the user message that initiated this turn */
+  lastUserMessage: string
+}
+
+export type SectionTrigger<TContext = unknown> = (
+  ctx: SectionContext<TContext>
+) => boolean | Promise<boolean>
+
+export type SectionContent<TContext = unknown> =
+  | string
+  | ((ctx: SectionContext<TContext>) => string | Promise<string>)
+
+export type InjectionTrigger<TContext = unknown> = (
+  ctx: TurnContext<TContext>
+) => boolean | Promise<boolean>
+
+export type InjectionContent<TContext = unknown> =
+  | string
+  | ((ctx: TurnContext<TContext>) => string | Promise<string>)
+
+/**
+ * Section evaluated once at the first turn of a conversation and appended to the
+ * system prompt for the session's lifetime. See docs/prompt-sections.md.
+ */
+export interface PromptSection<TContext = unknown> {
+  name: string
+  when: SectionTrigger<TContext>
+  content: SectionContent<TContext>
+}
+
+/**
+ * Injection evaluated on every turn until it fires. When `when` returns true,
+ * the rendered content is wrapped in a `<tuplet-note>` tag and inserted into
+ * the message history before the current user turn.
+ */
+export interface HistoryInjection<TContext = unknown> {
+  name: string
+  when: InjectionTrigger<TContext>
+  content: InjectionContent<TContext>
+  /** Default: true. When true, the injection only fires once per session. */
+  once?: boolean
+}
+
+// ============================================================================
 // Skills
 // ============================================================================
 
@@ -276,6 +333,18 @@ export interface TupletConfig {
 
   /** Skills - lazy-loaded prompts activated by name */
   skills?: SkillConfig[]
+
+  /**
+   * Prompt sections conditionally appended to the system prompt.
+   * Evaluated once at turn 1, cached for the session.
+   */
+  sections?: PromptSection<any>[]
+
+  /**
+   * History injections evaluated each turn until fired.
+   * Wrapped in <tuplet-note> and inserted before the current user turn.
+   */
+  historyInjections?: HistoryInjection<any>[]
 
   llm: LLMProvider
   logger?: LogProvider
@@ -378,6 +447,12 @@ export interface RunOptions {
    * The AI references variables by name (e.g., `$API_KEY`) and the shell resolves them.
    */
   env?: EnvironmentProvider
+
+  /**
+   * Host-provided context passed to `PromptSection.when/content` and
+   * `HistoryInjection.when/content`. Opaque to Tuplet.
+   */
+  context?: unknown
 
   /** @internal Trace builder passed from parent agent */
   _traceBuilder?: import('./trace.js').TraceBuilder

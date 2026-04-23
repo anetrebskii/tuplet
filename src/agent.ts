@@ -11,6 +11,8 @@ import type {
   RunOptions,
   AgentResult,
   Message,
+  SectionContext,
+  TurnContext,
 } from "./types.js";
 import { ContextManager } from "./context-manager.js";
 import { executeLoop } from "./executor.js";
@@ -31,6 +33,18 @@ import {
 import { getBuiltInAgents } from "./built-in-agents/index.js";
 import { MainAgentBuilder } from "./prompt/main-agent-builder.js";
 import { TASK_SCOPE_INSTRUCTIONS } from "./constants.js";
+import {
+  loadTupletState,
+  saveTupletState,
+  resolveSections,
+  formatSectionsForPrompt,
+  evaluateInjections,
+  renderInjectionsPayload,
+  countUserTurns,
+  extractLastUserText,
+  type SectionCacheEntry,
+  type TupletSessionState,
+} from "./prompt-sections.js";
 
 /** Path where the plan is stored in workspace (relative) */
 export const PLAN_PATH = ".tuplet/plan.md";
@@ -346,6 +360,50 @@ export class Tuplet {
   }
 
   /**
+   * Evaluate registered PromptSections against a context and return the ones
+   * that fire, in registration order. For host-side testing of triggers.
+   */
+  async resolveSections(ctx: SectionContext): Promise<{ name: string; content: string }[]> {
+    if (!this.config.sections || this.config.sections.length === 0) return [];
+    const { fired } = await resolveSections(this.config.sections, ctx, undefined);
+    return fired;
+  }
+
+  /**
+   * Evaluate registered HistoryInjections against a turn context. `firedNames`
+   * is used to skip once-fired injections (default: none). For host-side
+   * testing of triggers.
+   */
+  async evaluateInjections(
+    ctx: TurnContext,
+    firedNames: string[] = []
+  ): Promise<{ name: string; content: string; once: boolean }[]> {
+    if (!this.config.historyInjections || this.config.historyInjections.length === 0) return [];
+    return evaluateInjections(this.config.historyInjections, ctx, firedNames);
+  }
+
+  /**
+   * Invalidate a cached PromptSection for a conversation. On the next run, the
+   * section will be re-evaluated. If `name` is omitted, the entire section
+   * cache for the conversation is cleared.
+   */
+  async invalidateSection(conversationId: string, name?: string): Promise<void> {
+    const repo = this.config.repository;
+    if (!repo?.getState || !repo?.saveState) return;
+    const state = (await repo.getState(conversationId)) || {};
+    const tuplet = (state['__tuplet'] || {}) as TupletSessionState;
+    if (!tuplet.sections) return;
+    if (name) {
+      const next: Record<string, SectionCacheEntry> = { ...tuplet.sections };
+      delete next[name];
+      tuplet.sections = next;
+    } else {
+      tuplet.sections = {};
+    }
+    await repo.saveState(conversationId, { ...state, __tuplet: tuplet });
+  }
+
+  /**
    * Run the agent with a user message
    */
   async run(message: string, options: RunOptions = {}): Promise<AgentResult> {
@@ -538,6 +596,74 @@ export class Tuplet {
 When you need information the user hasn't provided and you cannot find it via other tools, call __ask_user__ with 1-4 questions. Each question should include relevant options. Do NOT ask for information already in the conversation or in workspace data.`;
     }
 
+    // Prompt sections & history injections (issue #15).
+    // Skip for sub-agents (they pass _systemPrompt and have their own config).
+    let sessionState: TupletSessionState = {};
+    const hasSectionsOrInjections =
+      !this.config._systemPrompt &&
+      ((this.config.sections && this.config.sections.length > 0) ||
+        (this.config.historyInjections && this.config.historyInjections.length > 0));
+
+    if (hasSectionsOrInjections) {
+      sessionState = await loadTupletState(this.config.repository, conversationId);
+
+      const sectionCtx: SectionContext = {
+        context: options.context,
+        conversationId: conversationId ?? '',
+      };
+
+      if (this.config.sections && this.config.sections.length > 0) {
+        const { fired, updatedCache } = await resolveSections(
+          this.config.sections,
+          sectionCtx,
+          sessionState.sections
+        );
+        sessionState = { ...sessionState, sections: updatedCache };
+        const rendered = formatSectionsForPrompt(fired);
+        if (rendered) {
+          systemPrompt += `\n\n${rendered}`;
+        }
+      }
+
+      if (
+        !isResuming &&
+        this.config.historyInjections &&
+        this.config.historyInjections.length > 0
+      ) {
+        const turnCtx: TurnContext = {
+          ...sectionCtx,
+          turnIndex: countUserTurns(messages),
+          lastUserMessage: extractLastUserText(messages),
+        };
+        const firedNames = sessionState.firedInjections ?? [];
+        const newFired = await evaluateInjections(
+          this.config.historyInjections,
+          turnCtx,
+          firedNames
+        );
+
+        if (newFired.length > 0) {
+          const payload = renderInjectionsPayload(newFired);
+          const insertIdx = messages.length - 1;
+          const prev = insertIdx > 0 ? messages[insertIdx - 1] : null;
+          const toInsert: Message[] = [];
+          if (prev && prev.role === 'user') {
+            toInsert.push({ role: 'assistant', content: 'Noted.' });
+          }
+          toInsert.push({ role: 'user', content: payload });
+          toInsert.push({ role: 'assistant', content: 'Noted.' });
+          messages.splice(insertIdx < 0 ? 0 : insertIdx, 0, ...toInsert);
+
+          const updatedFired = [...firedNames];
+          for (const inj of newFired) {
+            if (inj.once && !updatedFired.includes(inj.name)) {
+              updatedFired.push(inj.name);
+            }
+          }
+          sessionState = { ...sessionState, firedInjections: updatedFired };
+        }
+      }
+    }
 
     // Build tools list — split into core (always in API) and deferred (loaded on demand)
     const { coreTools, deferredTools } = this.getRunTools(taskManager, ws, this.config.agentName, mode);
@@ -590,6 +716,15 @@ When you need information the user hasn't provided and you cannot find it via ot
           await this.config.repository.saveHistory(conversationId, historyToSave);
         } catch (saveError) {
           this.config.logger?.warn("Failed to save history", saveError);
+        }
+      }
+
+      // Persist section/injection state so they don't re-fire on the next run.
+      if (hasSectionsOrInjections && conversationId) {
+        try {
+          await saveTupletState(this.config.repository, conversationId, sessionState);
+        } catch (saveError) {
+          this.config.logger?.warn("Failed to save tuplet state", saveError);
         }
       }
     }

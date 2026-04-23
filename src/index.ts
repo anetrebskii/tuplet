@@ -67,7 +67,17 @@ export type {
   // Config types
   ContextStrategy,
   SystemPromptConfig,
-  EnvironmentInfo
+  EnvironmentInfo,
+
+  // Prompt sections & history injections (issue #15)
+  PromptSection,
+  HistoryInjection,
+  SectionContext,
+  TurnContext,
+  SectionTrigger,
+  SectionContent,
+  InjectionTrigger,
+  InjectionContent
 } from './types.js'
 
 // Activity (semantic progress classification)

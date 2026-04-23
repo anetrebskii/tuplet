@@ -12,6 +12,7 @@ import {
   OpenRouterProvider,
   ConsoleLogger,
   ConsoleTraceProvider,
+  MemoryRepository,
   Workspace,
   FileWorkspaceProvider,
   RunRecorder,
@@ -22,12 +23,20 @@ import {
   type EnhancedQuestion,
   type QuestionOption,
   type TaskUpdateNotification,
+  type PromptSection,
+  type HistoryInjection,
 } from "tuplet";
 import { nutritionCounterTools } from "./tools.js";
 
 /** Check if workspace mode is enabled via --workspace flag or WORKSPACE env var */
 const useWorkspace =
   process.argv.includes("--workspace") || process.env.USE_WORKSPACE === "1";
+
+/** Host-provided context passed to PromptSections and HistoryInjections */
+interface EatingCtx {
+  isAdmin: boolean
+  locale: 'en' | 'ru'
+}
 
 // Helper to get option label (works with both string and QuestionOption)
 function getOptionLabel(opt: string | QuestionOption): string {
@@ -404,6 +413,36 @@ Keep the tone supportive and practical.`,
     },
   ];
 
+  // Conditional prompt pieces (issue #15).
+  // Sections evaluate once at turn 1 and live in the system prompt for the
+  // whole session. Injections evaluate each turn and land as synthetic
+  // messages before the current user turn.
+  const sections: PromptSection<EatingCtx>[] = [
+    {
+      name: "admin-capabilities",
+      when: ctx => ctx.context.isAdmin,
+      content:
+        "The current user is an administrator. You MAY help them reset " +
+        "workspace data or inspect raw JSON on request. Mention that these " +
+        "admin actions exist if the user asks what you can do.",
+    },
+  ];
+
+  const historyInjections: HistoryInjection<EatingCtx>[] = [
+    {
+      name: "opening-turn-warmup",
+      when: ctx => ctx.turnIndex === 1,
+      content:
+        "This is the first turn of the conversation. Open with a short, " +
+        "warm greeting acknowledging the person before jumping into food " +
+        "topics. Keep it under two sentences.",
+    },
+  ];
+
+  const isAdmin = process.argv.includes("--admin");
+  const repository = new MemoryRepository();
+  let conversationId = `eating-${Date.now()}`;
+
   // Create the main agent: skills-only, no sub-agents
   const agent = new Tuplet({
     role:
@@ -414,6 +453,9 @@ Keep the tone supportive and practical.`,
     skills,
     agents: [],
     llm: llmProvider,
+    repository,
+    sections,
+    historyInjections,
     allowedUrls: ['https://*.openfoodfacts.org/**'],
     logger: createProgressLogger(),
     maxIterations: 15,
@@ -421,6 +463,8 @@ Keep the tone supportive and practical.`,
     agentName: "eating_consultant",
     recorder: new RunRecorder({ outputDir: "./runs" }),
   });
+
+  const runContext: EatingCtx = { isAdmin, locale: "en" };
 
   let history: Message[] = [];
   let currentController: AbortController | null = null;
@@ -472,6 +516,7 @@ Keep the tone supportive and practical.`,
   console.log(
     `\nWorkspace: ${workspace ? "enabled (--workspace)" : "disabled (tools-only mode)"}`,
   );
+  console.log(`Admin mode: ${isAdmin ? "on (--admin)" : "off"}`);
   console.log('Commands: "quit" to exit, "clear" to reset');
   console.log("Press ESC to interrupt a running task");
   console.log("");
@@ -486,6 +531,8 @@ Keep the tone supportive and practical.`,
       "Start the conversation with a greeting.",
       {
         history,
+        conversationId,
+        context: runContext,
         signal: currentController.signal,
         workspace,
       },
@@ -520,6 +567,7 @@ Keep the tone supportive and practical.`,
 
       if (trimmed.toLowerCase() === "clear") {
         history = [];
+        conversationId = `eating-${Date.now()}`;
         console.log("\n--- Conversation cleared ---\n");
         prompt();
         return;
@@ -532,6 +580,8 @@ Keep the tone supportive and practical.`,
 
         const result = await agent.run(trimmed, {
           history,
+          conversationId,
+          context: runContext,
           signal: currentController.signal,
           workspace,
         });
@@ -588,6 +638,8 @@ Keep the tone supportive and practical.`,
 
           const continuedResult = await agent.run(combinedAnswer, {
             history: currentResult.history,
+            conversationId,
+            context: runContext,
             signal: currentController.signal,
             workspace,
           });
