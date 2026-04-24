@@ -310,20 +310,46 @@ export class OpenRouterProvider implements LLMProvider {
       body: JSON.stringify(requestBody)
     })
 
+    // Read the body as text once so we can both parse it AND echo it in error
+    // messages. OpenRouter often relays upstream failures as "Provider returned
+    // error" with the real detail in `error.metadata` or `error.code` — without
+    // the raw body in the thrown message, callers have no way to diagnose.
+    const rawBody = await response.text()
+    const data = safeParseJson(rawBody) as
+      | (OpenAIResponse & { error?: { message?: string; code?: number; metadata?: unknown } })
+      | null
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: { message: response.statusText } })) as { error?: { message?: string } }
-      throw new Error(`OpenRouter API error: ${errorData.error?.message || response.statusText}`)
+      const upstream = data?.error?.message || response.statusText
+      throw new Error(
+        `OpenRouter API error (HTTP ${response.status}): ${upstream} — ` +
+        `body: ${truncate(rawBody, 500)}`
+      )
     }
 
-    const data = await response.json() as OpenAIResponse & { error?: { message?: string; code?: number } }
+    if (!data) {
+      throw new Error(
+        `OpenRouter API error: response was not valid JSON — ` +
+        `body: ${truncate(rawBody, 500)}`
+      )
+    }
 
-    // OpenRouter can return 200 OK with an error body (e.g. provider timeout)
+    // OpenRouter can return 200 OK with an error body (e.g. provider timeout).
+    // Include the full error object since `.message` is often a generic
+    // placeholder ("Provider returned error") while the real detail lives in
+    // `.code` or `.metadata`.
     if (data.error) {
-      throw new Error(`OpenRouter API error: ${data.error.message || 'provider returned an error'}`)
+      throw new Error(
+        `OpenRouter API error: ${data.error.message || 'provider returned an error'} — ` +
+        `detail: ${truncate(JSON.stringify(data.error), 500)}`
+      )
     }
 
     if (!data.choices?.[0]?.message) {
-      throw new Error(`OpenRouter API error: empty response (no choices returned)`)
+      throw new Error(
+        `OpenRouter API error: empty response (no choices returned) — ` +
+        `body: ${truncate(rawBody, 500)}`
+      )
     }
 
     return data
@@ -605,4 +631,17 @@ interface OpenRouterModelsResponse {
       input_cache_write?: string
     }
   }>
+}
+
+function safeParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s
+  return `${s.slice(0, max)}…(+${s.length - max} chars)`
 }
