@@ -27,7 +27,23 @@ export interface OpenRouterProviderConfig {
   baseURL?: string
   referer?: string
   title?: string
-  cache?: boolean
+  /**
+   * When true, attach explicit `cache_control: { type: "ephemeral" }`
+   * breakpoints to the system prompt, the last tool, and the last user
+   * message — matching the Anthropic native-API convention.
+   *
+   * Default: `false`. OpenRouter handles prompt caching automatically for
+   * most upstreams (OpenAI, DeepSeek, Grok, Groq, Moonshot, Gemini 2.5+ via
+   * implicit caching), so breakpoints are only useful for families that
+   * require them explicitly — primarily Anthropic models (and Gemini when
+   * using explicit mode).
+   *
+   * Leaving this off is also safer: some strict upstreams for non-caching
+   * model families (e.g. certain Gemma providers) reject unknown fields
+   * with a 400, so sending `cache_control` universally can break routes
+   * that ignore caching entirely.
+   */
+  explicitCacheControl?: boolean
   /**
    * Max retries when the model returns a fuzzy response (empty, or leaked
    * chat-template markers, etc.) — treated as a stochastic glitch. Default: 2.
@@ -178,7 +194,7 @@ export class OpenRouterProvider implements LLMProvider {
   private baseURL: string
   private referer?: string
   private title?: string
-  private cache: boolean
+  private explicitCacheControl: boolean
   private maxFuzzyRetries: number
   private throwOnFuzzyExhaustion: boolean
   private providerPreferences?: Record<string, unknown>
@@ -191,7 +207,7 @@ export class OpenRouterProvider implements LLMProvider {
     this.baseURL = config.baseURL || 'https://openrouter.ai/api/v1'
     this.referer = config.referer
     this.title = config.title
-    this.cache = config.cache !== false
+    this.explicitCacheControl = config.explicitCacheControl === true
     this.maxFuzzyRetries = config.maxFuzzyRetries ?? 2
     this.throwOnFuzzyExhaustion = config.throwOnFuzzyExhaustion !== false
     this.providerPreferences = config.provider
@@ -212,8 +228,8 @@ export class OpenRouterProvider implements LLMProvider {
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const openaiMessages = this.convertMessages(systemPrompt, messages, this.cache)
-    const openaiTools = this.convertTools(tools, this.cache)
+    const openaiMessages = this.convertMessages(systemPrompt, messages, this.explicitCacheControl)
+    const openaiTools = this.convertTools(tools, this.explicitCacheControl)
 
     const requestBody: Record<string, unknown> = {
       model: options.model || this.model,

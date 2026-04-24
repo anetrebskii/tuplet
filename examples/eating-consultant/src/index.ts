@@ -241,7 +241,7 @@ async function main() {
 
   const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: "google/gemma-4-26b-a4b-it",
+    model: "anthropic/claude-3.5-haiku",    
     maxTokens: 2000,
   });
 
@@ -713,6 +713,9 @@ Keep the tone supportive and practical.`,
           console.log(
             `  Total: ${trace.totalInputTokens} in / ${trace.totalOutputTokens} out`,
           );
+          console.log(
+            `  Cache: ${trace.totalCacheReadTokens} read / ${trace.totalCacheCreationTokens} write`,
+          );
           if (trace.totalCost > 0) {
             console.log(`  Cost: $${trace.totalCost.toFixed(4)}`);
           }
@@ -720,7 +723,7 @@ Keep the tone supportive and practical.`,
             for (const modelId of Object.keys(trace.costByModel)) {
               const usage = trace.costByModel[modelId];
               console.log(
-                `  ${modelId}: ${usage.inputTokens} in / ${usage.outputTokens} out (${usage.calls} calls)`,
+                `  ${modelId}: ${usage.inputTokens} in / ${usage.outputTokens} out, ${usage.cacheReadTokens} cache-read / ${usage.cacheCreationTokens} cache-write (${usage.calls} calls)`,
               );
             }
           }

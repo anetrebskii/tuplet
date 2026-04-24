@@ -109,7 +109,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ tool_calls: [{ id: 't1', name: 'foo', args: { x: 1 } }] })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -123,7 +123,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ content: 'Hello, world!' })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -147,7 +147,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -168,7 +168,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ content: 'Got it.', prompt_tokens: 40, completion_tokens: 5 })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -185,7 +185,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
     })
     fetchMock.mockImplementation(async () => jsonResponse(fuzzy))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false, maxFuzzyRetries: 2 })
+    const provider = new OpenRouterProvider({ apiKey: 'k', maxFuzzyRetries: 2 })
     await expect(
       provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
     ).rejects.toThrow(/broken response after 3 attempt/)
@@ -205,7 +205,6 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
 
     const provider = new OpenRouterProvider({
       apiKey: 'k',
-      cache: false,
       maxFuzzyRetries: 2,
       throwOnFuzzyExhaustion: false
     })
@@ -222,7 +221,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ content: 'call:foo{x:1}<tool_call|>' })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false, maxFuzzyRetries: 0 })
+    const provider = new OpenRouterProvider({ apiKey: 'k', maxFuzzyRetries: 0 })
     await expect(
       provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
     ).rejects.toThrow(/broken response after 1 attempt/)
@@ -238,7 +237,6 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
 
     const provider = new OpenRouterProvider({
       apiKey: 'k',
-      cache: false,
       maxFuzzyRetries: 0,
       throwOnFuzzyExhaustion: false
     })
@@ -265,7 +263,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [dummyTool])
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -286,18 +284,18 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result.stopReason).toBe('max_tokens')
   })
 
-  it('sets cache_control on system prompt, last user message, and last tool when cache=true', async () => {
+  it('sets cache_control on system prompt, last user message, and last tool when explicitCacheControl=true', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k' })
+    const provider = new OpenRouterProvider({ apiKey: 'k', explicitCacheControl: true })
     await provider.chat(
       'sys',
       [{ role: 'user', content: 'hi' }],
@@ -320,7 +318,6 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
 
     const provider = new OpenRouterProvider({
       apiKey: 'k',
-      cache: false,
       provider: { order: ['Ionstream'], allow_fallbacks: false }
     })
     await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
@@ -333,18 +330,18 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body).not.toHaveProperty('provider')
   })
 
-  it('omits cache_control entirely when cache=false', async () => {
+  it('omits cache_control entirely by default (explicitCacheControl is off)', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     await provider.chat(
       'sys',
       [{ role: 'user', content: 'hi' }],
@@ -364,7 +361,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ content: 'ok' })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false, maxFuzzyRetries: 1 })
+    const provider = new OpenRouterProvider({ apiKey: 'k', maxFuzzyRetries: 1 })
     await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -379,7 +376,7 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
       okChoice({ content: 'thought\nHello, world!' })
     ))
 
-    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
 
     expect(result.content).toEqual([{ type: 'text', text: 'Hello, world!' }])
@@ -393,7 +390,6 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
 
     const provider = new OpenRouterProvider({
       apiKey: 'k',
-      cache: false,
       sanitizeOutput: false
     })
     const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
