@@ -293,6 +293,68 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
     expect(result.stopReason).toBe('max_tokens')
   })
 
+  it('sets cache_control on system prompt, last user message, and last tool when cache=true', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
+
+    const provider = new OpenRouterProvider({ apiKey: 'k' })
+    await provider.chat(
+      'sys',
+      [{ role: 'user', content: 'hi' }],
+      [
+        { name: 'a', description: 'a', input_schema: { type: 'object', properties: {} } },
+        { name: 'b', description: 'b', input_schema: { type: 'object', properties: {} } }
+      ]
+    )
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
+    expect(body.messages[1].content[0].cache_control).toEqual({ type: 'ephemeral' })
+    expect(body.tools[0].cache_control).toBeUndefined()
+    expect(body.tools[1].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('forwards provider preferences when configured', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
+
+    const provider = new OpenRouterProvider({
+      apiKey: 'k',
+      cache: false,
+      provider: { order: ['Ionstream'], allow_fallbacks: false }
+    })
+    await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.provider).toEqual({ order: ['Ionstream'], allow_fallbacks: false })
+  })
+
+  it('omits provider field when not configured', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
+
+    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body).not.toHaveProperty('provider')
+  })
+
+  it('omits cache_control entirely when cache=false', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok' })))
+
+    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    await provider.chat(
+      'sys',
+      [{ role: 'user', content: 'hi' }],
+      [{ name: 'a', description: 'a', input_schema: { type: 'object', properties: {} } }]
+    )
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(JSON.stringify(body)).not.toContain('cache_control')
+  })
+
   it('sends identical request body on each retry attempt', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(jsonResponse(
@@ -309,5 +371,33 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
     const body1 = (fetchMock.mock.calls[0][1] as RequestInit).body
     const body2 = (fetchMock.mock.calls[1][1] as RequestInit).body
     expect(body1).toBe(body2)
+  })
+
+  it('strips reasoning preamble from content by default', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(
+      okChoice({ content: 'thought\nHello, world!' })
+    ))
+
+    const provider = new OpenRouterProvider({ apiKey: 'k', cache: false })
+    const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+
+    expect(result.content).toEqual([{ type: 'text', text: 'Hello, world!' }])
+  })
+
+  it('returns raw content when sanitizeOutput is false', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(
+      okChoice({ content: 'thought\nHello, world!' })
+    ))
+
+    const provider = new OpenRouterProvider({
+      apiKey: 'k',
+      cache: false,
+      sanitizeOutput: false
+    })
+    const result = await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+
+    expect(result.content).toEqual([{ type: 'text', text: 'thought\nHello, world!' }])
   })
 })

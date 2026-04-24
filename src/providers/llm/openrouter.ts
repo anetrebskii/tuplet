@@ -45,6 +45,29 @@ export interface OpenRouterProviderConfig {
    * fuzzy response as-is.
    */
   throwOnFuzzyExhaustion?: boolean
+  /**
+   * OpenRouter provider-routing preferences, forwarded verbatim as the
+   * top-level `provider` field in the chat-completions body.
+   *
+   * Useful for pinning the request to a specific upstream when only some
+   * providers of a given model support the features you need (e.g. only
+   * Ionstream exposes cache-read pricing for `google/gemma-4-*`). Example:
+   *
+   *   { order: ['Ionstream'], allow_fallbacks: false }
+   *
+   * Shape is pass-through — see OpenRouter's Provider Routing docs for the
+   * full list of accepted fields.
+   */
+  provider?: Record<string, unknown>
+  /**
+   * If true (default), run `defaultSanitize` on the assistant's text content
+   * to strip reasoning-channel artifacts (harmony `<|channel|>` markers, bare
+   * `thought`/`探` preambles, etc.) that some models emit as plain text.
+   *
+   * Set to false to return raw `message.content` — useful for callers that
+   * want to render the reasoning stream themselves.
+   */
+  sanitizeOutput?: boolean
 }
 
 /**
@@ -110,6 +133,7 @@ interface OpenAITool {
     description: string
     parameters: Record<string, unknown>
   }
+  cache_control?: { type: 'ephemeral' }
 }
 
 interface OpenAIResponse {
@@ -157,6 +181,8 @@ export class OpenRouterProvider implements LLMProvider {
   private cache: boolean
   private maxFuzzyRetries: number
   private throwOnFuzzyExhaustion: boolean
+  private providerPreferences?: Record<string, unknown>
+  private sanitizeOutput: boolean
 
   constructor(config: OpenRouterProviderConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || ''
@@ -168,6 +194,8 @@ export class OpenRouterProvider implements LLMProvider {
     this.cache = config.cache !== false
     this.maxFuzzyRetries = config.maxFuzzyRetries ?? 2
     this.throwOnFuzzyExhaustion = config.throwOnFuzzyExhaustion !== false
+    this.providerPreferences = config.provider
+    this.sanitizeOutput = config.sanitizeOutput !== false
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
@@ -185,7 +213,7 @@ export class OpenRouterProvider implements LLMProvider {
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
     const openaiMessages = this.convertMessages(systemPrompt, messages, this.cache)
-    const openaiTools = this.convertTools(tools)
+    const openaiTools = this.convertTools(tools, this.cache)
 
     const requestBody: Record<string, unknown> = {
       model: options.model || this.model,
@@ -195,6 +223,10 @@ export class OpenRouterProvider implements LLMProvider {
 
     if (openaiTools.length > 0) {
       requestBody.tools = openaiTools
+    }
+
+    if (this.providerPreferences) {
+      requestBody.provider = this.providerPreferences
     }
 
     const headers: Record<string, string> = {
@@ -429,15 +461,24 @@ export class OpenRouterProvider implements LLMProvider {
     return messages
   }
 
-  private convertTools(tools: ToolSchema[]): OpenAITool[] {
-    return tools.map(tool => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.input_schema as unknown as Record<string, unknown>
+  private convertTools(tools: ToolSchema[], useCache: boolean): OpenAITool[] {
+    return tools.map((tool, index) => {
+      const isLast = index === tools.length - 1
+      const converted: OpenAITool = {
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.input_schema as unknown as Record<string, unknown>
+        }
       }
-    }))
+
+      if (useCache && isLast) {
+        converted.cache_control = { type: 'ephemeral' as const }
+      }
+
+      return converted
+    })
   }
 
   private convertResponse(response: OpenAIResponse): LLMResponse {
@@ -446,8 +487,11 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Strip reasoning-channel artifacts (harmony `<|channel|>` markers, leading
     // `thought\n`) that some OpenRouter models emit as plain text in content.
+    // Opt-out via `sanitizeOutput: false` on the provider config.
     if (choice.message.content) {
-      const cleaned = defaultSanitize(choice.message.content)
+      const cleaned = this.sanitizeOutput
+        ? defaultSanitize(choice.message.content)
+        : choice.message.content
       if (cleaned.length > 0) {
         content.push({ type: 'text', text: cleaned })
       }
