@@ -78,6 +78,58 @@ conversation history via `RepositoryProvider.saveState` under the `__tuplet`
 key. `MemoryRepository` and any custom repository that implements
 `getState`/`saveState` support this automatically.
 
+## Observing what fired
+
+`AgentResult` surfaces what the `when` predicates matched, so callers can run
+side effects (persist milestones, log analytics, update per-user state) without
+duplicating the detection logic:
+
+```typescript
+const result = await agent.run('hi', { conversationId: 'c1', context })
+
+// Delta for this run — only injections that fired during this invocation.
+for (const name of result.firedHistoryInjections ?? []) {
+  await analytics.track('injection-fired', { name, conversationId: 'c1' })
+}
+
+// Full active set for the session — sections evaluate on turn 1 and are
+// cached, so each run returns the same set.
+console.log('active sections:', result.firedPromptSections)
+```
+
+Semantics:
+
+- `firedHistoryInjections` — **delta for this run**. Names of injections whose
+  `when` matched during this `run()` call only. Empty `[]` when nothing fired
+  (e.g. on the second run after a `once: true` injection already fired).
+  `undefined` when `historyInjections` is not configured.
+- `firedPromptSections` — **active set for the session**. Names of all sections
+  whose `when` matched at turn 1. Stable across subsequent `run()` calls in the
+  same session because sections are cached. `undefined` when `sections` is not
+  configured.
+
+Typical uses:
+
+```typescript
+// One-shot side effect: persist a milestone once the injection fires.
+const injections = [{
+  name: 'milestone-firstOffense',
+  when: c => !c.context.user.milestones?.firstOffense && RE.test(c.lastUserMessage),
+  content: FIRST_OFFENSE_NUDGE,
+}]
+
+const result = await agent.run(userMessage, { context: { user } })
+
+for (const name of result.firedHistoryInjections ?? []) {
+  if (name.startsWith('milestone-')) {
+    await persistMilestone(user.id, name.slice('milestone-'.length))
+  }
+}
+
+// Session debug: see which conditional persona modules are live.
+console.log('active sections:', result.firedPromptSections)
+```
+
 ## Immutability
 
 - `PromptSection` only evaluates at turn 1 and is frozen for the session.

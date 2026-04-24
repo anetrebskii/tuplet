@@ -547,6 +547,16 @@ Keep the tone supportive and practical.`,
       console.error("\n❌ Error:", greeting.error, "\n");
     } else {
       console.log("\nAssistant:", greeting.response, "\n");
+      if (greeting.firedPromptSections && greeting.firedPromptSections.length > 0) {
+        console.log(
+          `🧩 Active prompt sections: ${greeting.firedPromptSections.join(", ")}\n`,
+        );
+      }
+      if (greeting.firedHistoryInjections && greeting.firedHistoryInjections.length > 0) {
+        console.log(
+          `💬 Fired history injections: ${greeting.firedHistoryInjections.join(", ")}\n`,
+        );
+      }
     }
   }
 
@@ -662,6 +672,20 @@ Keep the tone supportive and practical.`,
         } else if (currentResult.status === "interrupted") {
           console.log(
             `\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`,
+          );
+        }
+
+        // Show fired prompt sections (active set for the session)
+        if (finalResult.firedPromptSections && finalResult.firedPromptSections.length > 0) {
+          console.log(
+            `\n🧩 Active prompt sections: ${finalResult.firedPromptSections.join(", ")}`,
+          );
+        }
+
+        // Show fired history injections (delta for this run)
+        if (finalResult.firedHistoryInjections && finalResult.firedHistoryInjections.length > 0) {
+          console.log(
+            `\n💬 Fired history injections: ${finalResult.firedHistoryInjections.join(", ")}`,
           );
         }
 

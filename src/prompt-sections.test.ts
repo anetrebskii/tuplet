@@ -486,6 +486,119 @@ describe('Tuplet integration', () => {
     expect(evalCount).toBe(2)
   })
 
+  it('AgentResult.firedHistoryInjections reflects the when truth table', async () => {
+    const { llm } = recordingLLM()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+      historyInjections: [
+        { name: 'yes-1', when: () => true, content: 'Y1' },
+        { name: 'no', when: () => false, content: 'N' },
+        { name: 'yes-2', when: () => true, content: 'Y2' },
+      ],
+    })
+    const result = await agent.run('hi', {})
+    expect(result.firedHistoryInjections).toEqual(['yes-1', 'yes-2'])
+  })
+
+  it('AgentResult.firedHistoryInjections is empty when no injection fires', async () => {
+    const { llm } = recordingLLM()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+      historyInjections: [
+        { name: 'none', when: () => false, content: 'x' },
+      ],
+    })
+    const result = await agent.run('hi', {})
+    expect(result.firedHistoryInjections).toEqual([])
+  })
+
+  it('AgentResult.firedHistoryInjections is a per-run delta (empty on subsequent run once fired)', async () => {
+    const { llm } = recordingLLM()
+    const repo = new MemoryRepository()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+      repository: repo,
+      historyInjections: [
+        { name: 'once-only', when: () => true, content: 'x' },
+      ],
+    })
+    const first = await agent.run('hi', { conversationId: 'c1' })
+    expect(first.firedHistoryInjections).toEqual(['once-only'])
+
+    const second = await agent.run('again', { conversationId: 'c1' })
+    expect(second.firedHistoryInjections).toEqual([])
+  })
+
+  it('AgentResult.firedHistoryInjections is undefined when no historyInjections are configured', async () => {
+    const { llm } = recordingLLM()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+    })
+    const result = await agent.run('hi', {})
+    expect(result.firedHistoryInjections).toBeUndefined()
+  })
+
+  it('AgentResult.firedPromptSections includes only sections whose when matched', async () => {
+    const { llm } = recordingLLM()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+      sections: [
+        { name: 'admin', when: c => (c.context as { admin: boolean }).admin, content: 'ADMIN' },
+        { name: 'guest', when: () => false, content: 'GUEST' },
+        { name: 'always', when: () => true, content: 'ALWAYS' },
+      ],
+    })
+    const result = await agent.run('hi', { context: { admin: true } })
+    expect(result.firedPromptSections).toEqual(['admin', 'always'])
+  })
+
+  it('AgentResult.firedPromptSections is stable across subsequent runs (active set, not delta)', async () => {
+    const { llm } = recordingLLM()
+    const repo = new MemoryRepository()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+      repository: repo,
+      sections: [
+        { name: 'active', when: () => true, content: 'A' },
+        { name: 'inactive', when: () => false, content: 'B' },
+      ],
+    })
+    const first = await agent.run('one', { conversationId: 'c1' })
+    const second = await agent.run('two', { conversationId: 'c1' })
+    expect(first.firedPromptSections).toEqual(['active'])
+    expect(second.firedPromptSections).toEqual(['active'])
+  })
+
+  it('AgentResult.firedPromptSections is undefined when no sections are configured', async () => {
+    const { llm } = recordingLLM()
+    const agent = new Tuplet({
+      role: 'tester',
+      tools: [],
+      agents: [],
+      llm,
+    })
+    const result = await agent.run('hi', {})
+    expect(result.firedPromptSections).toBeUndefined()
+  })
+
   it('TurnContext exposes turnIndex and lastUserMessage', async () => {
     const { llm } = recordingLLM()
     const repo = new MemoryRepository()

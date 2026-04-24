@@ -533,6 +533,20 @@ export interface AgentResult {
 
   /** Execution trace with usage, costs, and timing (when trace provider configured) */
   trace?: import('./trace.js').Trace
+
+  /**
+   * Names of HistoryInjections that fired during this run (delta for this
+   * invocation only). Present when `historyInjections` is configured.
+   */
+  firedHistoryInjections?: string[]
+
+  /**
+   * Names of PromptSections whose `when` matched and are part of the system
+   * prompt for this session (full active set, not a delta). Sections are
+   * evaluated on turn 1 and cached, so each run returns the same set.
+   * Present when `sections` is configured.
+   */
+  firedPromptSections?: string[]
 }
 
 // ============================================================================

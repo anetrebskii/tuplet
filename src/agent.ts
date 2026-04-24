@@ -599,10 +599,18 @@ When you need information the user hasn't provided and you cannot find it via ot
     // Prompt sections & history injections (issue #15).
     // Skip for sub-agents (they pass _systemPrompt and have their own config).
     let sessionState: TupletSessionState = {};
-    const hasSectionsOrInjections =
+    const hasSections =
       !this.config._systemPrompt &&
-      ((this.config.sections && this.config.sections.length > 0) ||
-        (this.config.historyInjections && this.config.historyInjections.length > 0));
+      this.config.sections !== undefined &&
+      this.config.sections.length > 0;
+    const hasInjections =
+      !this.config._systemPrompt &&
+      this.config.historyInjections !== undefined &&
+      this.config.historyInjections.length > 0;
+    const hasSectionsOrInjections = hasSections || hasInjections;
+
+    let firedSectionNames: string[] | undefined = hasSections ? [] : undefined;
+    let firedInjectionNames: string[] | undefined = hasInjections ? [] : undefined;
 
     if (hasSectionsOrInjections) {
       sessionState = await loadTupletState(this.config.repository, conversationId);
@@ -612,24 +620,21 @@ When you need information the user hasn't provided and you cannot find it via ot
         conversationId: conversationId ?? '',
       };
 
-      if (this.config.sections && this.config.sections.length > 0) {
+      if (hasSections) {
         const { fired, updatedCache } = await resolveSections(
-          this.config.sections,
+          this.config.sections!,
           sectionCtx,
           sessionState.sections
         );
         sessionState = { ...sessionState, sections: updatedCache };
+        firedSectionNames = fired.map(f => f.name);
         const rendered = formatSectionsForPrompt(fired);
         if (rendered) {
           systemPrompt += `\n\n${rendered}`;
         }
       }
 
-      if (
-        !isResuming &&
-        this.config.historyInjections &&
-        this.config.historyInjections.length > 0
-      ) {
+      if (!isResuming && hasInjections) {
         const turnCtx: TurnContext = {
           ...sectionCtx,
           turnIndex: countUserTurns(messages),
@@ -637,10 +642,12 @@ When you need information the user hasn't provided and you cannot find it via ot
         };
         const firedNames = sessionState.firedInjections ?? [];
         const newFired = await evaluateInjections(
-          this.config.historyInjections,
+          this.config.historyInjections!,
           turnCtx,
           firedNames
         );
+
+        firedInjectionNames = newFired.map(i => i.name);
 
         if (newFired.length > 0) {
           const payload = renderInjectionsPayload(newFired);
@@ -727,6 +734,15 @@ When you need information the user hasn't provided and you cannot find it via ot
           this.config.logger?.warn("Failed to save tuplet state", saveError);
         }
       }
+    }
+
+    // Surface fired sections/injections so callers can run side effects without
+    // duplicating the trigger detection logic.
+    if (firedSectionNames !== undefined) {
+      result.firedPromptSections = firedSectionNames;
+    }
+    if (firedInjectionNames !== undefined) {
+      result.firedHistoryInjections = firedInjectionNames;
     }
 
     // End trace and attach to result (only for root agent, not sub-agents)
