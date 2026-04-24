@@ -34,6 +34,17 @@ export interface OpenRouterProviderConfig {
    * Set to 0 to disable.
    */
   maxFuzzyRetries?: number
+  /**
+   * If true (default), throw an error when all fuzzy-retry attempts are
+   * exhausted and the final response is still broken (empty, leaked template
+   * markers, or length-truncated with no tool calls). The executor surfaces
+   * this as `AgentResult.status === 'error'` with an empty `response`, so a
+   * host app can render its own fallback instead of leaking the broken text.
+   *
+   * Set to false to preserve the pre-fix behavior of returning the last
+   * fuzzy response as-is.
+   */
+  throwOnFuzzyExhaustion?: boolean
 }
 
 /**
@@ -49,12 +60,23 @@ const FUZZY_CONTENT_PATTERNS: RegExp[] = [
 ]
 
 /**
- * A response is "fuzzy" if it has no tool calls AND the text is either empty
- * or contains leaked template markers. From the caller's perspective this is
- * just a broken response that should be retried.
+ * A response is "fuzzy" if it has no tool calls AND one of:
+ *   - the text is empty / whitespace-only
+ *   - the text contains leaked chat-template markers (Gemma-family artefact)
+ *   - the response hit `max_tokens` while tools were available (model emitted
+ *     chain-of-thought as plain text until truncation instead of calling a
+ *     tool, observed on weaker tool-calling models like gemma-4-26b)
+ *
+ * From the caller's perspective this is just a broken response that should be
+ * retried.
  */
-export function isFuzzyResponse(content: string | null | undefined, hasToolCalls: boolean): boolean {
+export function isFuzzyResponse(
+  content: string | null | undefined,
+  hasToolCalls: boolean,
+  opts?: { finishReason?: string; toolsAvailable?: boolean }
+): boolean {
   if (hasToolCalls) return false
+  if (opts?.finishReason === 'length' && opts.toolsAvailable) return true
   if (!content || !content.trim()) return true
   return FUZZY_CONTENT_PATTERNS.some(re => re.test(content))
 }
@@ -134,6 +156,7 @@ export class OpenRouterProvider implements LLMProvider {
   private title?: string
   private cache: boolean
   private maxFuzzyRetries: number
+  private throwOnFuzzyExhaustion: boolean
 
   constructor(config: OpenRouterProviderConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || ''
@@ -144,6 +167,7 @@ export class OpenRouterProvider implements LLMProvider {
     this.title = config.title
     this.cache = config.cache !== false
     this.maxFuzzyRetries = config.maxFuzzyRetries ?? 2
+    this.throwOnFuzzyExhaustion = config.throwOnFuzzyExhaustion !== false
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
@@ -193,6 +217,7 @@ export class OpenRouterProvider implements LLMProvider {
     // fuzzy text can never leak into chat history.
     const maxAttempts = 1 + Math.max(0, this.maxFuzzyRetries)
     let lastData: OpenAIResponse | undefined
+    let lastFuzzy = true
     let totalInput = 0
     let totalOutput = 0
     let totalCacheRead = 0
@@ -212,9 +237,22 @@ export class OpenRouterProvider implements LLMProvider {
 
       const choice = data.choices[0]
       const hasToolCalls = (choice.message.tool_calls ?? []).length > 0
-      if (!isFuzzyResponse(choice.message.content, hasToolCalls)) {
+      const toolsAvailable = openaiTools.length > 0
+      if (!isFuzzyResponse(choice.message.content, hasToolCalls, {
+        finishReason: choice.finish_reason,
+        toolsAvailable
+      })) {
+        lastFuzzy = false
         break
       }
+    }
+
+    if (lastFuzzy && this.throwOnFuzzyExhaustion) {
+      throw new Error(
+        `OpenRouter: model returned a broken response after ${maxAttempts} attempt(s) ` +
+        `(empty, leaked chat-template markers, or truncated at max_tokens with no tool calls). ` +
+        `Set throwOnFuzzyExhaustion: false to return the fuzzy response as-is.`
+      )
     }
 
     const converted = this.convertResponse(lastData!)
