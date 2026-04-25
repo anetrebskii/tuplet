@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { OpenRouterProvider, isFuzzyResponse } from './openrouter.js'
+import { OpenRouterProvider, isFuzzyResponse, type OpenRouterLogEntry } from './openrouter.js'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -335,6 +335,53 @@ describe('OpenRouterProvider fuzzy-response retries', () => {
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body).not.toHaveProperty('provider')
+  })
+
+  it('invokes onRequestLog with request and response on success', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(okChoice({ content: 'ok', prompt_tokens: 7, completion_tokens: 3 })))
+
+    const entries: OpenRouterLogEntry[] = []
+    const provider = new OpenRouterProvider({
+      apiKey: 'k',
+      onRequestLog: (entry) => entries.push(entry)
+    })
+    await provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+
+    expect(entries).toHaveLength(1)
+    const entry = entries[0]
+    expect(entry.url).toMatch(/\/chat\/completions$/)
+    expect(entry.response.ok).toBe(true)
+    expect(entry.response.status).toBe(200)
+    expect(entry.error).toBeUndefined()
+    expect(entry.request.messages).toEqual([
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' }
+    ])
+  })
+
+  it('invokes onRequestLog with the error message when the upstream fails', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(
+      { error: { message: 'Provider returned error', code: 503 } },
+      503
+    ))
+
+    const entries: OpenRouterLogEntry[] = []
+    const provider = new OpenRouterProvider({
+      apiKey: 'k',
+      maxFuzzyRetries: 0,
+      onRequestLog: (entry) => entries.push(entry)
+    })
+
+    await expect(
+      provider.chat('sys', [{ role: 'user', content: 'hi' }], [])
+    ).rejects.toThrow(/HTTP 503/)
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0].response.ok).toBe(false)
+    expect(entries[0].response.status).toBe(503)
+    expect(entries[0].error).toMatch(/HTTP 503/)
   })
 
   it('omits cache_control entirely by default (explicitCacheControl is off)', async () => {

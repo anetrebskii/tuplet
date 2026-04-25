@@ -84,6 +84,45 @@ export interface OpenRouterProviderConfig {
    * want to render the reasoning stream themselves.
    */
   sanitizeOutput?: boolean
+  /**
+   * Optional hook fired once per HTTP exchange with the OpenRouter
+   * chat-completions endpoint. Receives the exact request body sent
+   * (including `cache_control`, `provider`, `tools`, etc.) and the raw
+   * response body — letting the host app decide how to persist or display
+   * it (write to disk, post to a logger, redact and forward, ignore).
+   *
+   * Designed for cache-debugging: run the same scenario twice, capture
+   * both entries, diff the two request bodies, and you'll see exactly what
+   * changed in the prefix — a single byte difference in the system prompt
+   * or tools list is enough to bust prompt caching.
+   *
+   * The hook runs after the response arrives (success or error). Errors
+   * thrown from the hook are caught and ignored so logging cannot break
+   * the request path. The hook is *not* invoked for fuzzy retries, only
+   * for the final attempt that succeeded or threw — call it on every
+   * attempt by changing the `requestOnce` wrapper if needed.
+   */
+  onRequestLog?: (entry: OpenRouterLogEntry) => void
+}
+
+/**
+ * Payload passed to {@link OpenRouterProviderConfig.onRequestLog}.
+ * The request body matches what was POSTed to `/chat/completions`; the
+ * response body is the parsed JSON if available, or the raw text if the
+ * server returned non-JSON.
+ */
+export interface OpenRouterLogEntry {
+  timestamp: number
+  url: string
+  request: Record<string, unknown>
+  response: {
+    status: number
+    ok: boolean
+    body: unknown
+    rawBody: string
+  }
+  durationMs: number
+  error?: string
 }
 
 /**
@@ -199,6 +238,7 @@ export class OpenRouterProvider implements LLMProvider {
   private throwOnFuzzyExhaustion: boolean
   private providerPreferences?: Record<string, unknown>
   private sanitizeOutput: boolean
+  private onRequestLog?: (entry: OpenRouterLogEntry) => void
 
   constructor(config: OpenRouterProviderConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || ''
@@ -212,6 +252,7 @@ export class OpenRouterProvider implements LLMProvider {
     this.throwOnFuzzyExhaustion = config.throwOnFuzzyExhaustion !== false
     this.providerPreferences = config.provider
     this.sanitizeOutput = config.sanitizeOutput !== false
+    this.onRequestLog = config.onRequestLog
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required')
@@ -320,7 +361,9 @@ export class OpenRouterProvider implements LLMProvider {
     requestBody: Record<string, unknown>,
     headers: Record<string, string>
   ): Promise<OpenAIResponse> {
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    const url = `${this.baseURL}/chat/completions`
+    const startedAt = Date.now()
+    const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
@@ -335,19 +378,38 @@ export class OpenRouterProvider implements LLMProvider {
       | (OpenAIResponse & { error?: { message?: string; code?: number; metadata?: unknown } })
       | null
 
+    const emitLog = (errorMessage?: string): void => {
+      if (!this.onRequestLog) return
+      try {
+        this.onRequestLog({
+          timestamp: startedAt,
+          url,
+          request: requestBody,
+          response: {
+            status: response.status,
+            ok: response.ok,
+            body: data,
+            rawBody
+          },
+          durationMs: Date.now() - startedAt,
+          error: errorMessage
+        })
+      } catch {
+        // Swallow hook errors — logging must never break the request path.
+      }
+    }
+
     if (!response.ok) {
       const upstream = data?.error?.message || response.statusText
-      throw new Error(
-        `OpenRouter API error (HTTP ${response.status}): ${upstream} — ` +
-        `body: ${truncate(rawBody, 500)}`
-      )
+      const message = `OpenRouter API error (HTTP ${response.status}): ${upstream} — body: ${truncate(rawBody, 500)}`
+      emitLog(message)
+      throw new Error(message)
     }
 
     if (!data) {
-      throw new Error(
-        `OpenRouter API error: response was not valid JSON — ` +
-        `body: ${truncate(rawBody, 500)}`
-      )
+      const message = `OpenRouter API error: response was not valid JSON — body: ${truncate(rawBody, 500)}`
+      emitLog(message)
+      throw new Error(message)
     }
 
     // OpenRouter can return 200 OK with an error body (e.g. provider timeout).
@@ -355,19 +417,18 @@ export class OpenRouterProvider implements LLMProvider {
     // placeholder ("Provider returned error") while the real detail lives in
     // `.code` or `.metadata`.
     if (data.error) {
-      throw new Error(
-        `OpenRouter API error: ${data.error.message || 'provider returned an error'} — ` +
-        `detail: ${truncate(JSON.stringify(data.error), 500)}`
-      )
+      const message = `OpenRouter API error: ${data.error.message || 'provider returned an error'} — detail: ${truncate(JSON.stringify(data.error), 500)}`
+      emitLog(message)
+      throw new Error(message)
     }
 
     if (!data.choices?.[0]?.message) {
-      throw new Error(
-        `OpenRouter API error: empty response (no choices returned) — ` +
-        `body: ${truncate(rawBody, 500)}`
-      )
+      const message = `OpenRouter API error: empty response (no choices returned) — body: ${truncate(rawBody, 500)}`
+      emitLog(message)
+      throw new Error(message)
     }
 
+    emitLog()
     return data
   }
 

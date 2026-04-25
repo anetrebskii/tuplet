@@ -7,6 +7,8 @@
 
 import "dotenv/config";
 import * as readline from "readline";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   Tuplet,
   OpenRouterProvider,
@@ -239,10 +241,24 @@ async function main() {
     process.exit(1);
   }
 
+  // Per-request log dir for cache debugging. Each LLM call writes one JSON
+  // file with the exact request body sent to OpenRouter and the response
+  // body. To find what's busting your cache, run the same scenario twice
+  // and diff the two newest files:
+  //   diff <(jq -S .request <older>.json) <(jq -S .request <newer>.json)
+  const logDir = process.env.OPENROUTER_LOG_DIR ?? "./openrouter-logs";
+  mkdirSync(logDir, { recursive: true });
+  let logCounter = 0;
+
   const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: "anthropic/claude-3.5-haiku",    
+    model: "anthropic/claude-3.5-haiku",
     maxTokens: 2000,
+    explicitCacheControl: true,
+    onRequestLog: (entry) => {
+      const file = join(logDir, `${entry.timestamp}-${logCounter++}.json`);
+      writeFileSync(file, JSON.stringify(entry, null, 2));
+    },
   });
 
   // Create workspace only when --workspace flag is set or USE_WORKSPACE=1
