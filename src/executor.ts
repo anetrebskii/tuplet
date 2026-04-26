@@ -459,10 +459,15 @@ export async function executeLoop(
     }
     const llmDurationMs = Date.now() - llmStartTime
 
+    // Use the model id reported on the response when present (e.g. a
+    // FallbackProvider that fell through to a backup vendor) so cost
+    // accounting follows the provider that actually served the call.
+    const callModelId = response.modelId ?? modelId
+
     // Record usage in trace
     if (response.usage) {
       traceBuilder?.recordLLMCall(
-        modelId,
+        callModelId,
         response.usage.inputTokens,
         response.usage.outputTokens,
         llmDurationMs,
@@ -485,7 +490,7 @@ export async function executeLoop(
       cumulativeOutputTokens += response.usage.outputTokens
 
       const callCost = calculateCost(
-        modelId,
+        callModelId,
         response.usage.inputTokens,
         response.usage.outputTokens,
         response.cacheUsage?.cacheCreationInputTokens,
@@ -504,7 +509,7 @@ export async function executeLoop(
             elapsed: Date.now() - executorStartTime,
             callCost,
             cumulativeCost,
-            modelId
+            modelId: callModelId
           }
         }
       })

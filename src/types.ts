@@ -138,6 +138,13 @@ export interface LLMResponse {
     outputTokens: number
   }
   cacheUsage?: CacheUsage
+  /**
+   * Model id (`provider:model`) that actually served this response. When
+   * present, the executor uses it for cost accounting in place of
+   * {@link LLMProvider.getModelId}. Set by routers/fallback providers whose
+   * effective model varies per call.
+   */
+  modelId?: string
 }
 
 export interface CacheUsage {

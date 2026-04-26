@@ -130,6 +130,11 @@ export {
 } from './providers/llm/openrouter.js'
 
 export {
+  FallbackProvider,
+  type FallbackProviderConfig
+} from './providers/llm/fallback.js'
+
+export {
   ConsoleLogger,
   type ConsoleLoggerConfig,
   type LogLevel
@@ -211,6 +216,7 @@ export {
 export {
   TraceBuilder,
   ConsoleTraceProvider,
+  LangfuseTraceProvider,
   generateTraceId,
   generateSpanId,
   calculateCost,
@@ -227,7 +233,8 @@ export {
   type TraceContext,
   type ModelPricing,
   type CostUpdate,
-  type ConsoleTraceConfig
+  type ConsoleTraceConfig,
+  type LangfuseTraceConfig
 } from './trace.js'
 
 // Workspace
