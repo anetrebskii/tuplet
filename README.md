@@ -75,7 +75,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 - **Skills** — Lazy-loaded prompts for specialized workflows. Only metadata is in the system prompt; full instructions load on demand when the model activates a skill
 - **Custom sub-agents** — Spawn specialized agents with their own tools, prompts, and even different LLM providers
 - **Pluggable storage** — Bring your own chat history provider (Firestore, Redis, Postgres, anything)
-- **Pluggable logging & tracing** — Integrate with Datadog, custom dashboards, or any observability platform
+- **Pluggable logging & tracing** — Built-in [Langfuse](https://langfuse.com) provider, console tracer, or wire your own (Datadog, custom dashboards, any observability platform). See [Tracing](./docs/tracing.md).
 - **Pluggable workspaces** — Virtual file systems, database-backed storage, or real file system
 
 ## Tuplet vs LangChain.js

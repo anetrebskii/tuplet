@@ -14,6 +14,7 @@ import {
   OpenRouterProvider,
   ConsoleLogger,
   ConsoleTraceProvider,
+  LangfuseTraceProvider,
   MemoryRepository,
   Workspace,
   FileWorkspaceProvider,
@@ -27,6 +28,7 @@ import {
   type TaskUpdateNotification,
   type PromptSection,
   type HistoryInjection,
+  type TraceProvider,
 } from "tuplet";
 import { nutritionCounterTools } from "./tools.js";
 
@@ -252,7 +254,7 @@ async function main() {
 
   const llmProvider = new OpenRouterProvider({
     apiKey,
-    model: "anthropic/claude-3.5-haiku",
+    model: "google/gemma-4-26b-a4b-it",
     maxTokens: 2000,
     explicitCacheControl: true,
     onRequestLog: (entry) => {
@@ -459,6 +461,30 @@ Keep the tone supportive and practical.`,
   const repository = new MemoryRepository();
   let conversationId = `eating-${Date.now()}`;
 
+  // Trace provider: Langfuse when credentials are present, console otherwise.
+  const useLangfuse =
+    !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
+  const langfuse = useLangfuse
+    ? new LangfuseTraceProvider({
+        sessionId: conversationId,
+        userId: process.env.USER ?? "local",
+        tags: ["eating-consultant"],
+      })
+    : null;
+  const traceProvider: TraceProvider =
+    langfuse ?? new ConsoleTraceProvider({ showCosts: true });
+  console.log(`Tracing: ${useLangfuse ? "Langfuse" : "console"}`);
+
+  // Flush any buffered trace events before the process exits.
+  const shutdownTracing = async () => {
+    if (langfuse) await langfuse.shutdown();
+  };
+  process.on("beforeExit", shutdownTracing);
+  process.on("SIGINT", async () => {
+    await shutdownTracing();
+    process.exit(0);
+  });
+
   // Create the main agent: skills-only, no sub-agents
   const agent = new Tuplet({
     role:
@@ -475,7 +501,7 @@ Keep the tone supportive and practical.`,
     allowedUrls: ['https://*.openfoodfacts.org/**'],
     logger: createProgressLogger(),
     maxIterations: 15,
-    trace: new ConsoleTraceProvider({ showCosts: true }),
+    trace: traceProvider,
     agentName: "eating_consultant",
     recorder: new RunRecorder({ outputDir: "./runs" }),
   });
@@ -511,7 +537,8 @@ Keep the tone supportive and practical.`,
         }
       } else if (key[0] === 3) {
         console.log("\nGoodbye!\n");
-        process.exit(0);
+        void shutdownTracing().finally(() => process.exit(0));
+        return;
       }
       // Continue listening if still processing
       if (isProcessing) {
@@ -588,6 +615,7 @@ Keep the tone supportive and practical.`,
       if (trimmed.toLowerCase() === "quit") {
         console.log("\nGoodbye! Eat well!\n");
         rl.close();
+        await shutdownTracing();
         process.exit(0);
       }
 

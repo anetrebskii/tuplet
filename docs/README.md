@@ -189,5 +189,5 @@ await workspace.dispose()
 - [Task Management](./task-management.md) - Task tracking with dependencies
 - [Progress Status](./progress-status.md) - Real-time activity tracking
 - [Logger](./logger.md) - Logging and event callbacks
-- [Tracing](./tracing.md) - Execution monitoring and cost breakdown
+- [Tracing](./tracing.md) - Execution monitoring, cost breakdown, Langfuse integration
 - [Run Recording](./run-recording.md) - Recording and replaying agent runs
