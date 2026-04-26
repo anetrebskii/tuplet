@@ -218,6 +218,7 @@ export {
   TraceBuilder,
   ConsoleTraceProvider,
   LangfuseTraceProvider,
+  MultiTraceProvider,
   generateTraceId,
   generateSpanId,
   calculateCost,

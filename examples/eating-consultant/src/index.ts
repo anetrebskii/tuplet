@@ -16,6 +16,7 @@ import {
   ConsoleLogger,
   ConsoleTraceProvider,
   LangfuseTraceProvider,
+  MultiTraceProvider,
   MemoryRepository,
   Workspace,
   FileWorkspaceProvider,
@@ -478,23 +479,32 @@ Keep the tone supportive and practical.`,
   const repository = new MemoryRepository();
   let conversationId = `eating-${Date.now()}`;
 
-  // Trace provider: Langfuse when credentials are present, console otherwise.
+  // Trace providers: always console; add Langfuse when credentials are present.
+  // MultiTraceProvider fans events out to both, isolates per-sink failures so
+  // one bad provider can't take down the run, and proxies shutdown() so we can
+  // flush Langfuse on exit without tracking it separately.
   const useLangfuse =
     !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
-  const langfuse = useLangfuse
-    ? new LangfuseTraceProvider({
+  const childProviders: TraceProvider[] = [
+    new ConsoleTraceProvider({ showCosts: true }),
+  ];
+  if (useLangfuse) {
+    childProviders.push(
+      new LangfuseTraceProvider({
         sessionId: conversationId,
         userId: process.env.USER ?? "local",
         tags: ["eating-consultant"],
       })
-    : null;
-  const traceProvider: TraceProvider =
-    langfuse ?? new ConsoleTraceProvider({ showCosts: true });
-  console.log(`Tracing: ${useLangfuse ? "Langfuse" : "console"}`);
+    );
+  }
+  const traceProvider = new MultiTraceProvider(childProviders);
+  console.log(
+    `Tracing: console${useLangfuse ? " + Langfuse" : ""} (via MultiTraceProvider)`
+  );
 
   // Flush any buffered trace events before the process exits.
   const shutdownTracing = async () => {
-    if (langfuse) await langfuse.shutdown();
+    await traceProvider.shutdown();
   };
   process.on("beforeExit", shutdownTracing);
   process.on("SIGINT", async () => {

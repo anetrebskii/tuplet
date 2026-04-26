@@ -33,3 +33,6 @@ export { ConsoleTraceProvider } from './console.js'
 // Langfuse Provider (zero-dep, native fetch)
 export type { LangfuseTraceConfig } from './langfuse.js'
 export { LangfuseTraceProvider } from './langfuse.js'
+
+// Multi Provider (fan-out to multiple providers)
+export { MultiTraceProvider } from './multi.js'
