@@ -270,8 +270,8 @@ async function main() {
 
   const llmProvider = new FallbackProvider({
     providers: [
-      // new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it:free" }),
-      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it1" }),
+      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it:free" }),
+      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it" }),
       new OpenRouterProvider({ ...openRouterConfig, model: "qwen/qwen3.5-27b" }),      
     ],
     onFallback: (error, fromIndex, toIndex) => {

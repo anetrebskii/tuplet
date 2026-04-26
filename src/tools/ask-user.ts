@@ -25,7 +25,26 @@ Example: ${toolName}({ "questions": [{"question": "What is your goal?", "header"
         questions: {
           type: "array",
           description:
-            "Array of 1-4 questions. Each item has: question (string, required), header (short label, optional), options (array of {label, description}, optional)",
+            "Array of 1-4 questions. Each item has: question (string, required), header (short label, optional), options (array of strings, optional).",
+          items: {
+            type: "object",
+            properties: {
+              question: {
+                type: "string",
+                description: "The complete question to ask the user.",
+              },
+              header: {
+                type: "string",
+                description: "Short label (max 12 chars), e.g. 'Goal', 'Budget'.",
+              },
+              options: {
+                type: "array",
+                description: "Suggested answers shown as quick-pick chips.",
+                items: { type: "string" },
+              },
+            },
+            required: ["question"],
+          },
         },
       },
       required: ["questions"],

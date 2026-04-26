@@ -43,14 +43,18 @@ export interface Message {
 // Tool Types
 // ============================================================================
 
+export interface JSONSchemaProperty {
+  type: string
+  description?: string
+  enum?: string[]
+  items?: JSONSchemaProperty
+  properties?: Record<string, JSONSchemaProperty>
+  required?: string[]
+}
+
 export interface JSONSchema {
   type: 'object'
-  properties: Record<string, {
-    type: string
-    description?: string
-    enum?: string[]
-    items?: JSONSchema
-  }>
+  properties: Record<string, JSONSchemaProperty>
   required?: string[]
   additionalProperties?: boolean
 }

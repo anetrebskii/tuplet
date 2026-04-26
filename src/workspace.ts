@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { JSONSchema, EnvironmentProvider } from './types.js'
+import type { JSONSchema, JSONSchemaProperty, EnvironmentProvider } from './types.js'
 import { Shell } from './shell/shell.js'
 import type { ShellConfig } from './shell/types.js'
 import type { WorkspaceProvider, WorkspaceChange } from './providers/workspace/types.js'
@@ -842,7 +842,7 @@ export class Workspace {
    */
   private validateProperty(
     value: unknown,
-    schema: { type: string; enum?: string[]; items?: JSONSchema },
+    schema: JSONSchemaProperty,
     path: string
   ): ValidationError[] {
     const errors: ValidationError[] = []
