@@ -266,9 +266,13 @@ export class TraceBuilder {
   }
 
   /**
-   * End the trace
+   * End the trace.
+   *
+   * Async so buffered providers (e.g. Langfuse) can finish flushing before
+   * `agent.run()` resolves — important in serverless where the runtime freezes
+   * the process the moment the handler returns.
    */
-  endTrace(status: 'complete' | 'error' | 'interrupted' = 'complete', outputResponse?: string): Trace {
+  async endTrace(status: 'complete' | 'error' | 'interrupted' = 'complete', outputResponse?: string): Promise<Trace> {
     const rootSpan = this.trace.rootSpan
     rootSpan.endTime = Date.now()
     rootSpan.durationMs = rootSpan.endTime - rootSpan.startTime
@@ -279,7 +283,7 @@ export class TraceBuilder {
     this.trace.durationMs = this.trace.endTime - this.trace.startTime
 
     this.provider?.onAgentEnd(rootSpan, this.trace)
-    this.provider?.onTraceEnd(this.trace)
+    await this.provider?.onTraceEnd(this.trace)
 
     // Strip circular parent references (parentSpanId is kept for identification)
     stripParentRefs(rootSpan)

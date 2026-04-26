@@ -753,7 +753,7 @@ When you need information the user hasn't provided and you cannot find it via ot
           : result.status === "interrupted"
           ? "interrupted"
           : "complete";
-      result.trace = traceBuilder.endTrace(status, result.response);
+      result.trace = await traceBuilder.endTrace(status, result.response);
     }
 
     // Record the run (only for root agent, not sub-agents)

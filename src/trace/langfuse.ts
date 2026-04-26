@@ -162,7 +162,7 @@ export class LangfuseTraceProvider implements TraceProvider {
     })
   }
 
-  onTraceEnd(trace: Trace): void {
+  async onTraceEnd(trace: Trace): Promise<void> {
     this.enqueue('trace-create', {
       id: trace.traceId,
       timestamp: isoFrom(trace.startTime),
@@ -181,7 +181,9 @@ export class LangfuseTraceProvider implements TraceProvider {
         costByModel: trace.costByModel
       }
     })
-    void this.flush()
+    // Awaiting here means agent.run() resolves only after events are sent —
+    // safe in serverless where the runtime freezes the process on return.
+    await this.flush()
   }
 
   onAgentStart(span: AgentSpan, trace: Trace): void {

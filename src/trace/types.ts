@@ -167,7 +167,13 @@ export interface CostUpdate {
  */
 export interface TraceProvider {
   onTraceStart(trace: Trace): void
-  onTraceEnd(trace: Trace): void
+  /**
+   * Called once when the root trace ends. May return a Promise; the framework
+   * awaits it before `agent.run()` resolves. This is the right place for
+   * buffered providers (e.g. Langfuse) to flush — awaiting here makes the
+   * provider safe in serverless contexts where `beforeExit` is unreliable.
+   */
+  onTraceEnd(trace: Trace): void | Promise<void>
   onAgentStart(span: AgentSpan, trace: Trace): void
   onAgentEnd(span: AgentSpan, trace: Trace): void
   onLLMCall(event: LLMCallEvent, span: AgentSpan, trace: Trace): void
