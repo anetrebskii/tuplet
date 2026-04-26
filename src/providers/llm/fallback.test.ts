@@ -116,12 +116,27 @@ describe('FallbackProvider', () => {
     expect(() => new FallbackProvider({ providers: [] })).toThrow(/at least one/)
   })
 
-  it('does NOT fall back on a 4xx error by default (caller bug, not transient)', async () => {
+  it('falls back on a 4xx error by default (per-provider errors like invalid model ID)', async () => {
+    const error = new Error('OpenRouter API error (HTTP 400): google/gemma-4-26b-a4b-it1 is not a valid model ID')
+    const primary = stubProvider({ chat: vi.fn().mockRejectedValue(error) })
+    const backup = stubProvider({ chat: vi.fn().mockResolvedValue(okResponse) })
+
+    const provider = new FallbackProvider({ providers: [primary, backup] })
+    const result = await provider.chat('sys', [], [])
+
+    expect(result.content).toEqual(okResponse.content)
+    expect(backup.chat).toHaveBeenCalledTimes(1)
+  })
+
+  it('honors isTransientError as opt-in strict policy (4xx no longer falls back)', async () => {
     const error = new Error('OpenRouter API error (HTTP 401): Invalid API key')
     const primary = stubProvider({ chat: vi.fn().mockRejectedValue(error) })
     const backup = stubProvider({ chat: vi.fn() })
 
-    const provider = new FallbackProvider({ providers: [primary, backup] })
+    const provider = new FallbackProvider({
+      providers: [primary, backup],
+      shouldFallback: isTransientError
+    })
 
     await expect(provider.chat('sys', [], [])).rejects.toBe(error)
     expect(backup.chat).not.toHaveBeenCalled()

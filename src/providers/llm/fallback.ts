@@ -16,22 +16,19 @@ import type {
 } from '../../types.js'
 
 /**
- * Default policy: an error is "transient" (worth retrying on a backup) when
- * it looks like a network or upstream issue, NOT when it's an obvious caller
- * bug that would fail identically on every provider.
+ * Strict policy that recognizes only network/upstream issues — HTTP 5xx,
+ * 408, 429, native socket errors, OpenRouter relays of upstream failures —
+ * and rejects HTTP 4xx (auth/validation) plus AbortError.
  *
- * Falls back on:
- *   - HTTP 5xx, 408 (timeout), 429 (rate limit)
- *   - native fetch connection errors (ECONNRESET, ETIMEDOUT, EAI_AGAIN, ...)
- *   - OpenRouter relays of upstream failures ("Provider returned error",
- *     non-JSON body, empty choices, fuzzy exhaustion)
- *   - any other thrown error we can't classify (resilient default)
+ * NOT used by default. The default {@link FallbackProvider} policy is more
+ * permissive (fall back on anything except AbortError) because chain members
+ * usually have *different* model ids, so an HTTP 400 like "invalid model ID"
+ * on the primary is exactly the kind of error a backup can recover from.
  *
- * Does NOT fall back on:
- *   - HTTP 400 / 401 / 403 / 404 / 422 — bad key, missing model, malformed
- *     request, etc. The backup would reject them too, and masking them turns
- *     "wrong API key" into a silent extra-billed retry.
- *   - AbortError — user cancelled the run on purpose.
+ * Pass this as `shouldFallback` if you'd rather only retry on classic
+ * transient outages and surface caller bugs immediately:
+ *
+ *     new FallbackProvider({ providers, shouldFallback: isTransientError })
  */
 export function isTransientError(error: unknown): boolean {
   if (!error) return false
@@ -65,6 +62,23 @@ export function isTransientError(error: unknown): boolean {
   return true
 }
 
+/**
+ * Default policy: fall back on every thrown error EXCEPT a user-triggered
+ * cancellation (AbortError). The intent of a fallback chain is "if my
+ * primary can't serve this, try the next one", and most 4xx errors are
+ * per-provider in practice — `invalid model ID`, `model not found`, an
+ * upstream backend that rejects a tool schema another backend accepts, etc.
+ *
+ * Cost-of-caller-bug: a genuinely broken request (e.g. malformed schema
+ * shared by every chain member) costs N calls instead of 1. That's the
+ * deliberate tradeoff for resilience. Callers who'd rather fail closed on
+ * 4xx errors should pass {@link isTransientError} as `shouldFallback`.
+ */
+function defaultShouldFallback(error: unknown): boolean {
+  if (error instanceof Error && error.name === 'AbortError') return false
+  return true
+}
+
 export interface FallbackProviderConfig {
   /**
    * Ordered list of providers. The first is the primary; each subsequent
@@ -73,9 +87,9 @@ export interface FallbackProviderConfig {
    */
   providers: LLMProvider[]
   /**
-   * Override the built-in {@link isTransientError} heuristic. Return false
-   * to re-throw immediately. Most callers should leave this unset and rely
-   * on the default policy.
+   * Override the default policy ({@link defaultShouldFallback} — fall back
+   * on everything except AbortError). Return false to re-throw immediately.
+   * Pass {@link isTransientError} for the stricter network-only policy.
    */
   shouldFallback?: (error: unknown, providerIndex: number) => boolean
   /**
@@ -96,7 +110,7 @@ export class FallbackProvider implements LLMProvider {
       throw new Error('FallbackProvider requires at least one provider')
     }
     this.providers = config.providers
-    this.shouldFallback = config.shouldFallback ?? ((err) => isTransientError(err))
+    this.shouldFallback = config.shouldFallback ?? defaultShouldFallback
     this.onFallback = config.onFallback
   }
 

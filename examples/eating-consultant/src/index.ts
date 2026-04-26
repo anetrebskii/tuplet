@@ -12,6 +12,7 @@ import { join } from "node:path";
 import {
   Tuplet,
   OpenRouterProvider,
+  FallbackProvider,
   ConsoleLogger,
   ConsoleTraceProvider,
   LangfuseTraceProvider,
@@ -29,6 +30,7 @@ import {
   type PromptSection,
   type HistoryInjection,
   type TraceProvider,
+  type OpenRouterProviderConfig,
 } from "tuplet";
 import { nutritionCounterTools } from "./tools.js";
 
@@ -252,14 +254,29 @@ async function main() {
   mkdirSync(logDir, { recursive: true });
   let logCounter = 0;
 
-  const llmProvider = new OpenRouterProvider({
+  // Try the free Gemma tier first; fall back to the paid one when the free
+  // tier is rate-limited, overloaded, or returns a transient error. Cost
+  // accounting follows the provider that actually served each call via
+  // FallbackProvider's per-response modelId stamp.
+  const openRouterConfig: Omit<OpenRouterProviderConfig, "model"> = {
     apiKey,
-    model: "google/gemma-4-26b-a4b-it",
     maxTokens: 2000,
     explicitCacheControl: true,
     onRequestLog: (entry) => {
       const file = join(logDir, `${entry.timestamp}-${logCounter++}.json`);
       writeFileSync(file, JSON.stringify(entry, null, 2));
+    },
+  };
+
+  const llmProvider = new FallbackProvider({
+    providers: [
+      // new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it:free" }),
+      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it1" }),
+      new OpenRouterProvider({ ...openRouterConfig, model: "qwen/qwen3.5-27b" }),      
+    ],
+    onFallback: (error, fromIndex, toIndex) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[fallback] provider ${fromIndex} -> ${toIndex}: ${message}`);
     },
   });
 

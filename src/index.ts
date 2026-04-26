@@ -131,6 +131,7 @@ export {
 
 export {
   FallbackProvider,
+  isTransientError,
   type FallbackProviderConfig
 } from './providers/llm/fallback.js'
 
