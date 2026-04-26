@@ -61,6 +61,8 @@ export interface LangfuseTraceConfig {
 
   /** Print ingestion errors to console (default: true). */
   debug?: boolean
+  /** Print a one-time confirmation line on first successful flush (default: false). */
+  verbose?: boolean
 
   /** Custom model pricing forwarded to the trace builder. */
   modelPricing?: Record<string, ModelPricing>
@@ -96,6 +98,7 @@ export class LangfuseTraceProvider implements TraceProvider {
   private readonly captureToolIO: boolean
   private readonly maxPayloadChars: number
   private readonly debug: boolean
+  private readonly verbose: boolean
 
   private queue: IngestionEvent[] = []
   private flushTimer?: ReturnType<typeof setTimeout>
@@ -136,6 +139,7 @@ export class LangfuseTraceProvider implements TraceProvider {
     this.captureToolIO = config.captureToolIO ?? true
     this.maxPayloadChars = config.maxPayloadChars ?? 32_768
     this.debug = config.debug ?? true
+    this.verbose = config.verbose ?? false
 
     this.modelPricing = config.modelPricing
   }
@@ -334,14 +338,10 @@ export class LangfuseTraceProvider implements TraceProvider {
       const successCount = parsed?.successes?.length ?? 0
       const errors = parsed?.errors ?? []
 
-      if (this.debug && !this.firstSendLogged) {
+      if (this.verbose && !this.firstSendLogged) {
         this.firstSendLogged = true
         console.log(
           `[langfuse] connected → ${this.endpoint} (sent ${batch.length}, accepted ${successCount}, rejected ${errors.length})`
-        )
-      } else if (this.debug && errors.length > 0) {
-        console.log(
-          `[langfuse] flushed (sent ${batch.length}, accepted ${successCount}, rejected ${errors.length})`
         )
       }
 

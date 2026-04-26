@@ -2,12 +2,13 @@
 
 See exactly what your agent is doing — every LLM call, tool invocation, and sub-agent spawn — with token usage and cost breakdown. Useful for debugging agent behavior, optimizing prompt costs, and monitoring production workloads.
 
-There are two ways to consume trace data:
+Built-in providers:
 
 - **`ConsoleTraceProvider`** — prints a real-time execution tree to the console as the agent runs. Best for development and debugging.
+- **`LangfuseTraceProvider`** — ships every run to [Langfuse](https://langfuse.com) for production observability. Zero dependencies; just credentials.
 - **`result.trace`** — returns trace data programmatically after the run completes. Best for storing costs, displaying progress in a UI, or analytics.
 
-You can use both at the same time.
+You can use any combination — `result.trace` is always available regardless of which provider you pass.
 
 ## ConsoleTraceProvider
 
@@ -63,6 +64,114 @@ new ConsoleTraceProvider({
   modelPricing: { ... }      // Override default pricing (see below)
 })
 ```
+
+## LangfuseTraceProvider
+
+Sends every agent run, LLM call, and tool call to [Langfuse](https://langfuse.com) for observability — token counts, cost, latency, full prompts, full responses, sub-agent hierarchy. No OpenTelemetry SDK or extra packages required: posts directly to Langfuse's ingestion API using Node 20+ built-in `fetch`.
+
+### Setup
+
+Set credentials via env vars:
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # or https://cloud.langfuse.com (EU), or your self-hosted URL
+```
+
+Then wire it like any other trace provider:
+
+```typescript
+import { Tuplet, ClaudeProvider, LangfuseTraceProvider } from 'tuplet'
+
+const trace = new LangfuseTraceProvider({
+  sessionId: conversationId,            // groups runs in the Langfuse "Sessions" view
+  userId: currentUserId,                // groups runs in the "Users" view
+  tags: ['production', 'eu-cluster'],
+})
+
+const agent = new Tuplet({
+  role: '...',
+  llm: new ClaudeProvider({ apiKey: '...' }),
+  trace,
+  agentName: 'my_agent',
+})
+```
+
+> **Region matters.** US-project keys only auth against `https://us.cloud.langfuse.com`; EU-project keys against `https://cloud.langfuse.com`. A region/key mismatch returns `401 Unauthorized`.
+
+### What lands in Langfuse
+
+| Tuplet event | Langfuse object | Notes |
+| --- | --- | --- |
+| `agent.run()` | **Trace** | Name = root agent name. Input = user message. Output = final response. Aggregated cost / tokens / durations land in `metadata`. |
+| Sub-agent span | **Span** | Nested under its parent observation; depth-1 sub-agents attach directly to the trace. |
+| LLM call | **Generation** | `model`, `usageDetails` (input/output/cache_read/cache_creation), `costDetails.total`, full system prompt + messages + response. |
+| Tool call | **Span** | Input/output JSON. Failed tools surface as `level: ERROR` with `statusMessage` set to the tool error. |
+
+### Flushing on exit
+
+The provider buffers events in memory and flushes when the batch hits `flushAt` (default 20), after `flushIntervalMs` (default 3000ms), or when you call `flush()` / `shutdown()`. CLI processes are usually short-lived — drain the queue before exit:
+
+```typescript
+process.on('beforeExit', () => trace.shutdown())
+process.on('SIGINT', async () => {
+  await trace.shutdown()
+  process.exit(0)
+})
+```
+
+### Options
+
+```typescript
+new LangfuseTraceProvider({
+  // credentials (default to env vars)
+  publicKey,
+  secretKey,
+  baseUrl,                 // default: https://cloud.langfuse.com
+                           // env fallbacks: LANGFUSE_BASE_URL, LANGFUSE_BASEURL, LANGFUSE_HOST
+
+  // grouping & metadata (all optional)
+  sessionId,               // groups runs in the Sessions view
+  userId,                  // groups runs in the Users view
+  tags: ['prod'],
+  metadata: { /* free-form */ },
+  release,                 // e.g. git sha
+  version,                 // app version
+
+  // capture controls
+  captureMessages: true,   // include LLM input/output (default: true). Disable for sensitive data.
+  captureToolIO: true,     // include tool input/output (default: true)
+  maxPayloadChars: 32_768, // truncate large payloads
+
+  // batching
+  flushAt: 20,             // batch size that triggers a flush
+  flushIntervalMs: 3000,   // periodic flush window
+  requestTimeoutMs: 10_000,
+
+  // diagnostics
+  debug: true,             // log errors and per-event rejections (default: true)
+  verbose: false,          // log a one-time `connected → ...` confirmation on first flush (default: false)
+
+  // pricing override (same shape as ConsoleTraceProvider)
+  modelPricing: { /* ... */ },
+})
+```
+
+### Sessions
+
+`sessionId` is captured at construction and stamped onto every trace the provider emits. All `agent.run()` calls during the process lifetime become separate Langfuse traces grouped under that session. To start a fresh session (e.g. after a "clear" command), construct a new `LangfuseTraceProvider` with a new `sessionId`.
+
+### Debugging
+
+With `debug: true` (default), the provider logs:
+
+- Per-event rejection reasons when Langfuse returns 207 with errors, or when individual events fail validation.
+- Auth/network errors with status code and response body.
+
+Set `verbose: true` to also get a one-time `[langfuse] connected → <endpoint> (sent N, accepted M, rejected K)` line on the first successful flush — useful for confirming the integration is wired correctly. Off by default because it can collide with interactive prompts (the log fires asynchronously and lands wherever stdout currently is).
+
+If you see `(sent N, accepted 0, rejected N)`, check the rejection reasons — they identify the offending field. If you see `401 Unauthorized`, verify region + keys. If nothing appears in the UI and there are no error logs, double-check the project filter at the top of the Langfuse page (you may be looking at a sibling project).
 
 ## Accessing Trace Data
 
